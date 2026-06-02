@@ -1,0 +1,7 @@
+.superpowers/
+daily-arXiv-ai-enhanced/
+zotero-arxiv-daily/
+
+.DS_Store
+__pycache__/
+*.pyc
