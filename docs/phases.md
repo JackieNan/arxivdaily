@@ -99,6 +99,7 @@ Date baseline: 2026-06-03
 ## Phase 6: Search and Discussion
 
 - Branch: `codex/phase-6-search-discussion`
+- Main merge commit: `a46c02c merge phase six search discussion`
 - Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-6-search-discussion.md`
 - Scope completed:
   - search papers across title, abstract, authors, categories, arXiv ID, and summaries
@@ -109,4 +110,4 @@ Date baseline: 2026-06-03
 - Verification:
   - focused Phase 6 tests: 10 passed, 1 warning
   - `uv run pytest -v`: 75 passed, 1 warning
-- Status: implemented on branch, not yet merged to `main`.
+- Status: merged to `main`.
