@@ -236,6 +236,16 @@ def test_post_summaries_run_uses_injected_runner(tmp_path):
     ]
 
 
+def test_post_summaries_run_returns_detail_when_template_missing(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    client = TestClient(create_app(database_path=db_path), raise_server_exceptions=False)
+
+    response = client.post("/api/summaries/run", json={"date": "2026-06-03", "template_name": "missing"})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "summary template not found"}
+
+
 def test_get_paper_summaries_returns_persisted_content(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     connection = connect(db_path)

@@ -100,6 +100,10 @@ label span {
   margin-bottom: 12px;
 }
 
+.topbar > div {
+  min-width: 0;
+}
+
 .topbar h1 {
   margin: 0;
   font-size: 22px;
@@ -109,6 +113,24 @@ label span {
 .status-line {
   margin: 4px 0 0;
   color: var(--muted);
+}
+
+.operation-detail,
+.operation-log {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--muted);
+  padding: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.operation-log {
+  margin-top: 8px;
+  max-width: 720px;
 }
 
 .date-control {

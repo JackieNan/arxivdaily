@@ -15,6 +15,16 @@ const ArxivDailyWorkbench = (() => {
     el("run-status").textContent = message;
   }
 
+  function setDetail(id, message) {
+    const node = el(id);
+    if (node) node.textContent = message;
+  }
+
+  function recordOperation(message, detail = "") {
+    setStatus(message);
+    setDetail("operation-log", detail ? `${message}\n${detail}` : message);
+  }
+
   function setBusy(button, busy) {
     if (!button) return;
     button.disabled = busy;
@@ -26,10 +36,24 @@ const ArxivDailyWorkbench = (() => {
       ...options,
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`${response.status} ${text}`);
+      throw new Error(await readErrorMessage(response));
     }
     return response.json();
+  }
+
+  async function readErrorMessage(response) {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const payload = await response.json().catch(() => null);
+      if (payload && typeof payload.detail === "string") return payload.detail;
+      if (payload) return JSON.stringify(payload);
+    }
+    const text = await response.text();
+    return text.trim() || `HTTP ${response.status}`;
+  }
+
+  function formatJson(value) {
+    return JSON.stringify(value, null, 2);
   }
 
   function splitList(value) {
@@ -55,11 +79,11 @@ const ArxivDailyWorkbench = (() => {
         body: JSON.stringify(body),
       });
       el("crawl-state").textContent = `run ${result.run_id}`;
-      setStatus(`Crawl run ${result.run_id} created`);
+      recordOperation(`Crawl run ${result.run_id} created`, formatJson(result));
       await runAudit();
       await runSearch();
     } catch (error) {
-      setStatus(`Crawl failed: ${error.message}`);
+      recordOperation(`Crawl failed: ${error.message}`);
       el("crawl-state").textContent = "failed";
     } finally {
       setBusy(button, false);
@@ -73,9 +97,9 @@ const ArxivDailyWorkbench = (() => {
       const report = await api(`/api/crawl/completeness/${encodeURIComponent(dateValue())}`);
       state.lastAudit = report;
       renderAudit(report);
-      setStatus(`Audit status: ${report.status}`);
+      recordOperation(`Audit status: ${report.status}`, formatJson(report));
     } catch (error) {
-      setStatus(`Audit failed: ${error.message}`);
+      recordOperation(`Audit failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -101,11 +125,11 @@ const ArxivDailyWorkbench = (() => {
         method: "POST",
         body: JSON.stringify(body),
       });
-      setStatus(`Retried ${result.retried} categories`);
+      recordOperation(`Retried ${result.retried} categories`, formatJson(result));
       await runAudit();
       await runSearch();
     } catch (error) {
-      setStatus(`Retry failed: ${error.message}`);
+      recordOperation(`Retry failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -123,10 +147,12 @@ const ArxivDailyWorkbench = (() => {
         }),
       });
       el("enrich-state").textContent = `${result.updated}/${result.requested}`;
-      setStatus(`Metadata updated ${result.updated} of ${result.requested}`);
+      setDetail("enrich-detail", formatJson(result));
+      recordOperation(`Metadata updated ${result.updated} of ${result.requested}`, formatJson(result));
       await runSearch();
     } catch (error) {
-      setStatus(`Metadata failed: ${error.message}`);
+      setDetail("enrich-detail", `Metadata failed:\n${error.message}`);
+      recordOperation(`Metadata failed: ${error.message}`);
       el("enrich-state").textContent = "failed";
     } finally {
       setBusy(button, false);
@@ -149,10 +175,12 @@ const ArxivDailyWorkbench = (() => {
         body: JSON.stringify(body),
       });
       el("enrich-state").textContent = `${result.completed}/${result.requested}`;
-      setStatus(`Summaries completed ${result.completed} of ${result.requested}`);
+      setDetail("enrich-detail", formatJson(result));
+      recordOperation(`Summaries completed ${result.completed} of ${result.requested}`, formatJson(result));
       await runSearch();
     } catch (error) {
-      setStatus(`Summary failed: ${error.message}`);
+      setDetail("enrich-detail", `Summary failed:\n${error.message}`);
+      recordOperation(`Summary failed: ${error.message}`);
       el("enrich-state").textContent = "failed";
     } finally {
       setBusy(button, false);
@@ -183,9 +211,15 @@ const ArxivDailyWorkbench = (() => {
       const data = await api(`/api/search/papers?${searchParams().toString()}`);
       renderResults(data.papers);
       el("result-count").textContent = String(data.count);
-      setStatus(`Search returned ${data.count} papers`);
+      const detail = data.count
+        ? `Showing ${data.count} papers for ${dateValue()}.`
+        : `No matching papers for ${dateValue()} with current filters.`;
+      setDetail("search-detail", detail);
+      recordOperation(`Search returned ${data.count} papers`, detail);
     } catch (error) {
-      setStatus(`Search failed: ${error.message}`);
+      setDetail("search-detail", `Search failed:\n${error.message}`);
+      el("paper-results").innerHTML = `<p class="empty-state">Search failed: ${escapeHtml(error.message)}</p>`;
+      recordOperation(`Search failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -232,9 +266,9 @@ const ArxivDailyWorkbench = (() => {
       el("paper-id").textContent = arxivId;
       renderPaperDetail(detail);
       renderDiscussions(detail.discussions || []);
-      setStatus(`Loaded ${arxivId}`);
+      recordOperation(`Loaded ${arxivId}`);
     } catch (error) {
-      setStatus(`Paper load failed: ${error.message}`);
+      recordOperation(`Paper load failed: ${error.message}`);
     }
   }
 
@@ -327,7 +361,7 @@ const ArxivDailyWorkbench = (() => {
       el("discussion-content").value = "";
       await loadPaper(state.selectedPaperId);
     } catch (error) {
-      setStatus(`Discussion failed: ${error.message}`);
+      recordOperation(`Discussion failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }

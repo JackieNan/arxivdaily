@@ -53,3 +53,11 @@
 - [x] Update README with web UI usage.
 - [x] Record Phase 7 in `docs/phases.md`.
 - [x] Commit Phase 7 locally.
+
+### Task 5: Operation Error Details
+
+- [x] Reproduce missing summary template as a failing API/UI visibility test.
+- [x] Return structured `400` API detail for summary template business errors.
+- [x] Add visible operation detail areas for enrich and search flows.
+- [x] Parse JSON error payloads in the web UI instead of showing generic failed states.
+- [x] Verify search still returns `200` and metadata `failed` badges are paper state, not request failure.

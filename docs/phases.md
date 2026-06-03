@@ -122,8 +122,10 @@ Date baseline: 2026-06-03
   - provide paper search and filters
   - show paper details, summaries, and discussions
   - support local discussion message creation from the UI
+  - show structured operation details for enrich/search errors and empty states
 - Verification:
-  - focused Phase 7 tests: 2 passed, 1 warning
-  - `uv run pytest -v`: 77 passed, 1 warning
+  - focused Phase 7 tests: 3 passed, 1 warning
+  - `uv run pytest -v`: 78 passed, 1 warning
   - Chrome headless desktop and mobile screenshots succeeded.
+  - live local checks: summary missing template returns `400 {"detail":"summary template not found"}`; search returns `200`.
 - Status: implemented on branch, not yet merged to `main`.

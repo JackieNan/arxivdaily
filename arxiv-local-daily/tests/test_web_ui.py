@@ -15,6 +15,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="search-panel"' in response.text
     assert 'id="paper-detail"' in response.text
     assert 'id="discussion-panel"' in response.text
+    assert 'id="enrich-detail"' in response.text
+    assert 'id="search-detail"' in response.text
+    assert 'id="operation-log"' in response.text
 
 
 def test_static_web_assets_are_served(tmp_path):
@@ -25,5 +28,7 @@ def test_static_web_assets_are_served(tmp_path):
 
     assert js_response.status_code == 200
     assert "ArxivDailyWorkbench" in js_response.text
+    assert "readErrorMessage" in js_response.text
     assert css_response.status_code == 200
     assert ".app-shell" in css_response.text
+    assert ".operation-detail" in css_response.text

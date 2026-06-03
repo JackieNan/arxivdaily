@@ -12,6 +12,7 @@
         <div>
           <h1>arXiv Daily Workbench</h1>
           <p id="run-status" class="status-line">Ready</p>
+          <pre id="operation-log" class="operation-log" aria-live="polite">No operations yet.</pre>
         </div>
         <label class="date-control">
           <span>Date</span>
@@ -66,6 +67,7 @@
             </label>
             <button id="summary-run" type="button">Run Summary</button>
           </div>
+          <pre id="enrich-detail" class="operation-detail" aria-live="polite">No enrichment run yet.</pre>
         </section>
 
         <section id="search-panel" class="panel search-panel">
@@ -110,6 +112,7 @@
             </label>
             <button id="search-run" type="button">Search</button>
           </div>
+          <pre id="search-detail" class="operation-detail" aria-live="polite">No search yet.</pre>
           <div id="paper-results" class="result-list" aria-live="polite"></div>
         </section>
 
