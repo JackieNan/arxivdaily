@@ -10,7 +10,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
     crawl = subparsers.add_parser("crawl")
     crawl.add_argument("--date", required=True)
-    crawl.add_argument("--category", action="append", required=True)
+    crawl.add_argument("--category", action="append")
     crawl.add_argument("--db", default=str(default_settings().database_path))
     return parser.parse_args(argv)
 

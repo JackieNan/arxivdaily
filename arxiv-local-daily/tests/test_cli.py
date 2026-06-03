@@ -7,3 +7,11 @@ def test_parse_args_accepts_date_and_category():
     assert args.command == "crawl"
     assert args.date == "2026-06-03"
     assert args.category == ["cs.AI"]
+
+
+def test_parse_args_all_categories_when_category_omitted():
+    args = parse_args(["crawl", "--date", "2026-06-03"])
+
+    assert args.command == "crawl"
+    assert args.date == "2026-06-03"
+    assert args.category is None
