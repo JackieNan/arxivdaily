@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <entry>
+    <id>http://arxiv.org/abs/2606.00001v2</id>
+    <updated>2026-06-03T12:34:56Z</updated>
+    <published>2026-06-02T00:00:00Z</published>
+    <title> First paper title </title>
+    <summary> First abstract with
+      whitespace. </summary>
+    <author><name>Ada Lovelace</name></author>
+    <author><name>Alan Turing</name></author>
+    <arxiv:primary_category term="cs.AI"/>
+    <category term="cs.AI"/>
+    <category term="cs.LG"/>
+    <link href="http://arxiv.org/abs/2606.00001v2" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2606.00001v2" rel="related" type="application/pdf"/>
+    <arxiv:comment>12 pages</arxiv:comment>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/hep-th/9901001v1</id>
+    <updated>1999-01-02T00:00:00Z</updated>
+    <published>1999-01-01T00:00:00Z</published>
+    <title>Legacy title</title>
+    <summary>Legacy abstract.</summary>
+    <author><name>Legacy Author</name></author>
+    <arxiv:primary_category term="hep-th"/>
+    <category term="hep-th"/>
+    <link href="http://arxiv.org/abs/hep-th/9901001v1" rel="alternate" type="text/html"/>
+  </entry>
+</feed>
