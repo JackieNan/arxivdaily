@@ -1,7 +1,7 @@
 import json
 import sqlite3
 
-from arxiv_local_daily.models import ParsedDailyEvent, SummaryTemplateInput
+from arxiv_local_daily.models import PaperMetadata, ParsedDailyEvent, SummaryTemplateInput
 
 
 class CrawlRepository:
@@ -121,6 +121,83 @@ class PaperRepository:
                 event.source_url,
             ),
         )
+
+    def upsert_metadata(self, metadata: PaperMetadata) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO papers
+                (arxiv_id, title, abstract, authors_json, primary_category, categories_json, abs_url, pdf_url,
+                 published_at, updated_at, metadata_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete')
+            ON CONFLICT(arxiv_id) DO UPDATE SET
+                title = excluded.title,
+                abstract = excluded.abstract,
+                authors_json = excluded.authors_json,
+                primary_category = excluded.primary_category,
+                categories_json = excluded.categories_json,
+                abs_url = excluded.abs_url,
+                pdf_url = excluded.pdf_url,
+                published_at = excluded.published_at,
+                updated_at = excluded.updated_at,
+                metadata_status = 'complete',
+                updated_row_at = CURRENT_TIMESTAMP
+            """,
+            (
+                metadata.arxiv_id,
+                metadata.title,
+                metadata.abstract,
+                json.dumps(metadata.authors, ensure_ascii=False),
+                metadata.primary_category,
+                json.dumps(metadata.categories, ensure_ascii=False),
+                metadata.abs_url,
+                metadata.pdf_url,
+                metadata.published_at,
+                metadata.updated_at,
+            ),
+        )
+        for version in metadata.versions:
+            self.connection.execute(
+                """
+                INSERT INTO paper_versions (arxiv_id, version, updated_at, comment, source_hash)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(arxiv_id, version) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    comment = excluded.comment,
+                    source_hash = excluded.source_hash
+                """,
+                (
+                    metadata.arxiv_id,
+                    version.version,
+                    version.updated_at,
+                    version.comment,
+                    version.source_hash,
+                ),
+            )
+
+    def mark_metadata_status(self, arxiv_id: str, status: str) -> None:
+        self.ensure_pending_paper(arxiv_id)
+        self.connection.execute(
+            """
+            UPDATE papers
+            SET metadata_status = ?, updated_row_at = CURRENT_TIMESTAMP
+            WHERE arxiv_id = ?
+            """,
+            (status, arxiv_id),
+        )
+
+    def list_metadata_pending_ids_for_date(self, date: str, *, limit: int) -> list[str]:
+        rows = self.connection.execute(
+            """
+            SELECT DISTINCT p.arxiv_id
+            FROM papers p
+            JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            WHERE e.date = ? AND p.metadata_status != 'complete'
+            ORDER BY p.arxiv_id
+            LIMIT ?
+            """,
+            (date, limit),
+        ).fetchall()
+        return [row["arxiv_id"] for row in rows]
 
 
 class TemplateRepository:
