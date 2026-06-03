@@ -20,6 +20,17 @@ class CrawlSourceResult(BaseModel):
     retry_count: int = 0
 
 
+class CrawlSourceInput(BaseModel):
+    category: str
+    event_section: str = "all"
+    url: str
+    status: str
+    http_status: int | None = None
+    html: str | None = None
+    error: str | None = None
+    retry_count: int = 0
+
+
 class SummaryTemplateField(BaseModel):
     key: str
     label: str

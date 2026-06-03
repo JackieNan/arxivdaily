@@ -11,6 +11,9 @@ dependencies = [
     "uvicorn>=0.30.0",
 ]
 
+[project.scripts]
+arxiv-local-daily = "arxiv_local_daily.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",

@@ -1,18 +1,31 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import FastAPI
+from pydantic import BaseModel, Field
 
 from arxiv_local_daily.config import default_settings
+from arxiv_local_daily.crawler.live import run_live_daily_crawl
 from arxiv_local_daily.db import connect, initialize_schema
-from arxiv_local_daily.repositories import TemplateRepository
+from arxiv_local_daily.repositories import CrawlRepository, TemplateRepository
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
     return dict(row)
 
 
-def create_app(database_path: Path | str | None = None) -> FastAPI:
+class CrawlRunRequest(BaseModel):
+    date: str
+    categories: list[str] = Field(min_length=1)
+
+
+CrawlerRunner = Callable[..., int]
+
+
+def create_app(
+    database_path: Path | str | None = None,
+    crawl_runner: CrawlerRunner = run_live_daily_crawl,
+) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
     db_path = Path(database_path) if database_path is not None else default_settings().database_path
 
@@ -50,25 +63,21 @@ def create_app(database_path: Path | str | None = None) -> FastAPI:
     def list_crawl_runs(date: str):
         connection = get_connection()
         try:
-            rows = connection.execute(
-                """
-                SELECT
-                    r.id,
-                    r.date,
-                    r.mode,
-                    r.status,
-                    r.started_at,
-                    r.finished_at,
-                    COUNT(s.id) AS source_count
-                FROM crawl_runs r
-                LEFT JOIN crawl_run_sources s ON s.run_id = r.id
-                WHERE r.date = ?
-                GROUP BY r.id
-                ORDER BY r.id DESC
-                """,
-                (date,),
-            ).fetchall()
-            return {"runs": [_row_to_dict(row) for row in rows]}
+            repo = CrawlRepository(connection)
+            return {"runs": repo.list_runs_for_date(date)}
+        finally:
+            connection.close()
+
+    @app.post("/api/crawl/run")
+    def run_crawl(request: CrawlRunRequest):
+        connection = get_connection()
+        try:
+            run_id = crawl_runner(
+                connection,
+                date=request.date,
+                categories=request.categories,
+            )
+            return {"run_id": run_id}
         finally:
             connection.close()
 

@@ -50,6 +50,42 @@ class CrawlRepository:
             (run_id, category, event_section, url, status, http_status, parsed_count, error, retry_count),
         )
 
+    def list_runs_for_date(self, date: str) -> list[dict]:
+        runs = self.connection.execute(
+            """
+            SELECT
+                r.id,
+                r.date,
+                r.mode,
+                r.status,
+                r.started_at,
+                r.finished_at,
+                r.summary_counts_json,
+                COUNT(s.id) AS source_count
+            FROM crawl_runs r
+            LEFT JOIN crawl_run_sources s ON s.run_id = r.id
+            WHERE r.date = ?
+            GROUP BY r.id
+            ORDER BY r.id DESC
+            """,
+            (date,),
+        ).fetchall()
+        results: list[dict] = []
+        for run in runs:
+            sources = self.connection.execute(
+                """
+                SELECT category, event_section, url, status, http_status, parsed_count, error, retry_count
+                FROM crawl_run_sources
+                WHERE run_id = ?
+                ORDER BY category, url
+                """,
+                (run["id"],),
+            ).fetchall()
+            item = dict(run)
+            item["sources"] = [dict(source) for source in sources]
+            results.append(item)
+        return results
+
 
 class PaperRepository:
     def __init__(self, connection: sqlite3.Connection):

@@ -46,6 +46,38 @@ def test_get_crawl_runs_returns_status(tmp_path):
     assert data["runs"][0]["source_count"] == 1
 
 
+def test_get_crawl_runs_includes_source_details(tmp_path):
+    client = _client_with_seed_data(tmp_path)
+
+    response = client.get("/api/crawl/runs/2026-06-03")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["runs"][0]["source_count"] == 1
+    assert data["runs"][0]["sources"][0]["category"] == "cs.AI"
+    assert data["runs"][0]["sources"][0]["parsed_count"] == 3
+
+
+def test_post_crawl_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[tuple[str, list[str]]] = []
+
+    def fake_runner(connection, *, date: str, categories: list[str]) -> int:
+        calls.append((date, categories))
+        return 42
+
+    client = TestClient(create_app(database_path=db_path, crawl_runner=fake_runner))
+
+    response = client.post(
+        "/api/crawl/run",
+        json={"date": "2026-06-03", "categories": ["cs.AI", "cs.LG"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"run_id": 42}
+    assert calls == [("2026-06-03", ["cs.AI", "cs.LG"])]
+
+
 def test_list_summary_templates_starts_empty(tmp_path):
     client = _client_with_seed_data(tmp_path)
 
