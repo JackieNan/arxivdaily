@@ -57,12 +57,14 @@ def build_summary_messages(
     authors = ", ".join(_json_list(_value(paper, "authors_json")))
     categories = ", ".join(_json_list(_value(paper, "categories_json")))
     system_prompt = _value(template, "system_prompt", "")
+    language = _value(template, "language", "Chinese")
     input_scope = _value(template, "input_scope", "abstract")
 
     system_message = (
         f"{system_prompt}\n\n"
         "Return only a valid JSON object. "
-        f"The JSON object must use these keys exactly: {expected_keys}."
+        f"The JSON object must use these keys exactly: {expected_keys}. "
+        f"All user-facing values must be in {language}; keep technical terms, arXiv IDs, and LaTeX formulas when needed."
     )
     user_message = "\n".join(
         [

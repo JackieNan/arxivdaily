@@ -203,3 +203,26 @@ Date baseline: 2026-06-03
   - browser desktop smoke: no Enrich/left rail/limit controls, top action strip present, no document horizontal overflow
   - browser mobile smoke at 390px width: search controls fit and no horizontal document overflow
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 11: Math Rendering and Chinese Keywords
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-11-math-keywords-cn-summary.md`
+- Scope completed:
+  - add MathJax configuration for title and abstract LaTeX rendering
+  - add a local lightweight LaTeX fallback renderer for common inline formulas when MathJax is unavailable
+  - trigger MathJax typesetting after dynamic search result and paper detail rendering
+  - add latest-summary `summary_keywords` to search results
+  - display Chinese keyword chips in paper cards instead of abstract snippets
+  - update the default web-created summary template with Chinese `keywords`, `tldr`, `method`, `value`, and `limits` fields
+  - update summary prompt construction to require user-facing JSON values in the template language
+- Important decisions:
+  - paper lists are for triage and should show LLM-compressed Chinese keywords, not long abstracts
+  - raw title and abstract remain in detail, but formulas should render where possible
+  - if a paper has no complete summary yet, the card shows a missing-keywords hint rather than abstract text
+- Verification:
+  - focused keyword/search, summary prompt, and web UI tests passed
+  - `uv run pytest -v`: 105 passed, 1 warning
+  - browser smoke after server restart confirmed no abstract snippets in default cards and no horizontal overflow
+  - local API smoke found the user-referenced formula-title paper `2104.14092`
+- Status: implemented on branch, not yet merged to `main`.

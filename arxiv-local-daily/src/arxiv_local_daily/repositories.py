@@ -1051,6 +1051,7 @@ class SearchRepository:
         item = self._paper_dict(row)
         item["latest_date"] = row["latest_date"]
         item["score"] = ScoreRepository(self.connection).get_latest_score(row["arxiv_id"])
+        item["summary_keywords"] = self._latest_summary_keywords(row["arxiv_id"])
         item["event_types"] = self._list_daily_event_values(row["arxiv_id"], "event_type")
         item["listing_categories"] = self._list_daily_event_values(row["arxiv_id"], "listing_category")
         item["summary_statuses"] = self._list_summary_statuses(row["arxiv_id"])
@@ -1087,3 +1088,26 @@ class SearchRepository:
             (arxiv_id,),
         ).fetchall()
         return [row["status"] for row in rows]
+
+    def _latest_summary_keywords(self, arxiv_id: str) -> list[str]:
+        row = self.connection.execute(
+            """
+            SELECT content_json
+            FROM summaries
+            WHERE arxiv_id = ?
+              AND status = 'complete'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (arxiv_id,),
+        ).fetchone()
+        if row is None:
+            return []
+        content = json.loads(row["content_json"])
+        raw_keywords = content.get("keywords") or content.get("关键词") or content.get("key_terms") or []
+        if isinstance(raw_keywords, list):
+            return [str(keyword).strip() for keyword in raw_keywords if str(keyword).strip()]
+        if isinstance(raw_keywords, str):
+            normalized = raw_keywords.replace("，", ",").replace("、", ",").replace("；", ",").replace(";", ",")
+            return [keyword.strip() for keyword in normalized.split(",") if keyword.strip()]
+        return []

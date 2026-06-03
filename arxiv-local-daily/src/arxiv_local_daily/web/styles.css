@@ -375,6 +375,25 @@ label span {
   margin-top: 8px;
 }
 
+.keyword-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.keyword-tag {
+  max-width: 100%;
+  border: 1px solid #cddfd7;
+  border-radius: 999px;
+  background: #f2faf6;
+  color: #276749;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .tag {
   max-width: 100%;
   border: 1px solid var(--line);
@@ -472,6 +491,70 @@ label span {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+mjx-container {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.paper-card-title mjx-container,
+.paper-content h3 mjx-container,
+.paper-content p mjx-container {
+  display: inline-block;
+  vertical-align: -0.1em;
+}
+
+.math-fallback {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  color: #111827;
+  font-family: "STIX Two Math", "Cambria Math", "Times New Roman", serif;
+  font-style: italic;
+  line-height: 1.1;
+  vertical-align: -0.08em;
+}
+
+.math-fallback.display {
+  display: block;
+  margin: 8px 0;
+  padding-bottom: 2px;
+}
+
+.math-script {
+  font-family: "Apple Chancery", "Brush Script MT", "Times New Roman", serif;
+  font-style: italic;
+}
+
+.math-bold {
+  font-weight: 700;
+}
+
+.math-roman {
+  font-style: normal;
+}
+
+.math-underline {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.math-hat {
+  position: relative;
+  display: inline-block;
+  padding-top: 0.1em;
+}
+
+.math-hat::before {
+  content: "^";
+  position: absolute;
+  top: -0.55em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.8em;
 }
 
 .discussion-list {

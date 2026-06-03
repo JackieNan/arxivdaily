@@ -65,6 +65,8 @@ def test_build_summary_messages_uses_enabled_template_fields_and_paper_metadata(
 
     assert messages[0]["role"] == "system"
     assert "valid JSON object" in messages[0]["content"]
+    assert "Chinese" in messages[0]["content"]
+    assert "All user-facing values" in messages[0]["content"]
     user_message = messages[1]["content"]
     assert "Structured Summaries for Daily Research" in user_message
     assert "Ada Lovelace, Alan Turing" in user_message

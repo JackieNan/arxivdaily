@@ -62,7 +62,7 @@ def _seed_search_data(db):
         model="fake-model",
         language="Chinese",
         input_scope="abstract",
-        content={"tldr": "Configurable summary pipeline helps daily triage."},
+        content={"tldr": "可配置总结流水线帮助每日论文筛选。", "keywords": ["论文筛选", "可配置摘要", "本地数据库"]},
         status="complete",
     )
     db.commit()
@@ -90,12 +90,13 @@ def test_search_papers_matches_metadata_and_summary_content(db):
     repo = SearchRepository(db)
 
     title_results = repo.search_papers(query="structured summaries")
-    summary_results = repo.search_papers(query="daily triage")
+    summary_results = repo.search_papers(query="论文筛选")
 
     assert [row["arxiv_id"] for row in title_results] == ["2606.00001"]
     assert [row["arxiv_id"] for row in summary_results] == ["2606.00001"]
     assert title_results[0]["latest_date"] == "2026-06-03"
     assert title_results[0]["summary_statuses"] == ["complete"]
+    assert title_results[0]["summary_keywords"] == ["论文筛选", "可配置摘要", "本地数据库"]
 
 
 def test_search_papers_filters_by_daily_event_and_status_fields(db):
@@ -103,14 +104,14 @@ def test_search_papers_filters_by_daily_event_and_status_fields(db):
     repo = SearchRepository(db)
 
     matching = repo.search_papers(
-        query="summary",
+        query="论文筛选",
         date="2026-06-03",
         category="cs.AI",
         event_type="new",
         metadata_status="complete",
         summary_status="complete",
     )
-    wrong_category = repo.search_papers(query="summary", category="math.AG")
+    wrong_category = repo.search_papers(query="论文筛选", category="math.AG")
 
     assert [row["arxiv_id"] for row in matching] == ["2606.00001"]
     assert wrong_category == []
@@ -128,5 +129,5 @@ def test_get_paper_detail_returns_events_summaries_and_discussions(db):
 
     assert detail["paper"]["title"] == "Structured Summaries for Daily Research"
     assert detail["events"][0]["date"] == "2026-06-03"
-    assert detail["summaries"][0]["content"]["tldr"].startswith("Configurable")
+    assert detail["summaries"][0]["content"]["tldr"].startswith("可配置")
     assert detail["discussions"][0]["content"] == "This is useful for triage."

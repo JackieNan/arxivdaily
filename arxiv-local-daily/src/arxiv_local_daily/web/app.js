@@ -9,39 +9,47 @@ const ArxivDailyWorkbench = (() => {
   const DEFAULT_SUMMARY_TEMPLATE = {
     name: "daily_research",
     language: "Chinese",
-    system_prompt: "Summarize the arXiv paper for a local research reading database. Answer in concise Chinese and return only JSON.",
+    system_prompt: "你是本地 arXiv 论文阅读数据库的中文研究助理。请用简洁中文总结论文，只返回 JSON。",
     input_scope: "abstract",
     is_default: true,
     fields: [
       {
-        key: "tldr",
-        label: "TLDR",
+        key: "keywords",
+        label: "关键词",
         order: 1,
-        prompt: "Give one concise sentence about the main contribution.",
+        prompt: "提炼 5-8 个中文关键词。保留必要英文术语、模型名和 LaTeX 符号。",
+        field_type: "keywords",
+        enabled: true,
+      },
+      {
+        key: "tldr",
+        label: "一句话结论",
+        order: 2,
+        prompt: "用一句中文概括论文的核心贡献。",
         field_type: "short_sentence",
         enabled: true,
       },
       {
         key: "method",
-        label: "Method",
-        order: 2,
-        prompt: "Explain the core method in two bullets.",
+        label: "核心方法",
+        order: 3,
+        prompt: "用 2-3 个中文要点解释核心方法。",
         field_type: "bullets",
         enabled: true,
       },
       {
         key: "value",
-        label: "Value",
-        order: 3,
-        prompt: "Explain why this paper may matter for research triage.",
+        label: "阅读价值",
+        order: 4,
+        prompt: "用中文说明为什么这篇论文值得阅读或暂时跳过。",
         field_type: "bullets",
         enabled: true,
       },
       {
         key: "limits",
-        label: "Limits",
-        order: 4,
-        prompt: "List obvious limitations or missing evidence.",
+        label: "局限",
+        order: 5,
+        prompt: "用中文列出明显局限、缺失证据或需要进一步确认的点。",
         field_type: "bullets",
         enabled: true,
       },
@@ -97,6 +105,101 @@ const ArxivDailyWorkbench = (() => {
 
   function formatJson(value) {
     return JSON.stringify(value, null, 2);
+  }
+
+  function renderLatexText(value) {
+    const text = String(value ?? "");
+    if (window.MathJax && typeof window.MathJax.typesetPromise === "function") {
+      return escapeHtml(text);
+    }
+    return renderLocalLatexText(text);
+  }
+
+  function renderLocalLatexText(text) {
+    const parts = [];
+    const pattern = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
+    let cursor = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      parts.push(escapeHtml(text.slice(cursor, match.index)));
+      parts.push(renderLocalFormula(match[0]));
+      cursor = match.index + match[0].length;
+    }
+    parts.push(escapeHtml(text.slice(cursor)));
+    return parts.join("");
+  }
+
+  function renderLocalFormula(source) {
+    const display = source.startsWith("$$") || source.startsWith("\\[");
+    const inner = source
+      .replace(/^\$\$|\$\$$/g, "")
+      .replace(/^\$|\$$/g, "")
+      .replace(/^\\\(|\\\)$/g, "")
+      .replace(/^\\\[|\\\]$/g, "")
+      .trim();
+    const className = display ? "math-fallback display" : "math-fallback";
+    return `<span class="${className}">${renderTexFragment(inner)}</span>`;
+  }
+
+  function renderTexFragment(tex) {
+    let html = escapeHtml(tex)
+      .replace(/\\,/g, " ")
+      .replace(/\\!/g, "")
+      .replace(/\\left/g, "")
+      .replace(/\\right/g, "");
+    const groupedCommands = [
+      ["mathscr", "math-script"],
+      ["mathcal", "math-script"],
+      ["mathbf", "math-bold"],
+      ["mathrm", "math-roman"],
+      ["rm", "math-roman"],
+      ["underline", "math-underline"],
+      ["widehat", "math-hat"],
+      ["hat", "math-hat"],
+    ];
+    for (const [command, className] of groupedCommands) {
+      html = html.replace(new RegExp(`\\\\${command}\\{([^{}]*)\\}`, "g"), (_, inner) => {
+        return `<span class="${className}">${renderTexFragment(inner)}</span>`;
+      });
+    }
+    html = html
+      .replace(/\^\{([^{}]*)\}/g, (_, inner) => `<sup>${renderTexFragment(inner)}</sup>`)
+      .replace(/_\{([^{}]*)\}/g, (_, inner) => `<sub>${renderTexFragment(inner)}</sub>`)
+      .replace(/\^([A-Za-z0-9+\-=])/g, "<sup>$1</sup>")
+      .replace(/_([A-Za-z0-9+\-=])/g, "<sub>$1</sub>")
+      .replace(/\\rm\s+([A-Za-z]+)/g, '<span class="math-roman">$1</span>');
+    const greek = {
+      alpha: "α",
+      beta: "β",
+      gamma: "γ",
+      delta: "δ",
+      epsilon: "ε",
+      theta: "θ",
+      lambda: "λ",
+      mu: "μ",
+      pi: "π",
+      sigma: "σ",
+      tau: "τ",
+      phi: "φ",
+      omega: "ω",
+      Gamma: "Γ",
+      Delta: "Δ",
+      Theta: "Θ",
+      Lambda: "Λ",
+      Pi: "Π",
+      Sigma: "Σ",
+      Phi: "Φ",
+      Omega: "Ω",
+    };
+    html = html.replace(/\\([A-Za-z]+)/g, (_, command) => greek[command] || command);
+    return html;
+  }
+
+  function typesetMath(root) {
+    if (!window.MathJax || typeof window.MathJax.typesetPromise !== "function") return;
+    window.MathJax.typesetPromise([root]).catch((error) => {
+      console.warn("MathJax typeset failed", error);
+    });
   }
 
   async function loadSummaryTemplates() {
@@ -324,10 +427,13 @@ const ArxivDailyWorkbench = (() => {
       card.type = "button";
       card.className = "paper-card";
       const score = paper.score && paper.score.status === "complete" ? paper.score : null;
-      const hint = paper.metadata_error || paper.abstract || "No abstract yet.";
+      const keywords = Array.isArray(paper.summary_keywords) ? paper.summary_keywords : [];
+      const keywordHint = paper.metadata_error
+        ? `Metadata: ${paper.metadata_error}`
+        : "尚无中文关键词，运行 Summary 后生成。";
       card.innerHTML = `
         <div class="paper-card-head">
-          <h3 class="paper-card-title">${escapeHtml(paper.title || paper.arxiv_id)}</h3>
+          <h3 class="paper-card-title">${renderLatexText(paper.title || paper.arxiv_id)}</h3>
           ${score ? `<span class="score-badge">${escapeHtml(score.score_total)} ${escapeHtml(score.recommended_action)}</span>` : ""}
         </div>
         <div class="paper-meta">
@@ -338,11 +444,14 @@ const ArxivDailyWorkbench = (() => {
         <div class="tag-row">
           ${(paper.listing_categories || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
         </div>
-        <p class="paper-card-hint">${escapeHtml(hint)}</p>
+        ${keywords.length
+          ? `<div class="keyword-row" aria-label="中文关键词">${keywords.map((item) => `<span class="keyword-tag">${escapeHtml(item)}</span>`).join("")}</div>`
+          : `<p class="paper-card-hint">${escapeHtml(keywordHint)}</p>`}
       `;
       card.addEventListener("click", () => selectPaper(paper.arxiv_id, card));
       container.appendChild(card);
     }
+    typesetMath(container);
   }
 
   async function selectPaper(arxivId, card) {
@@ -375,7 +484,7 @@ const ArxivDailyWorkbench = (() => {
     const score = detail.score;
     el("paper-content").innerHTML = `
       <div class="paper-hero">
-        <h3>${escapeHtml(paper.title || paper.arxiv_id)}</h3>
+        <h3>${renderLatexText(paper.title || paper.arxiv_id)}</h3>
         ${score ? `<span class="score-badge large">${escapeHtml(score.score_total)} ${escapeHtml(score.recommended_action)}</span>` : ""}
       </div>
       <div class="tag-row compact-tags">
@@ -391,7 +500,7 @@ const ArxivDailyWorkbench = (() => {
       </div>
       <div class="section-block">
         <h4>Abstract</h4>
-        <p>${escapeHtml(paper.abstract || "-")}</p>
+        <p>${renderLatexText(paper.abstract || "-")}</p>
       </div>
       <div class="section-block">
         <h4>Events</h4>
@@ -402,6 +511,7 @@ const ArxivDailyWorkbench = (() => {
         ${summaries.length ? summaries.map(renderSummary).join("") : '<p class="empty-state">No summaries.</p>'}
       </div>
     `;
+    typesetMath(el("paper-content"));
   }
 
   function metadataNotice(paper) {
@@ -499,6 +609,7 @@ const ArxivDailyWorkbench = (() => {
     el("search-query").addEventListener("keydown", (event) => {
       if (event.key === "Enter") runSearch();
     });
+    window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();
     runAudit();
     runSearch();

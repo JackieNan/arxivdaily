@@ -24,6 +24,8 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="summary-template-help"' in response.text
     assert 'id="score-run"' in response.text
     assert 'id="search-sort"' in response.text
+    assert "MathJax" in response.text
+    assert "tex-chtml.js" in response.text
     assert "Settings" in response.text
     assert "Enrich" not in response.text
     assert 'id="left-rail"' not in response.text
@@ -48,6 +50,12 @@ def test_static_web_assets_are_served(tmp_path):
     assert "runScore" in js_response.text
     assert "/api/scores/run" in js_response.text
     assert "score-badge" in js_response.text
+    assert "typesetMath" in js_response.text
+    assert "renderLatexText" in js_response.text
+    assert "math-fallback" in js_response.text
+    assert "summary_keywords" in js_response.text
+    assert "关键词" in js_response.text
+    assert 'paper.abstract || "No abstract yet."' not in js_response.text
     assert 'params.set("limit", "50")' not in js_response.text
     assert css_response.status_code == 200
     assert ".app-shell" in css_response.text
@@ -55,3 +63,5 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".workspace-grid" in css_response.text
     assert ".paper-card-title" in css_response.text
     assert ".right-rail" in css_response.text
+    assert ".math-fallback" in css_response.text
+    assert ".keyword-tag" in css_response.text
