@@ -9,7 +9,7 @@ EVENT_HEADING_MAP = {
     "replacements": "replacement",
 }
 
-CATEGORY_RE = re.compile(r"\(([a-z-]+\.[A-Z]{2})\)")
+CATEGORY_RE = re.compile(r"\(([a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9-]+)?)\)")
 
 
 def _heading_to_event_type(text: str) -> str | None:
@@ -27,7 +27,7 @@ def _extract_arxiv_id(dt: Tag) -> str | None:
     href = abstract_link.get("href", "")
     if "/abs/" not in href:
         return None
-    return href.rsplit("/", 1)[-1].strip()
+    return href.split("/abs/", 1)[1].strip()
 
 
 def _extract_primary_category(dd: Tag | None) -> str | None:

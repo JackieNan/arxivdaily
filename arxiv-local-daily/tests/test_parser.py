@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from arxiv_local_daily.crawler.parser import parse_daily_listing
 
 
@@ -30,3 +32,59 @@ def test_parse_daily_listing_extracts_primary_category():
 
     assert events[0].primary_category == "cs.AI"
     assert events[1].primary_category == "cs.LG"
+
+
+def test_parse_daily_listing_preserves_legacy_arxiv_id_namespace():
+    html = """
+    <div id="dlpage">
+      <h3>New submissions for Wed, 3 Jun 2026</h3>
+      <dl>
+        <dt>
+          <span class="list-identifier"><a title="Abstract" href="/abs/hep-th/9901001">arXiv:hep-th/9901001</a></span>
+        </dt>
+        <dd>
+          <div class="list-subjects">
+            <span class="primary-subject">High Energy Physics - Theory (hep-th)</span>
+          </div>
+        </dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_daily_listing(
+        html,
+        listing_category="hep-th",
+        source_url="https://arxiv.org/list/hep-th/new",
+    )
+
+    assert events[0].arxiv_id == "hep-th/9901001"
+
+
+@pytest.mark.parametrize(
+    "category",
+    ["hep-th", "quant-ph", "physics.data-an", "cond-mat.mtrl-sci"],
+)
+def test_parse_daily_listing_extracts_non_cs_category_formats(category):
+    html = f"""
+    <div id="dlpage">
+      <h3>New submissions for Wed, 3 Jun 2026</h3>
+      <dl>
+        <dt>
+          <span class="list-identifier"><a title="Abstract" href="/abs/2606.00004">arXiv:2606.00004</a></span>
+        </dt>
+        <dd>
+          <div class="list-subjects">
+            <span class="primary-subject">Primary Subject ({category})</span>
+          </div>
+        </dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_daily_listing(
+        html,
+        listing_category=category,
+        source_url=f"https://arxiv.org/list/{category}/new",
+    )
+
+    assert events[0].primary_category == category
