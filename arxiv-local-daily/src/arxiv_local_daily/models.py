@@ -68,3 +68,9 @@ class SummaryTemplateInput(BaseModel):
     system_prompt: str
     input_scope: str = "abstract"
     is_default: bool = False
+
+
+class PaperDiscussionInput(BaseModel):
+    role: str
+    content: str
+    tags: list[str] = Field(default_factory=list)

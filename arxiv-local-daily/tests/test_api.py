@@ -298,3 +298,106 @@ def test_get_paper_summaries_returns_persisted_content(tmp_path):
     data = response.json()
     assert data["summaries"][0]["content"] == {"tldr": "Stored summary."}
     assert data["summaries"][0]["status"] == "complete"
+
+
+def _seed_search_api_data(db_path: Path) -> None:
+    connection = connect(db_path)
+    initialize_schema(connection)
+    paper_repo = PaperRepository(connection)
+    paper_repo.upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="2606.00001",
+            event_type="new",
+            listing_category="cs.AI",
+            primary_category="cs.AI",
+            source_url="https://arxiv.org/list/cs.AI/new",
+        ),
+    )
+    paper_repo.upsert_metadata(
+        PaperMetadata(
+            arxiv_id="2606.00001",
+            title="Structured Summaries for Daily Research",
+            abstract="Configurable summaries help daily research triage.",
+            authors=["Ada Lovelace"],
+            primary_category="cs.AI",
+            categories=["cs.AI"],
+        )
+    )
+    template_id = TemplateRepository(connection).create_template(
+        SummaryTemplateInput(
+            name="daily_research",
+            language="Chinese",
+            system_prompt="Summarize.",
+            input_scope="abstract",
+            fields=[
+                SummaryTemplateField(
+                    key="tldr",
+                    label="一句话结论",
+                    order=1,
+                    prompt="Give one sentence.",
+                    field_type="short_sentence",
+                )
+            ],
+        )
+    )
+    SummaryRepository(connection).upsert_summary(
+        arxiv_id="2606.00001",
+        template_id=template_id,
+        template_version=1,
+        model="fake-model",
+        language="Chinese",
+        input_scope="abstract",
+        content={"tldr": "Daily triage summary."},
+        status="complete",
+    )
+    connection.commit()
+    connection.close()
+
+
+def test_search_papers_api_returns_filtered_results(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    _seed_search_api_data(db_path)
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get(
+        "/api/search/papers",
+        params={"q": "daily triage", "date": "2026-06-03", "category": "cs.AI"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["papers"][0]["arxiv_id"] == "2606.00001"
+
+
+def test_get_paper_detail_api_returns_nested_records(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    _seed_search_api_data(db_path)
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get("/api/papers/2606.00001")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["paper"]["arxiv_id"] == "2606.00001"
+    assert data["events"][0]["event_type"] == "new"
+    assert data["summaries"][0]["content"] == {"tldr": "Daily triage summary."}
+
+
+def test_paper_discussions_api_adds_and_lists_messages(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    _seed_search_api_data(db_path)
+    client = TestClient(create_app(database_path=db_path))
+
+    create_response = client.post(
+        "/api/papers/2606.00001/discussions",
+        json={"role": "user", "content": "Why is this paper useful?", "tags": ["question"]},
+    )
+    list_response = client.get("/api/papers/2606.00001/discussions")
+
+    assert create_response.status_code == 200
+    assert create_response.json()["message_id"] == 1
+    assert list_response.status_code == 200
+    assert list_response.json()["discussions"][0]["content"] == "Why is this paper useful?"
+    assert list_response.json()["discussions"][0]["tags"] == ["question"]

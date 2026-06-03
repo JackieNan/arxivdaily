@@ -5,8 +5,8 @@ from pathlib import Path
 from arxiv_local_daily.config import default_settings
 from arxiv_local_daily.crawler.live import run_live_daily_crawl
 from arxiv_local_daily.db import connect, initialize_schema
-from arxiv_local_daily.models import SummaryTemplateInput
-from arxiv_local_daily.repositories import TemplateRepository
+from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
+from arxiv_local_daily.repositories import DiscussionRepository, SearchRepository, TemplateRepository
 from arxiv_local_daily.services import (
     enrich_metadata_for_date,
     generate_summaries_for_date,
@@ -30,6 +30,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     crawl_retry.add_argument("--date", required=True)
     crawl_retry.add_argument("--expected-category", action="append")
     crawl_retry.add_argument("--db", default=str(default_settings().database_path))
+    search = subparsers.add_parser("search")
+    search.add_argument("--query")
+    search.add_argument("--date")
+    search.add_argument("--category")
+    search.add_argument("--event-type")
+    search.add_argument("--metadata-status")
+    search.add_argument("--summary-status")
+    search.add_argument("--limit", type=int, default=50)
+    search.add_argument("--db", default=str(default_settings().database_path))
+    discuss = subparsers.add_parser("discuss")
+    discuss_subparsers = discuss.add_subparsers(dest="discuss_command", required=True)
+    discuss_add = discuss_subparsers.add_parser("add")
+    discuss_add.add_argument("--arxiv-id", required=True)
+    discuss_add.add_argument("--role", required=True)
+    discuss_add.add_argument("--content", required=True)
+    discuss_add.add_argument("--tag", action="append")
+    discuss_add.add_argument("--db", default=str(default_settings().database_path))
+    discuss_list = discuss_subparsers.add_parser("list")
+    discuss_list.add_argument("--arxiv-id", required=True)
+    discuss_list.add_argument("--db", default=str(default_settings().database_path))
     metadata = subparsers.add_parser("metadata")
     metadata.add_argument("--date", required=True)
     metadata.add_argument("--limit", type=int, default=100)
@@ -86,6 +106,49 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             connection.close()
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
+    if args.command == "search":
+        connection = connect(args.db)
+        initialize_schema(connection)
+        try:
+            papers = SearchRepository(connection).search_papers(
+                query=args.query,
+                date=args.date,
+                category=args.category,
+                event_type=args.event_type,
+                metadata_status=args.metadata_status,
+                summary_status=args.summary_status,
+                limit=args.limit,
+            )
+        finally:
+            connection.close()
+        print(json.dumps({"count": len(papers), "papers": papers}, ensure_ascii=False, sort_keys=True))
+        return 0
+    if args.command == "discuss" and args.discuss_command == "add":
+        connection = connect(args.db)
+        initialize_schema(connection)
+        try:
+            message_id = DiscussionRepository(connection).add_message(
+                args.arxiv_id,
+                PaperDiscussionInput(
+                    role=args.role,
+                    content=args.content,
+                    tags=args.tag or [],
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        print(json.dumps({"message_id": message_id}, ensure_ascii=False, sort_keys=True))
+        return 0
+    if args.command == "discuss" and args.discuss_command == "list":
+        connection = connect(args.db)
+        initialize_schema(connection)
+        try:
+            messages = DiscussionRepository(connection).list_messages(args.arxiv_id)
+        finally:
+            connection.close()
+        print(json.dumps({"discussions": messages}, ensure_ascii=False, sort_keys=True))
         return 0
     if args.command == "metadata":
         connection = connect(args.db)

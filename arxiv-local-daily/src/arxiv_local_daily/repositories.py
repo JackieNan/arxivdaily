@@ -2,7 +2,12 @@ import json
 import sqlite3
 from typing import Any
 
-from arxiv_local_daily.models import PaperMetadata, ParsedDailyEvent, SummaryTemplateInput
+from arxiv_local_daily.models import (
+    PaperDiscussionInput,
+    PaperMetadata,
+    ParsedDailyEvent,
+    SummaryTemplateInput,
+)
 
 
 class CrawlRepository:
@@ -460,3 +465,223 @@ class SummaryRepository:
             item["content"] = json.loads(item.pop("content_json"))
             summaries.append(item)
         return summaries
+
+
+class DiscussionRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def add_message(self, arxiv_id: str, message: PaperDiscussionInput) -> int:
+        PaperRepository(self.connection).ensure_pending_paper(arxiv_id)
+        cursor = self.connection.execute(
+            """
+            INSERT INTO paper_discussions (arxiv_id, role, content, tags_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                arxiv_id,
+                message.role,
+                message.content,
+                json.dumps(message.tags, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        return int(cursor.lastrowid)
+
+    def list_messages(self, arxiv_id: str) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT id, arxiv_id, role, content, tags_json, created_at
+            FROM paper_discussions
+            WHERE arxiv_id = ?
+            ORDER BY id ASC
+            """,
+            (arxiv_id,),
+        ).fetchall()
+        messages: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["tags"] = json.loads(item.pop("tags_json"))
+            messages.append(item)
+        return messages
+
+
+class SearchRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def search_papers(
+        self,
+        *,
+        query: str | None = None,
+        date: str | None = None,
+        category: str | None = None,
+        event_type: str | None = None,
+        metadata_status: str | None = None,
+        summary_status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        where = ["1 = 1"]
+        params: list[Any] = []
+        if query:
+            like_query = f"%{query.lower()}%"
+            where.append(
+                """
+                (
+                    LOWER(p.arxiv_id) LIKE ?
+                    OR LOWER(COALESCE(p.title, '')) LIKE ?
+                    OR LOWER(COALESCE(p.abstract, '')) LIKE ?
+                    OR LOWER(COALESCE(p.authors_json, '')) LIKE ?
+                    OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                    OR EXISTS (
+                        SELECT 1 FROM summaries qs
+                        WHERE qs.arxiv_id = p.arxiv_id
+                          AND LOWER(qs.content_json) LIKE ?
+                    )
+                )
+                """
+            )
+            params.extend([like_query] * 6)
+        if date:
+            where.append("e.date = ?")
+            params.append(date)
+        if category:
+            category_like = f"%{category.lower()}%"
+            where.append(
+                """
+                (
+                    LOWER(COALESCE(e.listing_category, '')) = ?
+                    OR LOWER(COALESCE(p.primary_category, '')) = ?
+                    OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                )
+                """
+            )
+            params.extend([category.lower(), category.lower(), category_like])
+        if event_type:
+            where.append("e.event_type = ?")
+            params.append(event_type)
+        if metadata_status:
+            where.append("p.metadata_status = ?")
+            params.append(metadata_status)
+        if summary_status:
+            where.append(
+                """
+                EXISTS (
+                    SELECT 1 FROM summaries fs
+                    WHERE fs.arxiv_id = p.arxiv_id
+                      AND fs.status = ?
+                )
+                """
+            )
+            params.append(summary_status)
+
+        rows = self.connection.execute(
+            f"""
+            SELECT DISTINCT
+                p.arxiv_id,
+                p.title,
+                p.abstract,
+                p.authors_json,
+                p.primary_category,
+                p.categories_json,
+                p.abs_url,
+                p.pdf_url,
+                p.published_at,
+                p.updated_at,
+                p.metadata_status,
+                (
+                    SELECT MAX(de.date)
+                    FROM daily_events de
+                    WHERE de.arxiv_id = p.arxiv_id
+                ) AS latest_date
+            FROM papers p
+            LEFT JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            WHERE {" AND ".join(where)}
+            ORDER BY latest_date DESC, p.arxiv_id ASC
+            LIMIT ?
+            """,
+            (*params, limit),
+        ).fetchall()
+        return [self._paper_search_result(row) for row in rows]
+
+    def get_paper_detail(self, arxiv_id: str) -> dict[str, Any] | None:
+        paper_row = self.connection.execute(
+            """
+            SELECT
+                arxiv_id,
+                title,
+                abstract,
+                authors_json,
+                primary_category,
+                categories_json,
+                abs_url,
+                pdf_url,
+                published_at,
+                updated_at,
+                metadata_status,
+                created_at,
+                updated_row_at
+            FROM papers
+            WHERE arxiv_id = ?
+            """,
+            (arxiv_id,),
+        ).fetchone()
+        if paper_row is None:
+            return None
+        events = [
+            dict(row)
+            for row in self.connection.execute(
+                """
+                SELECT date, event_type, listing_category, primary_category, seen_source_url, created_at
+                FROM daily_events
+                WHERE arxiv_id = ?
+                ORDER BY date DESC, event_type ASC, listing_category ASC
+                """,
+                (arxiv_id,),
+            ).fetchall()
+        ]
+        return {
+            "paper": self._paper_dict(paper_row),
+            "events": events,
+            "summaries": SummaryRepository(self.connection).list_summaries_for_paper(arxiv_id),
+            "discussions": DiscussionRepository(self.connection).list_messages(arxiv_id),
+        }
+
+    def _paper_search_result(self, row: sqlite3.Row) -> dict[str, Any]:
+        item = self._paper_dict(row)
+        item["latest_date"] = row["latest_date"]
+        item["event_types"] = self._list_daily_event_values(row["arxiv_id"], "event_type")
+        item["listing_categories"] = self._list_daily_event_values(row["arxiv_id"], "listing_category")
+        item["summary_statuses"] = self._list_summary_statuses(row["arxiv_id"])
+        return item
+
+    def _paper_dict(self, row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        if "authors_json" in item:
+            item["authors"] = json.loads(item.pop("authors_json") or "[]")
+        if "categories_json" in item:
+            item["categories"] = json.loads(item.pop("categories_json") or "[]")
+        return item
+
+    def _list_daily_event_values(self, arxiv_id: str, column: str) -> list[str]:
+        rows = self.connection.execute(
+            f"""
+            SELECT DISTINCT {column} AS value
+            FROM daily_events
+            WHERE arxiv_id = ?
+            ORDER BY value ASC
+            """,
+            (arxiv_id,),
+        ).fetchall()
+        return [row["value"] for row in rows if row["value"] is not None]
+
+    def _list_summary_statuses(self, arxiv_id: str) -> list[str]:
+        rows = self.connection.execute(
+            """
+            SELECT DISTINCT status
+            FROM summaries
+            WHERE arxiv_id = ?
+            ORDER BY status ASC
+            """,
+            (arxiv_id,),
+        ).fetchall()
+        return [row["status"] for row in rows]

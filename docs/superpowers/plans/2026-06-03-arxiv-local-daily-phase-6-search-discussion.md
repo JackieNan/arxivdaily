@@ -31,34 +31,34 @@
 
 ### Task 1: Discussion Schema and Repository
 
-- [ ] Write a schema test for `paper_discussions`.
-- [ ] Write repository tests for adding and listing discussion messages by paper.
-- [ ] Implement `paper_discussions`, `PaperDiscussionInput`, and `DiscussionRepository`.
+- [x] Write a schema test for `paper_discussions`.
+- [x] Write repository tests for adding and listing discussion messages by paper.
+- [x] Implement `paper_discussions`, `PaperDiscussionInput`, and `DiscussionRepository`.
 
 ### Task 2: Paper Search and Detail
 
-- [ ] Write tests for query matching title, abstract, authors, and summary content.
-- [ ] Write tests for filtering by date, listing category, event type, metadata status, and summary status.
-- [ ] Write tests for paper detail returning metadata, daily events, summaries, and discussions.
-- [ ] Implement `SearchRepository.search_papers` and `SearchRepository.get_paper_detail`.
+- [x] Write tests for query matching title, abstract, authors, and summary content.
+- [x] Write tests for filtering by date, listing category, event type, metadata status, and summary status.
+- [x] Write tests for paper detail returning metadata, daily events, summaries, and discussions.
+- [x] Implement `SearchRepository.search_papers` and `SearchRepository.get_paper_detail`.
 
 ### Task 3: API Controls
 
-- [ ] Write API tests for `GET /api/search/papers`.
-- [ ] Write API tests for `GET /api/papers/{arxiv_id}`.
-- [ ] Write API tests for `POST /api/papers/{arxiv_id}/discussions` and `GET /api/papers/{arxiv_id}/discussions`.
-- [ ] Implement API endpoints.
+- [x] Write API tests for `GET /api/search/papers`.
+- [x] Write API tests for `GET /api/papers/{arxiv_id}`.
+- [x] Write API tests for `POST /api/papers/{arxiv_id}/discussions` and `GET /api/papers/{arxiv_id}/discussions`.
+- [x] Implement API endpoints.
 
 ### Task 4: CLI Controls
 
-- [ ] Write CLI parsing tests for `search`.
-- [ ] Write CLI parsing tests for `discuss add` and `discuss list`.
-- [ ] Implement CLI commands with JSON output.
+- [x] Write CLI parsing tests for `search`.
+- [x] Write CLI parsing tests for `discuss add` and `discuss list`.
+- [x] Implement CLI commands with JSON output.
 
 ### Task 5: Verification and Recording
 
-- [ ] Run focused search/discussion tests.
-- [ ] Run full `uv run pytest -v`.
-- [ ] Update README with search/discussion usage.
-- [ ] Record Phase 6 in `docs/phases.md`.
-- [ ] Commit Phase 6 locally.
+- [x] Run focused search/discussion tests.
+- [x] Run full `uv run pytest -v`.
+- [x] Update README with search/discussion usage.
+- [x] Record Phase 6 in `docs/phases.md`.
+- [x] Commit Phase 6 locally.

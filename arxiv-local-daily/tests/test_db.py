@@ -10,6 +10,7 @@ def test_schema_creates_core_tables(db):
         "crawl_runs",
         "daily_events",
         "papers",
+        "paper_discussions",
         "summary_templates",
         "summaries",
     }.issubset(table_names)

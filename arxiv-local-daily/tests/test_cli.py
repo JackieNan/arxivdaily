@@ -89,3 +89,62 @@ def test_parse_args_accepts_crawl_retry_failed_expected_categories():
     assert args.command == "crawl-retry-failed"
     assert args.date == "2026-06-03"
     assert args.expected_category == ["cs.AI"]
+
+
+def test_parse_args_accepts_search_filters():
+    args = parse_args(
+        [
+            "search",
+            "--query",
+            "daily triage",
+            "--date",
+            "2026-06-03",
+            "--category",
+            "cs.AI",
+            "--event-type",
+            "new",
+            "--metadata-status",
+            "complete",
+            "--summary-status",
+            "complete",
+            "--limit",
+            "5",
+        ]
+    )
+
+    assert args.command == "search"
+    assert args.query == "daily triage"
+    assert args.date == "2026-06-03"
+    assert args.category == "cs.AI"
+    assert args.event_type == "new"
+    assert args.metadata_status == "complete"
+    assert args.summary_status == "complete"
+    assert args.limit == 5
+
+
+def test_parse_args_accepts_discuss_add_and_list():
+    add_args = parse_args(
+        [
+            "discuss",
+            "add",
+            "--arxiv-id",
+            "2606.00001",
+            "--role",
+            "user",
+            "--content",
+            "Why is this useful?",
+            "--tag",
+            "question",
+        ]
+    )
+    list_args = parse_args(["discuss", "list", "--arxiv-id", "2606.00001"])
+
+    assert add_args.command == "discuss"
+    assert add_args.discuss_command == "add"
+    assert add_args.arxiv_id == "2606.00001"
+    assert add_args.role == "user"
+    assert add_args.content == "Why is this useful?"
+    assert add_args.tag == ["question"]
+    assert list_args.command == "discuss"
+    assert list_args.discuss_command == "list"
+    assert list_args.arxiv_id == "2606.00001"
