@@ -34,6 +34,54 @@ def test_parse_daily_listing_extracts_primary_category():
     assert events[1].primary_category == "cs.LG"
 
 
+def test_parse_daily_listing_handles_single_articles_dl_with_section_headings():
+    html = """
+    <div id="dlpage">
+      <dl id="articles">
+        <h3>New submissions (showing 1 of 1 entries)</h3>
+        <dt>
+          <span class="list-identifier"><a title="Abstract" href="/abs/2606.00001">arXiv:2606.00001</a></span>
+        </dt>
+        <dd>
+          <div class="list-subjects">
+            <span class="primary-subject">Artificial Intelligence (cs.AI)</span>
+          </div>
+        </dd>
+        <h3>Cross submissions (showing 1 of 1 entries)</h3>
+        <dt>
+          <span class="list-identifier"><a title="Abstract" href="/abs/2606.00002">arXiv:2606.00002</a></span>
+        </dt>
+        <dd>
+          <div class="list-subjects">
+            <span class="primary-subject">Machine Learning (cs.LG)</span>
+          </div>
+        </dd>
+        <h3>Replacement submissions (showing 1 of 1 entries)</h3>
+        <dt>
+          <span class="list-identifier"><a title="Abstract" href="/abs/2606.00003">arXiv:2606.00003</a></span>
+        </dt>
+        <dd>
+          <div class="list-subjects">
+            <span class="primary-subject">Artificial Intelligence (cs.AI)</span>
+          </div>
+        </dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_daily_listing(
+        html,
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/new",
+    )
+
+    assert [(event.arxiv_id, event.event_type) for event in events] == [
+        ("2606.00001", "new"),
+        ("2606.00002", "cross-list"),
+        ("2606.00003", "replacement"),
+    ]
+
+
 def test_parse_daily_listing_preserves_legacy_arxiv_id_namespace():
     html = """
     <div id="dlpage">

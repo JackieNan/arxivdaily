@@ -3,20 +3,17 @@ from bs4 import BeautifulSoup, Tag
 
 from arxiv_local_daily.models import ParsedDailyEvent
 
-EVENT_HEADING_MAP = {
-    "new submissions": "new",
-    "cross-lists": "cross-list",
-    "replacements": "replacement",
-}
-
 CATEGORY_RE = re.compile(r"\(([a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9-]+)?)\)")
 
 
 def _heading_to_event_type(text: str) -> str | None:
-    normalized = " ".join(text.lower().split())
-    for marker, event_type in EVENT_HEADING_MAP.items():
-        if marker in normalized:
-            return event_type
+    normalized = " ".join(text.lower().replace("-", " ").split())
+    if "new submission" in normalized:
+        return "new"
+    if "cross" in normalized and ("submission" in normalized or "list" in normalized):
+        return "cross-list"
+    if "replacement" in normalized:
+        return "replacement"
     return None
 
 
@@ -50,7 +47,7 @@ def parse_daily_listing(
     events: list[ParsedDailyEvent] = []
     current_event_type: str | None = None
 
-    for node in dlpage.children:
+    for node in dlpage.descendants:
         if not isinstance(node, Tag):
             continue
         if node.name in {"h2", "h3", "h4"}:
@@ -58,20 +55,19 @@ def parse_daily_listing(
             if detected is not None:
                 current_event_type = detected
             continue
-        if node.name != "dl" or current_event_type is None:
+        if node.name != "dt" or current_event_type is None:
             continue
-        for dt in node.select(":scope > dt"):
-            arxiv_id = _extract_arxiv_id(dt)
-            if arxiv_id is None:
-                continue
-            dd = dt.find_next_sibling("dd")
-            events.append(
-                ParsedDailyEvent(
-                    arxiv_id=arxiv_id,
-                    event_type=current_event_type,
-                    listing_category=listing_category,
-                    primary_category=_extract_primary_category(dd),
-                    source_url=source_url,
-                )
+        arxiv_id = _extract_arxiv_id(node)
+        if arxiv_id is None:
+            continue
+        dd = node.find_next_sibling("dd")
+        events.append(
+            ParsedDailyEvent(
+                arxiv_id=arxiv_id,
+                event_type=current_event_type,
+                listing_category=listing_category,
+                primary_category=_extract_primary_category(dd),
+                source_url=source_url,
             )
+        )
     return events

@@ -34,7 +34,7 @@ uv run pytest
 ## Run API
 
 ```bash
-uv run uvicorn arxiv_local_daily.api:create_app --factory --reload
+PYTHONPATH=src uv run uvicorn arxiv_local_daily.api:create_app --factory --reload
 ```
 
 The phase-one endpoints are:
