@@ -226,3 +226,20 @@ Date baseline: 2026-06-03
   - browser smoke after server restart confirmed no abstract snippets in default cards and no horizontal overflow
   - local API smoke found the user-referenced formula-title paper `2104.14092`
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 12: Daily vs Overview Search Scope
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-12-search-scope-toggle.md`
+- Scope completed:
+  - add a search scope selector with `当日` and `总揽`
+  - keep `当日` as the default behavior and continue sending the selected date to search
+  - make `总揽` omit the date parameter so the search list covers the whole local database
+  - update result detail/status text to show the active scope
+- Important decisions:
+  - the previous list was already day-scoped, but the UI did not make that obvious
+  - `总揽` is a repository-wide view, not a separate data source
+- Verification:
+  - focused web UI tests passed
+  - `uv run pytest -v`: 105 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

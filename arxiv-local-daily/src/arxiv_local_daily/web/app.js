@@ -380,17 +380,23 @@ const ArxivDailyWorkbench = (() => {
     const params = new URLSearchParams();
     const pairs = [
       ["q", el("search-query").value.trim()],
-      ["date", dateValue()],
       ["category", el("search-category").value.trim()],
       ["event_type", el("search-event").value],
       ["metadata_status", el("search-metadata").value],
       ["summary_status", el("search-summary").value],
       ["sort", el("search-sort").value],
     ];
+    if (el("search-scope").value === "daily") {
+      params.set("date", dateValue());
+    }
     for (const [key, value] of pairs) {
       if (value) params.set(key, value);
     }
     return params;
+  }
+
+  function searchScopeLabel() {
+    return el("search-scope").value === "daily" ? `当日 ${dateValue()}` : "总揽";
   }
 
   async function runSearch(options = {}) {
@@ -401,11 +407,12 @@ const ArxivDailyWorkbench = (() => {
       const data = await api(`/api/search/papers?${searchParams().toString()}`);
       renderResults(data.papers);
       el("result-count").textContent = String(data.count);
+      const scope = searchScopeLabel();
       const detail = data.count
-        ? `Showing ${data.count} papers for ${dateValue()}.`
-        : `No matching papers for ${dateValue()} with current filters.`;
+        ? `${scope}: showing ${data.count} papers.`
+        : `${scope}: no matching papers with current filters.`;
       setDetail("search-detail", detail);
-      if (!silent) recordOperation(`Search returned ${data.count} papers`, detail);
+      if (!silent) recordOperation(`Search returned ${data.count} papers (${scope})`, detail);
     } catch (error) {
       setDetail("search-detail", `Search failed:\n${error.message}`);
       el("paper-results").innerHTML = `<p class="empty-state">Search failed: ${escapeHtml(error.message)}</p>`;
@@ -605,6 +612,7 @@ const ArxivDailyWorkbench = (() => {
     el("summary-run").addEventListener("click", runSummary);
     el("score-run").addEventListener("click", runScore);
     el("search-run").addEventListener("click", runSearch);
+    el("search-scope").addEventListener("change", runSearch);
     el("discussion-add").addEventListener("click", addDiscussion);
     el("search-query").addEventListener("keydown", (event) => {
       if (event.key === "Enter") runSearch();
