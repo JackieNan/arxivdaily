@@ -23,13 +23,22 @@ Phase 2 adds live daily crawling:
 - limited manual category crawls for smoke testing
 - `complete` and `partial` crawl status based on per-source success
 
+## Phase 3
+
+Phase 3 adds arXiv API metadata enrichment:
+
+- arXiv API `id_list` URL construction
+- Atom feed parsing for modern and legacy arXiv IDs
+- title, authors, abstract, category, URL, timestamp, and version persistence
+- metadata status transitions to `complete` or `failed`
+- manual metadata enrichment through CLI and API
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
 
 These are planned for later versions:
 
-- arXiv API metadata enrichment
 - AI summary workers
 - full-text extraction
 - complex long-chain paper-reading agents
@@ -70,3 +79,15 @@ The all-category command discovers categories from arXiv's taxonomy page, then f
 The crawl trigger API accepts the same date/category shape:
 
 - `POST /api/crawl/run`
+
+## Run Metadata Enrichment
+
+```bash
+uv run --with-editable . arxiv-local-daily metadata --date 2026-06-03 --limit 100
+```
+
+Metadata enrichment uses the official arXiv API `id_list` query for crawled paper IDs. Daily crawl events remain in the database even when metadata is missing or failed.
+
+The metadata trigger API accepts the same date/limit shape:
+
+- `POST /api/metadata/run`
