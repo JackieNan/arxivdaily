@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from typing import Any
 
 from arxiv_local_daily.models import PaperMetadata, ParsedDailyEvent, SummaryTemplateInput
 
@@ -238,3 +239,198 @@ class TemplateRepository:
                 """
             ).fetchall()
         )
+
+    def get_template(
+        self,
+        *,
+        template_id: int | None = None,
+        name: str | None = None,
+    ) -> sqlite3.Row | None:
+        if template_id is not None:
+            return self.connection.execute(
+                "SELECT * FROM summary_templates WHERE id = ?",
+                (template_id,),
+            ).fetchone()
+        if name is not None:
+            return self.connection.execute(
+                """
+                SELECT *
+                FROM summary_templates
+                WHERE name = ?
+                ORDER BY version DESC
+                LIMIT 1
+                """,
+                (name,),
+            ).fetchone()
+        return self.connection.execute(
+            """
+            SELECT *
+            FROM summary_templates
+            ORDER BY is_default DESC, name ASC, version DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+
+class SummaryRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def list_summary_candidate_ids_for_date(
+        self,
+        *,
+        date: str,
+        template_id: int,
+        template_version: int,
+        model: str,
+        input_scope: str,
+        limit: int,
+        force: bool = False,
+    ) -> list[str]:
+        rows = self.connection.execute(
+            """
+            SELECT DISTINCT p.arxiv_id
+            FROM papers p
+            JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            WHERE e.date = ?
+              AND p.metadata_status = 'complete'
+              AND COALESCE(p.abstract, '') != ''
+              AND (
+                ? = 1 OR NOT EXISTS (
+                    SELECT 1
+                    FROM summaries s
+                    WHERE s.arxiv_id = p.arxiv_id
+                      AND s.template_id = ?
+                      AND s.template_version = ?
+                      AND s.model = ?
+                      AND s.input_scope = ?
+                      AND s.status = 'complete'
+                )
+              )
+            ORDER BY p.arxiv_id
+            LIMIT ?
+            """,
+            (
+                date,
+                1 if force else 0,
+                template_id,
+                template_version,
+                model,
+                input_scope,
+                limit,
+            ),
+        ).fetchall()
+        return [row["arxiv_id"] for row in rows]
+
+    def count_existing_complete_summaries_for_date(
+        self,
+        *,
+        date: str,
+        template_id: int,
+        template_version: int,
+        model: str,
+        input_scope: str,
+    ) -> int:
+        row = self.connection.execute(
+            """
+            SELECT COUNT(DISTINCT p.arxiv_id) AS count
+            FROM papers p
+            JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            JOIN summaries s ON s.arxiv_id = p.arxiv_id
+            WHERE e.date = ?
+              AND p.metadata_status = 'complete'
+              AND s.template_id = ?
+              AND s.template_version = ?
+              AND s.model = ?
+              AND s.input_scope = ?
+              AND s.status = 'complete'
+            """,
+            (date, template_id, template_version, model, input_scope),
+        ).fetchone()
+        return int(row["count"])
+
+    def get_paper_for_summary(self, arxiv_id: str) -> sqlite3.Row | None:
+        return self.connection.execute(
+            """
+            SELECT
+                arxiv_id,
+                title,
+                abstract,
+                authors_json,
+                primary_category,
+                categories_json,
+                abs_url,
+                pdf_url,
+                published_at,
+                updated_at
+            FROM papers
+            WHERE arxiv_id = ?
+            """,
+            (arxiv_id,),
+        ).fetchone()
+
+    def upsert_summary(
+        self,
+        *,
+        arxiv_id: str,
+        template_id: int,
+        template_version: int,
+        model: str,
+        language: str,
+        input_scope: str,
+        content: dict[str, Any],
+        status: str,
+    ) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO summaries
+                (arxiv_id, template_id, template_version, model, language, input_scope, content_json, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(arxiv_id, template_id, template_version, model, input_scope) DO UPDATE SET
+                language = excluded.language,
+                content_json = excluded.content_json,
+                status = excluded.status,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                arxiv_id,
+                template_id,
+                template_version,
+                model,
+                language,
+                input_scope,
+                json.dumps(content, ensure_ascii=False, sort_keys=True),
+                status,
+            ),
+        )
+        return int(cursor.lastrowid)
+
+    def list_summaries_for_paper(self, arxiv_id: str) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                s.id,
+                s.arxiv_id,
+                s.template_id,
+                t.name AS template_name,
+                s.template_version,
+                s.model,
+                s.language,
+                s.input_scope,
+                s.content_json,
+                s.status,
+                s.created_at,
+                s.updated_at
+            FROM summaries s
+            JOIN summary_templates t ON t.id = s.template_id
+            WHERE s.arxiv_id = ?
+            ORDER BY s.updated_at DESC, s.id DESC
+            """,
+            (arxiv_id,),
+        ).fetchall()
+        summaries: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["content"] = json.loads(item.pop("content_json"))
+            summaries.append(item)
+        return summaries
