@@ -8,6 +8,7 @@ from arxiv_local_daily.config import default_settings
 from arxiv_local_daily.crawler.live import run_live_daily_crawl
 from arxiv_local_daily.db import connect, initialize_schema
 from arxiv_local_daily.repositories import CrawlRepository, TemplateRepository
+from arxiv_local_daily.services import enrich_metadata_for_date
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
@@ -19,12 +20,19 @@ class CrawlRunRequest(BaseModel):
     categories: list[str] = Field(min_length=1)
 
 
+class MetadataRunRequest(BaseModel):
+    date: str
+    limit: int = 100
+
+
 CrawlerRunner = Callable[..., int]
+MetadataRunner = Callable[..., dict[str, int]]
 
 
 def create_app(
     database_path: Path | str | None = None,
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
+    metadata_runner: MetadataRunner = enrich_metadata_for_date,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
     db_path = Path(database_path) if database_path is not None else default_settings().database_path
@@ -78,6 +86,14 @@ def create_app(
                 categories=request.categories,
             )
             return {"run_id": run_id}
+        finally:
+            connection.close()
+
+    @app.post("/api/metadata/run")
+    def run_metadata(request: MetadataRunRequest):
+        connection = get_connection()
+        try:
+            return metadata_runner(connection, date=request.date, limit=request.limit)
         finally:
             connection.close()
 
