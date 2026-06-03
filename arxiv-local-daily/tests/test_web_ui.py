@@ -61,8 +61,12 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'el("search-scope").value === "daily"' in js_response.text
     assert 'params.set("date", dateValue())' in js_response.text
     assert "总览" in js_response.text
+    assert "Loaded ${arxivId}" not in js_response.text
     assert "Apple Chancery" not in css_response.text
     assert "Brush Script" not in css_response.text
+    assert "Cambria Math" not in css_response.text
+    assert 'font-family: Georgia, "Times New Roman", serif;' in css_response.text
+    assert "font-style: normal;" in css_response.text
     assert '.math-hat::before' not in css_response.text
     assert 'paper.abstract || "No abstract yet."' not in js_response.text
     assert 'params.set("limit", "50")' not in js_response.text
@@ -74,3 +78,11 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".right-rail" in css_response.text
     assert ".math-fallback" in css_response.text
     assert ".keyword-tag" in css_response.text
+    assert "grid-template-columns: minmax(320px, 0.72fr) minmax(520px, 1.28fr);" in css_response.text
+    assert "grid-template-columns: repeat(2, minmax(132px, 1fr));" in css_response.text
+    assert ".top-actions .panel" in css_response.text
+    assert ".top-actions button" in css_response.text
+    assert ".operation-log" in css_response.text
+    assert "max-height: 84px;" in css_response.text
+    assert "@media (max-width: 420px)" in css_response.text
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css_response.text

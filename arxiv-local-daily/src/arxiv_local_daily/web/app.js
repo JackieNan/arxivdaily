@@ -475,7 +475,6 @@ const ArxivDailyWorkbench = (() => {
       el("paper-id").textContent = arxivId;
       renderPaperDetail(detail);
       renderDiscussions(detail.discussions || []);
-      recordOperation(`Loaded ${arxivId}`);
     } catch (error) {
       recordOperation(`Paper load failed: ${error.message}`);
     }

@@ -257,3 +257,23 @@ Date baseline: 2026-06-03
   - focused web UI tests passed
   - `uv run pytest -v`: 105 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 14: UI Density and Detail Focus
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-14-ui-density-detail-focus.md`
+- Scope completed:
+  - remove routine `Loaded <id>` paper-selection messages from the top operation log
+  - make the Crawl and Settings top strip denser with smaller buttons, badges, inputs, and diagnostic text
+  - use a desktop grid that narrows the search/list column and widens the right paper detail rail
+  - make search controls stable two-column controls with full-width query and search action
+  - switch fallback LaTeX text to a plainer serif style without ornate math/script fonts
+- Important decisions:
+  - paper detail is the main reading surface and should get more first-screen width than the list
+  - top controls should stay available without competing visually with the paper detail
+  - paper selection is navigation, not an operation worth logging
+- Verification:
+  - focused web UI tests passed
+  - `uv run pytest -v`: 105 passed, 1 warning
+  - browser smoke at 599px viewport confirmed no horizontal overflow in document, Settings, Crawl, Search, or detail rail; operation log capped at 84px and no `Loaded <id>` paper-selection message
+- Status: implemented on branch, not yet merged to `main`.
