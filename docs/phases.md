@@ -67,6 +67,7 @@ Date baseline: 2026-06-03
 ## Phase 4: Configurable AI Summary Worker
 
 - Branch: `codex/phase-4-ai-summary-worker`
+- Main merge commit: `b18056d merge phase four summary worker`
 - Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-4-ai-summary-worker.md`
 - Scope completed:
   - create and version user-editable summary templates through API/CLI
@@ -77,4 +78,4 @@ Date baseline: 2026-06-03
 - Verification:
   - `uv run pytest -v`: 55 passed, 1 warning
   - focused Phase 4 tests: 11 passed, 1 warning
-- Status: implemented on branch, not yet merged to `main`.
+- Status: merged to `main`.
