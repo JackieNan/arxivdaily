@@ -107,10 +107,21 @@ class TemplateRepository:
                 template.name,
                 template.language,
                 version,
-                json.dumps([field.model_dump() for field in template.fields], sort_keys=True),
+                json.dumps([field.model_dump() for field in template.fields], sort_keys=True, ensure_ascii=False),
                 template.system_prompt,
                 template.input_scope,
                 1 if template.is_default else 0,
             ),
         )
         return int(cursor.lastrowid)
+
+    def list_templates(self) -> list[sqlite3.Row]:
+        return list(
+            self.connection.execute(
+                """
+                SELECT *
+                FROM summary_templates
+                ORDER BY name ASC, version DESC
+                """
+            ).fetchall()
+        )
