@@ -49,11 +49,16 @@ Date baseline: 2026-06-03
 
 ## Phase 3: arXiv API Metadata Enrichment
 
-- Branch: planned `codex/phase-3-metadata-enrichment`
-- Scope planned:
+- Branch: `codex/phase-3-metadata-enrichment`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-3-metadata-enrichment.md`
+- Scope completed:
   - fetch metadata from the arXiv API for known arXiv IDs
   - parse Atom feed entries into structured paper metadata
   - persist title, authors, abstract, categories, URLs, published/updated timestamps, and version data
   - mark metadata as `complete`, `pending`, or `failed`
   - expose manual metadata enrichment through CLI/API
-- Status: planned, development starting.
+- Verification:
+  - `uv run pytest -v`: 44 passed, 1 warning
+  - metadata CLI help smoke test succeeded.
+  - live arXiv API metadata smoke test: `2606.00001` returned one parsed paper.
+- Status: implemented on branch, not yet merged to `main`.

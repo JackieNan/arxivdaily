@@ -15,3 +15,11 @@ def test_parse_args_all_categories_when_category_omitted():
     assert args.command == "crawl"
     assert args.date == "2026-06-03"
     assert args.category is None
+
+
+def test_parse_args_accepts_metadata_date_and_limit():
+    args = parse_args(["metadata", "--date", "2026-06-03", "--limit", "25"])
+
+    assert args.command == "metadata"
+    assert args.date == "2026-06-03"
+    assert args.limit == 25

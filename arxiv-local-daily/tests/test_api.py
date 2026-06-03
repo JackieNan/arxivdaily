@@ -78,6 +78,23 @@ def test_post_crawl_run_uses_injected_runner(tmp_path):
     assert calls == [("2026-06-03", ["cs.AI", "cs.LG"])]
 
 
+def test_post_metadata_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[tuple[str, int]] = []
+
+    def fake_metadata_runner(connection, *, date: str, limit: int):
+        calls.append((date, limit))
+        return {"requested": 2, "updated": 2, "missing": 0, "failed": 0}
+
+    client = TestClient(create_app(database_path=db_path, metadata_runner=fake_metadata_runner))
+
+    response = client.post("/api/metadata/run", json={"date": "2026-06-03", "limit": 2})
+
+    assert response.status_code == 200
+    assert response.json() == {"requested": 2, "updated": 2, "missing": 0, "failed": 0}
+    assert calls == [("2026-06-03", 2)]
+
+
 def test_list_summary_templates_starts_empty(tmp_path):
     client = _client_with_seed_data(tmp_path)
 

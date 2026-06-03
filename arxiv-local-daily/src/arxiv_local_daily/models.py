@@ -31,6 +31,27 @@ class CrawlSourceInput(BaseModel):
     retry_count: int = 0
 
 
+class PaperVersionInput(BaseModel):
+    version: str
+    updated_at: str | None = None
+    comment: str | None = None
+    source_hash: str | None = None
+
+
+class PaperMetadata(BaseModel):
+    arxiv_id: str
+    title: str
+    abstract: str
+    authors: list[str]
+    primary_category: str | None = None
+    categories: list[str] = Field(default_factory=list)
+    abs_url: str | None = None
+    pdf_url: str | None = None
+    published_at: str | None = None
+    updated_at: str | None = None
+    versions: list[PaperVersionInput] = Field(default_factory=list)
+
+
 class SummaryTemplateField(BaseModel):
     key: str
     label: str
