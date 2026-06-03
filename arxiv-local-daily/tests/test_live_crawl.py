@@ -1,5 +1,9 @@
 from pathlib import Path
 
+import httpx
+
+from arxiv_local_daily.crawler.http import ArxivHttpClient
+from arxiv_local_daily.crawler.live import build_daily_listing_url, run_live_daily_crawl
 from arxiv_local_daily.models import CrawlSourceInput
 from arxiv_local_daily.services import ingest_daily_crawl_sources
 
@@ -58,3 +62,94 @@ def test_ingest_daily_crawl_sources_marks_run_partial_when_source_fails(db):
     assert source["status"] == "failed"
     assert source["parsed_count"] == 0
     assert source["error"] == "HTTP 503"
+
+
+def test_build_daily_listing_url_encodes_category():
+    assert build_daily_listing_url("https://arxiv.org", "cond-mat.mtrl-sci") == (
+        "https://arxiv.org/list/cond-mat.mtrl-sci/new"
+    )
+
+
+def test_run_live_daily_crawl_fetches_each_requested_category(db):
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+    requested_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        return httpx.Response(200, text=html)
+
+    client = ArxivHttpClient(
+        transport=httpx.MockTransport(handler),
+        retry_sleep_seconds=0,
+    )
+
+    run_id = run_live_daily_crawl(
+        db,
+        date="2026-06-03",
+        categories=["cs.AI", "cs.LG"],
+        http_client=client,
+    )
+
+    source_rows = db.execute(
+        "SELECT category, status, parsed_count FROM crawl_run_sources WHERE run_id = ? ORDER BY category",
+        (run_id,),
+    ).fetchall()
+
+    assert requested_urls == [
+        "https://arxiv.org/list/cs.AI/new",
+        "https://arxiv.org/list/cs.LG/new",
+    ]
+    assert [(row["category"], row["status"], row["parsed_count"]) for row in source_rows] == [
+        ("cs.AI", "complete", 3),
+        ("cs.LG", "complete", 3),
+    ]
+
+
+def test_run_live_daily_crawl_records_failed_http_source(db):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="temporary")
+
+    client = ArxivHttpClient(
+        transport=httpx.MockTransport(handler),
+        retry_sleep_seconds=0,
+    )
+
+    run_id = run_live_daily_crawl(
+        db,
+        date="2026-06-03",
+        categories=["cs.AI"],
+        http_client=client,
+    )
+
+    run = db.execute("SELECT * FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
+    source = db.execute("SELECT * FROM crawl_run_sources WHERE run_id = ?", (run_id,)).fetchone()
+
+    assert run["status"] == "partial"
+    assert source["status"] == "failed"
+    assert source["http_status"] == 503
+    assert source["error"] == "HTTP 503"
+
+
+def test_run_live_daily_crawl_records_network_exception_source(db):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("cannot connect", request=request)
+
+    client = ArxivHttpClient(
+        transport=httpx.MockTransport(handler),
+        retry_sleep_seconds=0,
+    )
+
+    run_id = run_live_daily_crawl(
+        db,
+        date="2026-06-03",
+        categories=["cs.AI"],
+        http_client=client,
+    )
+
+    run = db.execute("SELECT * FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
+    source = db.execute("SELECT * FROM crawl_run_sources WHERE run_id = ?", (run_id,)).fetchone()
+
+    assert run["status"] == "partial"
+    assert source["status"] == "failed"
+    assert source["http_status"] is None
+    assert source["error"] == "cannot connect"
