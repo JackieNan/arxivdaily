@@ -79,3 +79,15 @@ Date baseline: 2026-06-03
   - `uv run pytest -v`: 55 passed, 1 warning
   - focused Phase 4 tests: 11 passed, 1 warning
 - Status: merged to `main`.
+
+## Phase 5: Crawl Completeness Audit
+
+- Branch: planned `codex/phase-5-crawl-completeness-audit`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-5-crawl-completeness-audit.md`
+- Scope planned:
+  - compute daily crawl completeness across all crawl runs for a date
+  - detect failed and never-attempted expected categories
+  - expose retry candidates for incomplete categories
+  - rerun failed or missing categories through CLI/API
+  - document audit and retry workflow
+- Status: planned, development starting.
