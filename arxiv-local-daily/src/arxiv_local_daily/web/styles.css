@@ -146,8 +146,10 @@ label span {
 .operation-log {
   margin-top: 8px;
   max-width: 720px;
-  max-height: 84px;
-  overflow: auto;
+  max-height: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .date-control {
@@ -300,8 +302,12 @@ label span {
 }
 
 .settings-grid {
-  grid-template-columns: minmax(150px, 1fr) minmax(92px, 0.65fr) repeat(3, minmax(96px, 0.7fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
+}
+
+#summary-template-create {
+  grid-column: 1 / -1;
 }
 
 .daily-grid {

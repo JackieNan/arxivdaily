@@ -73,7 +73,7 @@ const ArxivDailyWorkbench = (() => {
 
   function recordOperation(message, detail = "") {
     setStatus(message);
-    setDetail("operation-log", detail ? `${message}\n${detail}` : message);
+    setDetail("operation-log", message);
   }
 
   function setBusy(button, busy) {

@@ -299,3 +299,25 @@ Date baseline: 2026-06-03
   - browser smoke at 599px viewport confirmed Daily panel controls, no horizontal overflow, and compact two-row top action layout
   - local API smoke confirmed `GET /api/daily/status/2026-06-03?model=local` returns crawl, metadata, summary, score, and blocker fields
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 16: Compact Status and Data Reset
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-04-arxiv-local-daily-phase-16-ui-compact-status-data-reset.md`
+- Scope completed:
+  - make the Settings grid fit narrow in-app browser widths without horizontal overflow
+  - make `Create Default Template` span the full Settings row
+  - cap the top operation log to a one-line key status instead of rendering detailed JSON
+  - reset the current local paper and metadata data
+  - preserve summary templates after the reset
+- Important decisions:
+  - the top-left status area should answer "what just happened" only
+  - detailed operation output belongs in the relevant panel detail area
+  - clearing papers should also clear daily events, crawl runs, metadata runs/source records, summaries, scores, discussions, and jobs
+- Verification:
+  - focused web UI tests passed
+  - `uv run pytest -v`: 109 passed, 1 warning
+  - browser smoke at 599px viewport confirmed no horizontal overflow and a 35px one-line operation log
+  - SQLite reset confirmed papers, daily events, metadata runs/source records, summaries, scores, and crawl runs are 0; summary templates remain 2
+  - local API smoke confirmed daily status is `not_started` and search returns `count=0`
+- Status: implemented on branch, not yet merged to `main`.

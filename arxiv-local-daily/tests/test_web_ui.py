@@ -60,6 +60,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert "/api/daily/status/" in js_response.text
     assert "/api/daily/pipeline/run" in js_response.text
     assert "/api/scores/run" in js_response.text
+    assert 'setDetail("operation-log", message);' in js_response.text
+    assert 'detail ? `${message}\\n${detail}` : message' not in js_response.text
     assert "score-badge" in js_response.text
     assert "typesetMath" in js_response.text
     assert "renderLatexText" in js_response.text
@@ -92,7 +94,12 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".top-actions button" in css_response.text
     assert ".daily-grid" in css_response.text
     assert ".daily-summary" in css_response.text
+    assert "#summary-template-create" in css_response.text
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css_response.text
+    assert "grid-column: 1 / -1;" in css_response.text
+    assert "minmax(150px, 1fr) minmax(92px" not in css_response.text
     assert ".operation-log" in css_response.text
-    assert "max-height: 84px;" in css_response.text
+    assert "white-space: nowrap;" in css_response.text
+    assert "max-height: 40px;" in css_response.text
     assert "@media (max-width: 420px)" in css_response.text
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css_response.text
