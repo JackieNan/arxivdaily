@@ -2,6 +2,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from arxiv_local_daily.config import default_settings
@@ -29,7 +31,7 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
 
 class CrawlRunRequest(BaseModel):
     date: str
-    categories: list[str] = Field(min_length=1)
+    categories: list[str] | None = Field(default=None)
 
 
 class CrawlRetryFailedRequest(BaseModel):
@@ -66,11 +68,17 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
     db_path = Path(database_path) if database_path is not None else default_settings().database_path
+    web_dir = Path(__file__).resolve().parent / "web"
+    app.mount("/static", StaticFiles(directory=web_dir), name="static")
 
     def get_connection():
         connection = connect(db_path)
         initialize_schema(connection)
         return connection
+
+    @app.get("/")
+    def web_workbench():
+        return FileResponse(web_dir / "index.html")
 
     @app.get("/api/days/{date}/papers")
     def list_day_papers(date: str):

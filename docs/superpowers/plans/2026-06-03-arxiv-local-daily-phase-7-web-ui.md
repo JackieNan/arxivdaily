@@ -26,30 +26,30 @@
 
 ### Task 1: Serve Local Web UI
 
-- [ ] Write tests for `GET /` returning the workbench HTML.
-- [ ] Write tests for `/static/app.js` and `/static/styles.css`.
-- [ ] Implement static asset serving in `create_app`.
+- [x] Write tests for `GET /` returning the workbench HTML.
+- [x] Write tests for `/static/app.js` and `/static/styles.css`.
+- [x] Implement static asset serving in `create_app`.
 
 ### Task 2: Workbench Shell
 
-- [ ] Create an app shell with date, crawl, audit, metadata, summary, search, result list, and detail regions.
-- [ ] Add responsive CSS with compact controls and stable layout dimensions.
-- [ ] Verify text does not overflow compact controls.
+- [x] Create an app shell with date, crawl, audit, metadata, summary, search, result list, and detail regions.
+- [x] Add responsive CSS with compact controls and stable layout dimensions.
+- [x] Verify text does not overflow compact controls.
 
 ### Task 3: Frontend Interactions
 
-- [ ] Implement crawl run and retry controls.
-- [ ] Implement crawl audit display.
-- [ ] Implement metadata and summary run controls.
-- [ ] Implement paper search and filters.
-- [ ] Implement paper detail, summaries, and discussions.
+- [x] Implement crawl run and retry controls.
+- [x] Implement crawl audit display.
+- [x] Implement metadata and summary run controls.
+- [x] Implement paper search and filters.
+- [x] Implement paper detail, summaries, and discussions.
 
 ### Task 4: Verification and Recording
 
-- [ ] Run focused web UI tests.
-- [ ] Run full `uv run pytest -v`.
-- [ ] Start local `uvicorn` server.
-- [ ] Verify UI in browser at localhost.
-- [ ] Update README with web UI usage.
-- [ ] Record Phase 7 in `docs/phases.md`.
-- [ ] Commit Phase 7 locally.
+- [x] Run focused web UI tests.
+- [x] Run full `uv run pytest -v`.
+- [x] Start local `uvicorn` server.
+- [x] Verify UI in browser at localhost.
+- [x] Update README with web UI usage.
+- [x] Record Phase 7 in `docs/phases.md`.
+- [x] Commit Phase 7 locally.

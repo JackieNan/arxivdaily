@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>arXiv Daily Workbench</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>arXiv Daily Workbench</h1>
+          <p id="run-status" class="status-line">Ready</p>
+        </div>
+        <label class="date-control">
+          <span>Date</span>
+          <input id="date-input" type="date">
+        </label>
+      </header>
+
+      <main class="workspace-grid">
+        <section id="crawl-panel" class="panel control-panel">
+          <div class="panel-title">
+            <h2>Crawl</h2>
+            <span id="crawl-state" class="badge">idle</span>
+          </div>
+          <label>
+            <span>Categories</span>
+            <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
+          </label>
+          <div class="button-row">
+            <button id="crawl-run" type="button">Run Crawl</button>
+            <button id="crawl-audit" type="button">Audit</button>
+            <button id="crawl-retry" type="button">Retry</button>
+          </div>
+          <div id="audit-summary" class="metric-grid">
+            <div><span>Status</span><strong>-</strong></div>
+            <div><span>Complete</span><strong>-</strong></div>
+            <div><span>Retry</span><strong>-</strong></div>
+          </div>
+        </section>
+
+        <section class="panel control-panel">
+          <div class="panel-title">
+            <h2>Enrich</h2>
+            <span id="enrich-state" class="badge">idle</span>
+          </div>
+          <label>
+            <span>Limit</span>
+            <input id="metadata-limit" type="number" min="1" value="100">
+          </label>
+          <button id="metadata-run" type="button">Run Metadata</button>
+          <div class="summary-runner">
+            <label>
+              <span>Template</span>
+              <input id="summary-template" type="text" placeholder="daily_research">
+            </label>
+            <label>
+              <span>Model</span>
+              <input id="summary-model" type="text" value="local">
+            </label>
+            <label>
+              <span>Limit</span>
+              <input id="summary-limit" type="number" min="1" value="20">
+            </label>
+            <button id="summary-run" type="button">Run Summary</button>
+          </div>
+        </section>
+
+        <section id="search-panel" class="panel search-panel">
+          <div class="panel-title">
+            <h2>Search</h2>
+            <span id="result-count" class="badge">0</span>
+          </div>
+          <div class="search-controls">
+            <label class="wide">
+              <span>Query</span>
+              <input id="search-query" type="search" placeholder="method, title, author, summary">
+            </label>
+            <label>
+              <span>Category</span>
+              <input id="search-category" type="text" placeholder="cs.AI">
+            </label>
+            <label>
+              <span>Event</span>
+              <select id="search-event">
+                <option value="">Any</option>
+                <option value="new">new</option>
+                <option value="cross">cross</option>
+                <option value="replace">replace</option>
+              </select>
+            </label>
+            <label>
+              <span>Metadata</span>
+              <select id="search-metadata">
+                <option value="">Any</option>
+                <option value="complete">complete</option>
+                <option value="pending">pending</option>
+                <option value="failed">failed</option>
+              </select>
+            </label>
+            <label>
+              <span>Summary</span>
+              <select id="search-summary">
+                <option value="">Any</option>
+                <option value="complete">complete</option>
+                <option value="failed">failed</option>
+              </select>
+            </label>
+            <button id="search-run" type="button">Search</button>
+          </div>
+          <div id="paper-results" class="result-list" aria-live="polite"></div>
+        </section>
+
+        <section id="paper-detail" class="panel detail-panel">
+          <div class="panel-title">
+            <h2>Paper</h2>
+            <span id="paper-id" class="badge">none</span>
+          </div>
+          <article id="paper-content" class="paper-content">
+            <p class="empty-state">No paper selected.</p>
+          </article>
+        </section>
+
+        <section id="discussion-panel" class="panel discussion-panel">
+          <div class="panel-title">
+            <h2>Discussion</h2>
+            <span id="discussion-count" class="badge">0</span>
+          </div>
+          <div id="discussion-list" class="discussion-list"></div>
+          <div class="discussion-form">
+            <label>
+              <span>Role</span>
+              <select id="discussion-role">
+                <option value="user">user</option>
+                <option value="assistant">assistant</option>
+                <option value="system">system</option>
+              </select>
+            </label>
+            <label class="wide">
+              <span>Message</span>
+              <textarea id="discussion-content" rows="4"></textarea>
+            </label>
+            <label>
+              <span>Tags</span>
+              <input id="discussion-tags" type="text" placeholder="question, followup">
+            </label>
+            <button id="discussion-add" type="button">Add Message</button>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

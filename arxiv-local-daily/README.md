@@ -61,6 +61,15 @@ Phase 6 adds search and discussion:
 - paper detail records with events, summaries, and discussions
 - local per-paper discussion messages
 
+## Phase 7
+
+Phase 7 adds a local web workbench:
+
+- FastAPI serves the UI at `/`
+- static CSS and JavaScript are served under `/static`
+- crawl, audit, retry, metadata, summary, search, paper detail, and discussion controls are available in one screen
+- the UI uses the existing local API and SQLite database
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
@@ -82,6 +91,14 @@ uv run pytest
 ```bash
 PYTHONPATH=src uv run uvicorn arxiv_local_daily.api:create_app --factory --reload
 ```
+
+## Run Web UI
+
+```bash
+uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --host 127.0.0.1 --port 8765
+```
+
+Then open `http://127.0.0.1:8765/`.
 
 The phase-one endpoints are:
 

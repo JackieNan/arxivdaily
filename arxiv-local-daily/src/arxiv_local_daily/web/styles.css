@@ -1,0 +1,403 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --line: #d8dee6;
+  --text: #1d252d;
+  --muted: #66717f;
+  --accent: #176b87;
+  --accent-strong: #0f4f66;
+  --good: #1f7a4d;
+  --warn: #a15c12;
+  --bad: #a63333;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  max-width: 100%;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid var(--accent-strong);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover {
+  background: var(--accent-strong);
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 16px;
+  overflow-x: hidden;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.status-line {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.date-control {
+  width: 190px;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-areas:
+    "crawl enrich search"
+    "detail detail search"
+    "discussion discussion search";
+  gap: 12px;
+  align-items: start;
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+
+.control-panel {
+  display: grid;
+  gap: 10px;
+}
+
+#crawl-panel {
+  grid-area: crawl;
+}
+
+.control-panel:nth-of-type(2) {
+  grid-area: enrich;
+}
+
+.search-panel {
+  grid-area: search;
+}
+
+.detail-panel {
+  grid-area: detail;
+}
+
+.discussion-panel {
+  grid-area: discussion;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel-title h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  min-height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 2px 8px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.button-row,
+.search-controls,
+.summary-runner,
+.discussion-form {
+  display: grid;
+  gap: 8px;
+}
+
+.button-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.metric-grid div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.metric-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-grid strong {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-controls {
+  grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(82px, 0.65fr)) minmax(80px, 88px);
+  align-items: end;
+}
+
+.wide {
+  min-width: 0;
+}
+
+.result-list {
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 190px);
+  min-height: 360px;
+  overflow: auto;
+}
+
+.paper-card {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.paper-card:hover,
+.paper-card.is-selected {
+  border-color: var(--accent);
+}
+
+.paper-card h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.paper-meta,
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 2px 7px;
+  font-size: 12px;
+}
+
+.paper-content {
+  display: grid;
+  gap: 12px;
+}
+
+.paper-content h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.paper-content p {
+  margin: 0;
+}
+
+.section-block {
+  display: grid;
+  gap: 6px;
+}
+
+.section-block h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.summary-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.summary-section pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.discussion-list {
+  display: grid;
+  gap: 8px;
+  min-height: 80px;
+}
+
+.discussion-message {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.discussion-message strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.empty-state {
+  color: var(--muted);
+}
+
+.status-complete {
+  color: var(--good);
+}
+
+.status-partial,
+.status-pending {
+  color: var(--warn);
+}
+
+.status-failed {
+  color: var(--bad);
+}
+
+@media (max-width: 1120px) {
+  .workspace-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "crawl enrich"
+      "search search"
+      "detail detail"
+      "discussion discussion";
+  }
+
+  .result-list {
+    max-height: 460px;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    padding: 10px;
+  }
+
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .date-control {
+    width: 100%;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "crawl"
+      "enrich"
+      "search"
+      "detail"
+      "discussion";
+  }
+
+  .search-controls,
+  .button-row,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  button {
+    width: 100%;
+  }
+}

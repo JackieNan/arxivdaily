@@ -114,12 +114,16 @@ Date baseline: 2026-06-03
 
 ## Phase 7: Local Web UI
 
-- Branch: planned `codex/phase-7-web-ui`
+- Branch: `codex/phase-7-web-ui`
 - Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-7-web-ui.md`
-- Scope planned:
+- Scope completed:
   - serve a static local workbench from FastAPI
   - provide crawl, audit, metadata, and summary controls
   - provide paper search and filters
   - show paper details, summaries, and discussions
   - support local discussion message creation from the UI
-- Status: planned, development starting.
+- Verification:
+  - focused Phase 7 tests: 2 passed, 1 warning
+  - `uv run pytest -v`: 77 passed, 1 warning
+  - Chrome headless desktop and mobile screenshots succeeded.
+- Status: implemented on branch, not yet merged to `main`.
