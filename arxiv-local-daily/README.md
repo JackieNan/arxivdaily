@@ -33,13 +33,22 @@ Phase 3 adds arXiv API metadata enrichment:
 - metadata status transitions to `complete` or `failed`
 - manual metadata enrichment through CLI and API
 
+## Phase 4
+
+Phase 4 adds configurable AI summary generation:
+
+- user-editable summary templates with versioned fields
+- structured prompt construction from paper metadata and enabled template fields
+- strict JSON response parsing into custom summary sections
+- summary persistence by paper, template version, model, and input scope
+- manual summary generation through CLI and API
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
 
 These are planned for later versions:
 
-- AI summary workers
 - full-text extraction
 - complex long-chain paper-reading agents
 - production web UI
@@ -61,6 +70,9 @@ The phase-one endpoints are:
 - `GET /api/days/{date}/papers`
 - `GET /api/crawl/runs/{date}`
 - `GET /api/summary-templates`
+- `POST /api/summary-templates`
+- `POST /api/summaries/run`
+- `GET /api/papers/{arxiv_id}/summaries`
 
 ## Run Limited Live Crawl
 
@@ -91,3 +103,62 @@ Metadata enrichment uses the official arXiv API `id_list` query for crawled pape
 The metadata trigger API accepts the same date/limit shape:
 
 - `POST /api/metadata/run`
+
+## Customize Summary Structure
+
+Create a JSON template file with the sections you want:
+
+```json
+{
+  "name": "daily_research",
+  "language": "Chinese",
+  "system_prompt": "Summarize the paper for a local research reading database.",
+  "input_scope": "abstract",
+  "is_default": true,
+  "fields": [
+    {
+      "key": "tldr",
+      "label": "一句话结论",
+      "order": 1,
+      "prompt": "Give one sentence about the main result.",
+      "field_type": "short_sentence",
+      "enabled": true
+    },
+    {
+      "key": "method",
+      "label": "核心方法",
+      "order": 2,
+      "prompt": "Explain the core method in two bullets.",
+      "field_type": "bullets",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Importing a template with the same `name` creates a new version:
+
+```bash
+uv run --with-editable . arxiv-local-daily template import --file template.json
+```
+
+## Run AI Summary Generation
+
+The summary worker calls an OpenAI-compatible chat-completions endpoint. Configure it with environment variables:
+
+```bash
+export ARXIV_DAILY_LLM_BASE_URL="http://localhost:11434/v1"
+export ARXIV_DAILY_LLM_API_KEY=""
+```
+
+Then generate summaries for metadata-enriched papers from one daily crawl:
+
+```bash
+uv run --with-editable . arxiv-local-daily summarize \
+  --date 2026-06-03 \
+  --template-name daily_research \
+  --model local-model \
+  --limit 20
+```
+
+Use `--force` to regenerate existing complete summaries for the same template version, model, and input scope.

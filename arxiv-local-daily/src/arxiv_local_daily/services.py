@@ -1,10 +1,18 @@
 import sqlite3
+from typing import Any
 
 from arxiv_local_daily.crawler.metadata import ArxivMetadataClient
 from arxiv_local_daily.crawler.parser import parse_daily_listing
 from arxiv_local_daily.db import transaction
 from arxiv_local_daily.models import CrawlSourceInput
-from arxiv_local_daily.repositories import CrawlRepository, PaperRepository
+from arxiv_local_daily.repositories import CrawlRepository, PaperRepository, SummaryRepository, TemplateRepository
+from arxiv_local_daily.summary import (
+    LLMClient,
+    OpenAICompatibleChatClient,
+    build_summary_messages,
+    enabled_template_fields,
+    parse_summary_response,
+)
 
 
 def ingest_daily_listing_html(
@@ -118,4 +126,86 @@ def enrich_metadata_for_date(
         "updated": len(papers),
         "missing": len(missing_ids),
         "failed": 0,
+    }
+
+
+def generate_summaries_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int | None = None,
+    template_name: str | None = None,
+    model: str = "local",
+    limit: int = 20,
+    force: bool = False,
+    llm_client: LLMClient | None = None,
+) -> dict[str, Any]:
+    template_repo = TemplateRepository(connection)
+    template = template_repo.get_template(template_id=template_id, name=template_name)
+    if template is None:
+        raise ValueError("summary template not found")
+
+    summary_repo = SummaryRepository(connection)
+    template_id_value = int(template["id"])
+    template_version = int(template["version"])
+    input_scope = template["input_scope"]
+    skipped = 0
+    if not force:
+        skipped = summary_repo.count_existing_complete_summaries_for_date(
+            date=date,
+            template_id=template_id_value,
+            template_version=template_version,
+            model=model,
+            input_scope=input_scope,
+        )
+    candidate_ids = summary_repo.list_summary_candidate_ids_for_date(
+        date=date,
+        template_id=template_id_value,
+        template_version=template_version,
+        model=model,
+        input_scope=input_scope,
+        limit=limit,
+        force=force,
+    )
+    client = llm_client or OpenAICompatibleChatClient.from_env()
+    expected_keys = [field["key"] for field in enabled_template_fields(template)]
+    completed = 0
+    failed = 0
+
+    for arxiv_id in candidate_ids:
+        paper = summary_repo.get_paper_for_summary(arxiv_id)
+        if paper is None:
+            continue
+        try:
+            response_text = client.complete(
+                model=model,
+                messages=build_summary_messages(paper=paper, template=template),
+            )
+            content = parse_summary_response(response_text, expected_keys=expected_keys)
+            status = "complete"
+            completed += 1
+        except Exception as exc:
+            content = {"error": str(exc)}
+            status = "failed"
+            failed += 1
+
+        with transaction(connection):
+            summary_repo.upsert_summary(
+                arxiv_id=arxiv_id,
+                template_id=template_id_value,
+                template_version=template_version,
+                model=model,
+                language=template["language"],
+                input_scope=input_scope,
+                content=content,
+                status=status,
+            )
+
+    return {
+        "requested": len(candidate_ids),
+        "completed": completed,
+        "failed": failed,
+        "skipped": skipped,
+        "template_id": template_id_value,
+        "template_version": template_version,
     }

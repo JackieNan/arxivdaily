@@ -66,12 +66,15 @@ Date baseline: 2026-06-03
 
 ## Phase 4: Configurable AI Summary Worker
 
-- Branch: planned `codex/phase-4-ai-summary-worker`
+- Branch: `codex/phase-4-ai-summary-worker`
 - Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-4-ai-summary-worker.md`
-- Scope planned:
+- Scope completed:
   - create and version user-editable summary templates through API/CLI
   - build structured prompts from template fields and paper metadata
   - parse JSON AI responses into configurable summary sections
   - persist summaries by paper, template version, model, and input scope
   - expose manual summary generation through CLI/API
-- Status: planned, development starting.
+- Verification:
+  - `uv run pytest -v`: 55 passed, 1 warning
+  - focused Phase 4 tests: 11 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

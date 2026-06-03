@@ -4,6 +4,13 @@ from fastapi.testclient import TestClient
 
 from arxiv_local_daily.api import create_app
 from arxiv_local_daily.db import connect, initialize_schema
+from arxiv_local_daily.models import (
+    PaperMetadata,
+    ParsedDailyEvent,
+    SummaryTemplateField,
+    SummaryTemplateInput,
+)
+from arxiv_local_daily.repositories import PaperRepository, SummaryRepository, TemplateRepository
 from arxiv_local_daily.services import ingest_daily_listing_html
 
 
@@ -102,3 +109,134 @@ def test_list_summary_templates_starts_empty(tmp_path):
 
     assert response.status_code == 200
     assert response.json() == {"templates": []}
+
+
+def test_post_summary_template_creates_versioned_template(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.post(
+        "/api/summary-templates",
+        json={
+            "name": "daily_research",
+            "language": "Chinese",
+            "system_prompt": "Summarize with the configured structure.",
+            "input_scope": "abstract",
+            "is_default": True,
+            "fields": [
+                {
+                    "key": "tldr",
+                    "label": "一句话结论",
+                    "order": 1,
+                    "prompt": "Give one sentence.",
+                    "field_type": "short_sentence",
+                    "enabled": True,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"template_id": 1, "version": 1}
+
+
+def test_post_summaries_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_summary_runner(connection, *, date: str, template_id: int | None, template_name: str | None, model: str, limit: int, force: bool):
+        calls.append(
+            {
+                "date": date,
+                "template_id": template_id,
+                "template_name": template_name,
+                "model": model,
+                "limit": limit,
+                "force": force,
+            }
+        )
+        return {"requested": 2, "completed": 2, "failed": 0, "skipped": 0, "template_id": template_id, "template_version": 1}
+
+    client = TestClient(create_app(database_path=db_path, summary_runner=fake_summary_runner))
+
+    response = client.post(
+        "/api/summaries/run",
+        json={"date": "2026-06-03", "template_id": 7, "model": "fake-model", "limit": 2, "force": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["completed"] == 2
+    assert calls == [
+        {
+            "date": "2026-06-03",
+            "template_id": 7,
+            "template_name": None,
+            "model": "fake-model",
+            "limit": 2,
+            "force": True,
+        }
+    ]
+
+
+def test_get_paper_summaries_returns_persisted_content(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    connection = connect(db_path)
+    initialize_schema(connection)
+    paper_repo = PaperRepository(connection)
+    paper_repo.upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="2606.00001",
+            event_type="new",
+            listing_category="cs.AI",
+            primary_category="cs.AI",
+            source_url="https://arxiv.org/list/cs.AI/new",
+        ),
+    )
+    paper_repo.upsert_metadata(
+        PaperMetadata(
+            arxiv_id="2606.00001",
+            title="Structured Summaries",
+            abstract="Abstract.",
+            authors=["Ada Lovelace"],
+            primary_category="cs.AI",
+            categories=["cs.AI"],
+        )
+    )
+    template_id = TemplateRepository(connection).create_template(
+        SummaryTemplateInput(
+            name="daily_research",
+            language="Chinese",
+            system_prompt="Summarize.",
+            input_scope="abstract",
+            fields=[
+                SummaryTemplateField(
+                    key="tldr",
+                    label="一句话结论",
+                    order=1,
+                    prompt="Give one sentence.",
+                    field_type="short_sentence",
+                )
+            ],
+        )
+    )
+    SummaryRepository(connection).upsert_summary(
+        arxiv_id="2606.00001",
+        template_id=template_id,
+        template_version=1,
+        model="fake-model",
+        language="Chinese",
+        input_scope="abstract",
+        content={"tldr": "Stored summary."},
+        status="complete",
+    )
+    connection.commit()
+    connection.close()
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get("/api/papers/2606.00001/summaries")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summaries"][0]["content"] == {"tldr": "Stored summary."}
+    assert data["summaries"][0]["status"] == "complete"

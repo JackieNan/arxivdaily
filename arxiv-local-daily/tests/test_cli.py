@@ -23,3 +23,35 @@ def test_parse_args_accepts_metadata_date_and_limit():
     assert args.command == "metadata"
     assert args.date == "2026-06-03"
     assert args.limit == 25
+
+
+def test_parse_args_accepts_summarize_controls():
+    args = parse_args(
+        [
+            "summarize",
+            "--date",
+            "2026-06-03",
+            "--template-id",
+            "7",
+            "--model",
+            "fake-model",
+            "--limit",
+            "5",
+            "--force",
+        ]
+    )
+
+    assert args.command == "summarize"
+    assert args.date == "2026-06-03"
+    assert args.template_id == 7
+    assert args.model == "fake-model"
+    assert args.limit == 5
+    assert args.force is True
+
+
+def test_parse_args_accepts_template_import_file():
+    args = parse_args(["template", "import", "--file", "template.json"])
+
+    assert args.command == "template"
+    assert args.template_command == "import"
+    assert args.file == "template.json"

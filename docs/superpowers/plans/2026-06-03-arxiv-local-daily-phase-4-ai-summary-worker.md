@@ -31,32 +31,32 @@
 
 ### Task 1: Prompt Builder and Response Parser
 
-- [ ] Write tests for prompt construction from a paper row and a custom template.
-- [ ] Write tests for parsing strict JSON and fenced JSON model responses.
-- [ ] Implement `build_summary_messages` and `parse_summary_response`.
+- [x] Write tests for prompt construction from a paper row and a custom template.
+- [x] Write tests for parsing strict JSON and fenced JSON model responses.
+- [x] Implement `build_summary_messages` and `parse_summary_response`.
 
 ### Task 2: Template and Summary Repositories
 
-- [ ] Write tests for loading latest/default templates.
-- [ ] Write tests for selecting daily papers that have complete metadata and do not already have a summary for the requested template/model unless `force=True`.
-- [ ] Write tests for upserting summary content with template version and status.
-- [ ] Implement repository methods.
+- [x] Write tests for loading latest/default templates.
+- [x] Write tests for selecting daily papers that have complete metadata and do not already have a summary for the requested template/model unless `force=True`.
+- [x] Write tests for upserting summary content with template version and status.
+- [x] Implement repository methods.
 
 ### Task 3: Summary Generation Service
 
-- [ ] Write tests with a fake LLM client returning structured JSON.
-- [ ] Write tests for failed model calls storing failed summary rows without losing the paper.
-- [ ] Implement `generate_summaries_for_date`.
+- [x] Write tests with a fake LLM client returning structured JSON.
+- [x] Write tests for failed model calls storing failed summary rows without losing the paper.
+- [x] Implement `generate_summaries_for_date`.
 
 ### Task 4: CLI/API Controls
 
-- [ ] Write tests for `POST /api/summary-templates`, `POST /api/summaries/run`, and `GET /api/papers/{arxiv_id}/summaries`.
-- [ ] Write CLI parsing tests for `summarize` and template JSON import.
-- [ ] Implement controls and documentation.
+- [x] Write tests for `POST /api/summary-templates`, `POST /api/summaries/run`, and `GET /api/papers/{arxiv_id}/summaries`.
+- [x] Write CLI parsing tests for `summarize` and template JSON import.
+- [x] Implement controls and documentation.
 
 ### Task 5: Verification
 
-- [ ] Run focused tests for summary behavior.
-- [ ] Run full `uv run pytest -v`.
-- [ ] Record Phase 4 in `docs/phases.md`.
-- [ ] Commit Phase 4 locally.
+- [x] Run focused tests for summary behavior.
+- [x] Run full `uv run pytest -v`.
+- [x] Record Phase 4 in `docs/phases.md`.
+- [x] Commit Phase 4 locally.
