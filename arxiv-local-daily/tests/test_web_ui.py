@@ -35,6 +35,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert "DEFAULT_SUMMARY_TEMPLATE" in js_response.text
     assert "loadSummaryTemplates" in js_response.text
     assert "createDefaultTemplate" in js_response.text
+    assert "retryable" in js_response.text
+    assert "next_run_at" in js_response.text
     assert css_response.status_code == 200
     assert ".app-shell" in css_response.text
     assert ".operation-detail" in css_response.text

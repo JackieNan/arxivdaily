@@ -236,10 +236,16 @@ const ArxivDailyWorkbench = (() => {
           limit: Number(el("metadata-limit").value || 100),
         }),
       });
-      const stateText = result.requested && result.failed === result.requested ? "failed" : `${result.updated}/${result.requested}`;
+      const stateText = result.retryable
+        ? "retryable"
+        : result.requested && result.failed === result.requested
+          ? "failed"
+          : `${result.updated}/${result.requested}`;
       el("enrich-state").textContent = stateText;
       setDetail("enrich-detail", formatJson(result));
-      const message = result.error
+      const message = result.retryable
+        ? `Metadata rate limited; retry after ${result.next_run_at || "later"}`
+        : result.error
         ? `Metadata failed for ${result.failed} of ${result.requested}`
         : `Metadata updated ${result.updated} of ${result.requested}`;
       recordOperation(message, formatJson(result));

@@ -69,3 +69,12 @@
 - [x] Clarify the metadata limit as max papers per run.
 - [x] Add a UI action to create a default `daily_research` summary template.
 - [x] Keep background search refresh from overwriting enrich operation details.
+
+### Task 7: Metadata API Rate Limit Handling
+
+- [x] Add paper-level metadata error, attempt count, and next retry timestamp columns.
+- [x] Auto-upgrade existing SQLite databases with the new metadata retry columns.
+- [x] Mark HTTP 429 metadata responses as `retryable` instead of permanent `failed`.
+- [x] Skip retryable papers until `metadata_next_run_at` is reached.
+- [x] Rate-limit arXiv metadata API requests across client instances to at least three seconds apart.
+- [x] Surface `retryable` and `next_run_at` in the Enrich operation detail.

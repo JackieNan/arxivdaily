@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from arxiv_local_daily.crawler.audit import build_crawl_completeness_report
@@ -14,6 +15,53 @@ from arxiv_local_daily.summary import (
     enabled_template_fields,
     parse_summary_response,
 )
+
+METADATA_RATE_LIMIT_BACKOFF_SECONDS = 10 * 60
+
+
+def _metadata_result(
+    *,
+    requested: int,
+    updated: int,
+    missing: int,
+    failed: int,
+    retryable: int = 0,
+    error: str | None = None,
+    next_run_at: str | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "requested": requested,
+        "updated": updated,
+        "missing": missing,
+        "failed": failed,
+        "retryable": retryable,
+    }
+    if error is not None:
+        result["error"] = error
+    if next_run_at is not None:
+        result["next_run_at"] = next_run_at
+    return result
+
+
+def _utc_after(seconds: int) -> str:
+    return (datetime.now(UTC) + timedelta(seconds=seconds)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _is_retryable_metadata_error(error: Exception) -> bool:
+    message = str(error).lower()
+    retryable_markers = [
+        "http 429",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+        "rate limit",
+        "read operation timed out",
+        "timeout",
+        "timed out",
+        "too many requests",
+    ]
+    return any(marker in message for marker in retryable_markers)
 
 
 def ingest_daily_listing_html(
@@ -106,20 +154,32 @@ def enrich_metadata_for_date(
     repo = PaperRepository(connection)
     ids = repo.list_metadata_pending_ids_for_date(date, limit=limit)
     if not ids:
-        return {"requested": 0, "updated": 0, "missing": 0, "failed": 0}
+        return _metadata_result(requested=0, updated=0, missing=0, failed=0)
     try:
         papers = client.fetch_by_ids(ids)
     except Exception as exc:
+        error = str(exc)
+        is_retryable = _is_retryable_metadata_error(exc)
+        next_run_at = _utc_after(METADATA_RATE_LIMIT_BACKOFF_SECONDS) if is_retryable else None
+        status = "retryable" if is_retryable else "failed"
         with transaction(connection):
             for arxiv_id in ids:
-                repo.mark_metadata_status(arxiv_id, "failed")
-        return {
-            "requested": len(ids),
-            "updated": 0,
-            "missing": 0,
-            "failed": len(ids),
-            "error": str(exc),
-        }
+                repo.mark_metadata_status(
+                    arxiv_id,
+                    status,
+                    error=error,
+                    next_run_at=next_run_at,
+                    increment_attempts=True,
+                )
+        return _metadata_result(
+            requested=len(ids),
+            updated=0,
+            missing=0,
+            failed=0 if is_retryable else len(ids),
+            retryable=len(ids) if is_retryable else 0,
+            error=error,
+            next_run_at=next_run_at,
+        )
 
     returned_by_id = {paper.arxiv_id: paper for paper in papers}
     with transaction(connection):
@@ -127,13 +187,13 @@ def enrich_metadata_for_date(
             repo.upsert_metadata(paper)
         missing_ids = sorted(set(ids) - set(returned_by_id))
         for arxiv_id in missing_ids:
-            repo.mark_metadata_status(arxiv_id, "failed")
-    return {
-        "requested": len(ids),
-        "updated": len(papers),
-        "missing": len(missing_ids),
-        "failed": 0,
-    }
+            repo.mark_metadata_status(arxiv_id, "failed", error="not returned by arXiv API")
+    return _metadata_result(
+        requested=len(ids),
+        updated=len(papers),
+        missing=len(missing_ids),
+        failed=0,
+    )
 
 
 def generate_summaries_for_date(

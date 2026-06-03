@@ -172,6 +172,9 @@ class PaperRepository:
                 published_at = excluded.published_at,
                 updated_at = excluded.updated_at,
                 metadata_status = 'complete',
+                metadata_error = NULL,
+                metadata_attempts = 0,
+                metadata_next_run_at = NULL,
                 updated_row_at = CURRENT_TIMESTAMP
             """,
             (
@@ -206,15 +209,29 @@ class PaperRepository:
                 ),
             )
 
-    def mark_metadata_status(self, arxiv_id: str, status: str) -> None:
+    def mark_metadata_status(
+        self,
+        arxiv_id: str,
+        status: str,
+        *,
+        error: str | None = None,
+        next_run_at: str | None = None,
+        increment_attempts: bool = False,
+    ) -> None:
         self.ensure_pending_paper(arxiv_id)
+        attempts_sql = "metadata_attempts + 1" if increment_attempts else "metadata_attempts"
         self.connection.execute(
-            """
+            f"""
             UPDATE papers
-            SET metadata_status = ?, updated_row_at = CURRENT_TIMESTAMP
+            SET
+                metadata_status = ?,
+                metadata_error = ?,
+                metadata_next_run_at = ?,
+                metadata_attempts = {attempts_sql},
+                updated_row_at = CURRENT_TIMESTAMP
             WHERE arxiv_id = ?
             """,
-            (status, arxiv_id),
+            (status, error, next_run_at, arxiv_id),
         )
 
     def list_metadata_pending_ids_for_date(self, date: str, *, limit: int) -> list[str]:
@@ -223,7 +240,13 @@ class PaperRepository:
             SELECT DISTINCT p.arxiv_id
             FROM papers p
             JOIN daily_events e ON e.arxiv_id = p.arxiv_id
-            WHERE e.date = ? AND p.metadata_status != 'complete'
+            WHERE e.date = ?
+              AND p.metadata_status != 'complete'
+              AND (
+                p.metadata_status != 'retryable'
+                OR p.metadata_next_run_at IS NULL
+                OR datetime(p.metadata_next_run_at) <= CURRENT_TIMESTAMP
+              )
             ORDER BY p.arxiv_id
             LIMIT ?
             """,
@@ -588,6 +611,9 @@ class SearchRepository:
                 p.published_at,
                 p.updated_at,
                 p.metadata_status,
+                p.metadata_error,
+                p.metadata_attempts,
+                p.metadata_next_run_at,
                 (
                     SELECT MAX(de.date)
                     FROM daily_events de
@@ -618,6 +644,9 @@ class SearchRepository:
                 published_at,
                 updated_at,
                 metadata_status,
+                metadata_error,
+                metadata_attempts,
+                metadata_next_run_at,
                 created_at,
                 updated_row_at
             FROM papers

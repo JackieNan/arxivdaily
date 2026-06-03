@@ -100,7 +100,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-In the Enrich panel, `Max papers/run` limits how many crawled paper IDs are sent to the arXiv metadata API in one metadata run. `Run Metadata` fills in title, authors, abstract, categories, and URLs before summary generation. `Run Summary` needs a summary template first; use `Create Default Template` or import your own template JSON.
+In the Enrich panel, `Max papers/run` limits how many crawled paper IDs are sent in one arXiv metadata API batch. It is not a daily quota. `Run Metadata` fills in title, authors, abstract, categories, and URLs before summary generation. Metadata API calls are rate-limited to one request every three seconds inside the app process. HTTP 429 responses are stored as `retryable` with a `next_run_at` timestamp instead of permanent failure. `Run Summary` needs a summary template first; use `Create Default Template` or import your own template JSON.
 
 The phase-one endpoints are:
 

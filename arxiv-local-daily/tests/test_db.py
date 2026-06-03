@@ -15,6 +15,16 @@ def test_schema_creates_core_tables(db):
         "summaries",
     }.issubset(table_names)
 
+    paper_columns = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(papers)").fetchall()
+    }
+    assert {
+        "metadata_error",
+        "metadata_attempts",
+        "metadata_next_run_at",
+    }.issubset(paper_columns)
+
 
 def test_daily_events_are_unique_per_date_id_type_and_listing_category(db):
     db.execute(

@@ -39,6 +39,9 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             published_at TEXT,
             updated_at TEXT,
             metadata_status TEXT NOT NULL DEFAULT 'pending',
+            metadata_error TEXT,
+            metadata_attempts INTEGER NOT NULL DEFAULT 0,
+            metadata_next_run_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_row_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -143,4 +146,16 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         );
         """
     )
+    _ensure_column(connection, "papers", "metadata_error", "TEXT")
+    _ensure_column(connection, "papers", "metadata_attempts", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(connection, "papers", "metadata_next_run_at", "TEXT")
     connection.commit()
+
+
+def _ensure_column(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
