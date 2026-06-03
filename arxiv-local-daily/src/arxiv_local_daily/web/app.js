@@ -272,6 +272,7 @@ const ArxivDailyWorkbench = (() => {
       const suffix = result.metadata_enrich ? "; metadata enrich queued" : "";
       recordOperation(`Crawl run ${result.run_id} created${suffix}`, formatJson(result));
       await runAudit();
+      await loadDailyStatus({ silent: true });
       await runSearch();
     } catch (error) {
       recordOperation(`Crawl failed: ${error.message}`);
@@ -318,6 +319,7 @@ const ArxivDailyWorkbench = (() => {
       });
       recordOperation(`Retried ${result.retried} categories`, formatJson(result));
       await runAudit();
+      await loadDailyStatus({ silent: true });
       await runSearch();
     } catch (error) {
       recordOperation(`Retry failed: ${error.message}`);
@@ -342,6 +344,7 @@ const ArxivDailyWorkbench = (() => {
       });
       setDetail("settings-detail", formatJson(result));
       recordOperation(`Summaries completed ${result.completed} of ${result.requested}`, formatJson(result));
+      await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
     } catch (error) {
       const templateHint = error.message === "summary template not found"
@@ -367,6 +370,7 @@ const ArxivDailyWorkbench = (() => {
       });
       setDetail("settings-detail", formatJson(result));
       recordOperation(`Scores completed ${result.completed} of ${result.requested}`, formatJson(result));
+      await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
     } catch (error) {
       setDetail("settings-detail", `Score failed:\n${error.message}`);
@@ -374,6 +378,83 @@ const ArxivDailyWorkbench = (() => {
     } finally {
       setBusy(button, false);
     }
+  }
+
+  function dailyStatusParams() {
+    const params = new URLSearchParams();
+    const templateName = el("summary-template").value.trim();
+    const model = el("summary-model").value.trim() || "local";
+    params.set("model", model);
+    if (templateName) params.set("template_name", templateName);
+    return params;
+  }
+
+  function dailyPipelineBody() {
+    const categories = splitList(el("crawl-categories").value);
+    const templateName = el("summary-template").value.trim();
+    const body = {
+      date: dateValue(),
+      model: el("summary-model").value.trim() || "local",
+    };
+    if (categories.length) {
+      body.categories = categories;
+      body.expected_categories = categories;
+    }
+    if (templateName) body.template_name = templateName;
+    return body;
+  }
+
+  async function loadDailyStatus(options = {}) {
+    const silent = options.silent === true;
+    const button = el("daily-status-run");
+    setBusy(button, true);
+    try {
+      const params = dailyStatusParams();
+      const status = await api(`/api/daily/status/${encodeURIComponent(dateValue())}?${params.toString()}`);
+      renderDailyStatus(status);
+      setDetail("daily-detail", formatJson(status));
+      if (!silent) recordOperation(`Daily status: ${status.status}`, formatJson(status));
+      return status;
+    } catch (error) {
+      el("daily-state").textContent = "failed";
+      setDetail("daily-detail", `Daily status failed:\n${error.message}`);
+      if (!silent) recordOperation(`Daily status failed: ${error.message}`);
+      return null;
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function runDailyPipeline() {
+    const button = el("daily-pipeline-run");
+    setBusy(button, true);
+    try {
+      const result = await api("/api/daily/pipeline/run", {
+        method: "POST",
+        body: JSON.stringify(dailyPipelineBody()),
+      });
+      if (result.daily_status) renderDailyStatus(result.daily_status);
+      setDetail("daily-detail", formatJson(result));
+      recordOperation(`Daily pipeline: ${result.status}`, formatJson(result));
+      await runSearch({ silent: true });
+    } catch (error) {
+      el("daily-state").textContent = "failed";
+      setDetail("daily-detail", `Daily pipeline failed:\n${error.message}`);
+      recordOperation(`Daily pipeline failed: ${error.message}`);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function renderDailyStatus(status) {
+    const cells = el("daily-summary").querySelectorAll("strong");
+    cells[0].textContent = status.status;
+    cells[0].className = `status-${status.status}`;
+    cells[1].textContent = `${status.metadata.complete}/${status.metadata.total}`;
+    cells[2].textContent = `${status.summary.complete}/${status.summary.eligible}`;
+    cells[3].textContent = `${status.score.complete}/${status.score.eligible}`;
+    el("daily-state").textContent = status.status;
+    el("daily-state").className = `badge status-${status.status}`;
   }
 
   function searchParams() {
@@ -607,6 +688,8 @@ const ArxivDailyWorkbench = (() => {
     el("crawl-run").addEventListener("click", runCrawl);
     el("crawl-audit").addEventListener("click", runAudit);
     el("crawl-retry").addEventListener("click", retryCrawl);
+    el("daily-status-run").addEventListener("click", () => loadDailyStatus());
+    el("daily-pipeline-run").addEventListener("click", runDailyPipeline);
     el("summary-template-create").addEventListener("click", createDefaultTemplate);
     el("summary-run").addEventListener("click", runSummary);
     el("score-run").addEventListener("click", runScore);
@@ -619,10 +702,11 @@ const ArxivDailyWorkbench = (() => {
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();
     runAudit();
+    loadDailyStatus({ silent: true });
     runSearch();
   }
 
-  return { bind, runSearch, runAudit, runScore };
+  return { bind, runSearch, runAudit, runScore, loadDailyStatus, runDailyPipeline };
 })();
 
 window.addEventListener("DOMContentLoaded", ArxivDailyWorkbench.bind);

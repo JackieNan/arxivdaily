@@ -173,6 +173,136 @@ def test_post_crawl_run_schedules_auto_metadata_enrich(tmp_path):
     assert enrich_calls == [{"date": "2026-06-03", "limit": None, "oai_max_pages": 1}]
 
 
+def test_get_daily_status_reports_summary_coverage(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    connection = connect(db_path)
+    initialize_schema(connection)
+    template_id = TemplateRepository(connection).create_template(
+        SummaryTemplateInput(
+            name="daily_research",
+            language="Chinese",
+            system_prompt="Return Chinese summaries.",
+            input_scope="abstract",
+            is_default=True,
+            fields=[
+                SummaryTemplateField(
+                    key="keywords",
+                    label="关键词",
+                    order=1,
+                    prompt="Return Chinese keywords.",
+                    field_type="bullets",
+                )
+            ],
+        )
+    )
+    PaperRepository(connection).upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="2606.00001",
+            event_type="new",
+            listing_category="cs.AI",
+            primary_category="cs.AI",
+            source_url="https://arxiv.org/list/cs.AI/new",
+        ),
+    )
+    PaperRepository(connection).upsert_metadata(
+        PaperMetadata(
+            arxiv_id="2606.00001",
+            title="Daily Summary Coverage",
+            abstract="Daily status should include summary coverage.",
+            authors=["Ada Lovelace"],
+            primary_category="cs.AI",
+            categories=["cs.AI"],
+        )
+    )
+    SummaryRepository(connection).upsert_summary(
+        arxiv_id="2606.00001",
+        template_id=template_id,
+        template_version=1,
+        model="fake-model",
+        language="Chinese",
+        input_scope="abstract",
+        content={"keywords": ["每日状态"]},
+        status="complete",
+    )
+    connection.commit()
+    connection.close()
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get("/api/daily/status/2026-06-03?template_id=1&model=fake-model")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["complete"] == 1
+    assert data["summary"]["missing"] == 0
+    assert data["summary"]["required_fields"] == ["keywords"]
+
+
+def test_post_daily_pipeline_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_daily_pipeline_runner(
+        connection,
+        *,
+        date: str,
+        categories: list[str] | None,
+        expected_categories: list[str] | None,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        force_summary: bool,
+        force_score: bool,
+        oai_max_pages: int,
+    ):
+        calls.append(
+            {
+                "date": date,
+                "categories": categories,
+                "expected_categories": expected_categories,
+                "template_id": template_id,
+                "template_name": template_name,
+                "model": model,
+                "force_summary": force_summary,
+                "force_score": force_score,
+                "oai_max_pages": oai_max_pages,
+            }
+        )
+        return {"date": date, "status": "complete", "steps": {}, "daily_status": {"status": "complete"}}
+
+    client = TestClient(create_app(database_path=db_path, daily_pipeline_runner=fake_daily_pipeline_runner))
+
+    response = client.post(
+        "/api/daily/pipeline/run",
+        json={
+            "date": "2026-06-03",
+            "categories": ["cs.AI"],
+            "expected_categories": ["cs.AI"],
+            "template_id": 1,
+            "model": "fake-model",
+            "force_summary": True,
+            "force_score": True,
+            "oai_max_pages": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "complete"
+    assert calls == [
+        {
+            "date": "2026-06-03",
+            "categories": ["cs.AI"],
+            "expected_categories": ["cs.AI"],
+            "template_id": 1,
+            "template_name": None,
+            "model": "fake-model",
+            "force_summary": True,
+            "force_score": True,
+            "oai_max_pages": 2,
+        }
+    ]
+
+
 def test_post_metadata_run_uses_injected_runner(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     calls: list[tuple[str, int]] = []

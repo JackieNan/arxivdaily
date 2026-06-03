@@ -23,7 +23,9 @@ from arxiv_local_daily.services import (
     enrich_metadata_for_date_unified,
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
+    get_daily_pipeline_status,
     retry_incomplete_crawl_categories_for_date,
+    run_daily_pipeline,
     run_oai_metadata_sync,
     score_papers_for_date,
 )
@@ -77,6 +79,18 @@ class ScoreRunRequest(BaseModel):
     force: bool = False
 
 
+class DailyPipelineRunRequest(BaseModel):
+    date: str
+    categories: list[str] | None = None
+    expected_categories: list[str] | None = None
+    template_id: int | None = None
+    template_name: str | None = None
+    model: str = "local"
+    force_summary: bool = False
+    force_score: bool = False
+    oai_max_pages: int = Field(default=1, ge=0, le=100)
+
+
 CrawlerRunner = Callable[..., int]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
@@ -84,6 +98,7 @@ UnifiedMetadataRunner = Callable[..., dict[str, Any]]
 OaiSyncRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
 ScoreRunner = Callable[..., dict[str, Any]]
+DailyPipelineRunner = Callable[..., dict[str, Any]]
 
 
 def _run_oai_sync_background(
@@ -138,6 +153,7 @@ def create_app(
     oai_sync_runner: OaiSyncRunner = run_oai_metadata_sync,
     summary_runner: SummaryRunner = generate_summaries_for_date,
     score_runner: ScoreRunner = score_papers_for_date,
+    daily_pipeline_runner: DailyPipelineRunner = run_daily_pipeline,
     auto_enrich_after_crawl: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
@@ -256,6 +272,44 @@ def create_app(
                 connection,
                 date=request.date,
                 expected_categories=request.expected_categories,
+            )
+        finally:
+            connection.close()
+
+    @app.get("/api/daily/status/{date}")
+    def get_daily_status(
+        date: str,
+        template_id: int | None = None,
+        template_name: str | None = None,
+        model: str = "local",
+    ):
+        connection = get_connection()
+        try:
+            return get_daily_pipeline_status(
+                connection,
+                date=date,
+                template_id=template_id,
+                template_name=template_name,
+                model=model,
+            )
+        finally:
+            connection.close()
+
+    @app.post("/api/daily/pipeline/run")
+    def run_daily_pipeline_endpoint(request: DailyPipelineRunRequest):
+        connection = get_connection()
+        try:
+            return daily_pipeline_runner(
+                connection,
+                date=request.date,
+                categories=request.categories,
+                expected_categories=request.expected_categories,
+                template_id=request.template_id,
+                template_name=request.template_name,
+                model=request.model,
+                force_summary=request.force_summary,
+                force_score=request.force_score,
+                oai_max_pages=request.oai_max_pages,
             )
         finally:
             connection.close()

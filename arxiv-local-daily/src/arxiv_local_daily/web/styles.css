@@ -156,7 +156,8 @@ label span {
 
 .top-actions {
   display: grid;
-  grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.1fr);
+  grid-template-columns: minmax(260px, 0.78fr) minmax(380px, 1.04fr) minmax(280px, 0.88fr);
+  grid-template-areas: "crawl settings daily";
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -183,6 +184,18 @@ label span {
 .control-panel {
   display: grid;
   gap: 10px;
+}
+
+#crawl-panel {
+  grid-area: crawl;
+}
+
+#settings-panel {
+  grid-area: settings;
+}
+
+#daily-panel {
+  grid-area: daily;
 }
 
 .top-actions .panel {
@@ -291,6 +304,11 @@ label span {
   gap: 7px;
 }
 
+.daily-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
 .inline-status {
   margin: -2px 0 2px;
   color: var(--muted);
@@ -305,6 +323,11 @@ label span {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+
+.daily-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .metric-grid div {
@@ -633,7 +656,10 @@ mjx-container {
 
 @media (max-width: 1120px) {
   .top-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "crawl daily"
+      "settings settings";
   }
 
   .workspace-grid {
@@ -683,13 +709,18 @@ mjx-container {
   }
 
   .settings-grid,
-  .search-controls {
+  .search-controls,
+  .daily-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .button-row,
   .metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .daily-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .search-controls .wide {
@@ -702,12 +733,25 @@ mjx-container {
 }
 
 @media (max-width: 420px) {
+  .top-actions {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "crawl"
+      "settings"
+      "daily";
+  }
+
   .settings-grid,
-  .search-controls {
+  .search-controls,
+  .daily-grid {
     grid-template-columns: 1fr;
   }
 
   .search-controls .wide {
     grid-column: auto;
+  }
+
+  .daily-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

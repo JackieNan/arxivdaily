@@ -85,6 +85,24 @@
           <p id="summary-template-help" class="inline-status">No template loaded.</p>
           <pre id="settings-detail" class="operation-detail" aria-live="polite">No summary or score run yet.</pre>
         </section>
+
+        <section id="daily-panel" class="panel control-panel">
+          <div class="panel-title">
+            <h2>Daily</h2>
+            <span id="daily-state" class="badge">idle</span>
+          </div>
+          <div class="action-grid daily-grid">
+            <button id="daily-status-run" type="button">Daily Status</button>
+            <button id="daily-pipeline-run" type="button">Run Daily Pipeline</button>
+          </div>
+          <div id="daily-summary" class="metric-grid daily-summary">
+            <div><span>Status</span><strong>-</strong></div>
+            <div><span>Metadata</span><strong>-</strong></div>
+            <div><span>Summary</span><strong>-</strong></div>
+            <div><span>Score</span><strong>-</strong></div>
+          </div>
+          <pre id="daily-detail" class="operation-detail" aria-live="polite">No daily status yet.</pre>
+        </section>
       </section>
 
       <main class="workspace-grid">

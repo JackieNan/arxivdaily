@@ -277,3 +277,25 @@ Date baseline: 2026-06-03
   - `uv run pytest -v`: 105 passed, 1 warning
   - browser smoke at 599px viewport confirmed no horizontal overflow in document, Settings, Crawl, Search, or detail rail; operation log capped at 84px and no `Loaded <id>` paper-selection message
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 15: Daily Pipeline and Summary Completion
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-15-daily-pipeline-summary-completion.md`
+- Scope completed:
+  - add `get_daily_pipeline_status` for daily crawl, metadata, summary, and score coverage
+  - add `run_daily_pipeline` to orchestrate crawl, audit/retry, unified metadata enrichment, summary generation, and scoring
+  - expose `GET /api/daily/status/{date}`
+  - expose `POST /api/daily/pipeline/run`
+  - add a compact Daily panel with `Daily Status`, `Run Daily Pipeline`, and coverage counters
+  - treat missing summary templates, missing summaries, failed summaries, missing scores, and metadata gaps as explicit daily blockers
+- Important decisions:
+  - AI summary completion is part of daily reliability, not only a manual side action
+  - summary coverage is measured over daily papers with complete metadata and non-empty abstracts
+  - the PDF-reading agent remains separate from this abstract/metadata-based daily pipeline
+- Verification:
+  - focused Phase 15 tests passed
+  - `uv run pytest -v`: 109 passed, 1 warning
+  - browser smoke at 599px viewport confirmed Daily panel controls, no horizontal overflow, and compact two-row top action layout
+  - local API smoke confirmed `GET /api/daily/status/2026-06-03?model=local` returns crawl, metadata, summary, score, and blocker fields
+- Status: implemented on branch, not yet merged to `main`.

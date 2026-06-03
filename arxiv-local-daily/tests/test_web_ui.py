@@ -14,6 +14,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="crawl-panel"' in response.text
     assert 'id="top-actions"' in response.text
     assert 'id="settings-panel"' in response.text
+    assert 'id="daily-panel"' in response.text
     assert 'id="search-panel"' in response.text
     assert 'id="right-rail"' in response.text
     assert 'id="paper-detail"' in response.text
@@ -22,6 +23,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="operation-log"' in response.text
     assert 'id="summary-template-create"' in response.text
     assert 'id="summary-template-help"' in response.text
+    assert 'id="daily-status-run"' in response.text
+    assert 'id="daily-pipeline-run"' in response.text
+    assert 'id="daily-summary"' in response.text
     assert 'id="score-run"' in response.text
     assert 'id="search-sort"' in response.text
     assert 'id="search-scope"' in response.text
@@ -51,6 +55,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert "retryable" in js_response.text
     assert "next_run_at" in js_response.text
     assert "runScore" in js_response.text
+    assert "runDailyPipeline" in js_response.text
+    assert "loadDailyStatus" in js_response.text
+    assert "/api/daily/status/" in js_response.text
+    assert "/api/daily/pipeline/run" in js_response.text
     assert "/api/scores/run" in js_response.text
     assert "score-badge" in js_response.text
     assert "typesetMath" in js_response.text
@@ -82,6 +90,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert "grid-template-columns: repeat(2, minmax(132px, 1fr));" in css_response.text
     assert ".top-actions .panel" in css_response.text
     assert ".top-actions button" in css_response.text
+    assert ".daily-grid" in css_response.text
+    assert ".daily-summary" in css_response.text
     assert ".operation-log" in css_response.text
     assert "max-height: 84px;" in css_response.text
     assert "@media (max-width: 420px)" in css_response.text

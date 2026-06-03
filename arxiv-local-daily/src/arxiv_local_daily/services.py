@@ -621,6 +621,319 @@ def score_papers_for_date(
     return {"requested": len(candidate_ids), "completed": completed, "failed": failed, "skipped": skipped}
 
 
+def _daily_metadata_counts(connection: sqlite3.Connection, *, date: str) -> dict[str, int]:
+    row = connection.execute(
+        """
+        SELECT
+            COUNT(DISTINCT p.arxiv_id) AS total,
+            COUNT(DISTINCT CASE WHEN p.metadata_status = 'complete' THEN p.arxiv_id END) AS complete,
+            COUNT(DISTINCT CASE WHEN p.metadata_status = 'pending' THEN p.arxiv_id END) AS pending,
+            COUNT(DISTINCT CASE WHEN p.metadata_status = 'failed' THEN p.arxiv_id END) AS failed,
+            COUNT(DISTINCT CASE WHEN p.metadata_status = 'retryable' THEN p.arxiv_id END) AS retryable
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        WHERE e.date = ?
+        """,
+        (date,),
+    ).fetchone()
+    return {key: int(row[key] or 0) for key in ["total", "complete", "pending", "failed", "retryable"]}
+
+
+def _summary_coverage(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int | None,
+    template_name: str | None,
+    model: str,
+) -> dict[str, Any]:
+    template = TemplateRepository(connection).get_template(template_id=template_id, name=template_name)
+    if template is None:
+        eligible = _eligible_daily_paper_count(connection, date=date)
+        return {
+            "eligible": eligible,
+            "complete": 0,
+            "failed": 0,
+            "missing": eligible,
+            "template_id": template_id,
+            "template_version": None,
+            "template_name": template_name,
+            "template_missing": True,
+            "required_fields": [],
+        }
+
+    fields = enabled_template_fields(template)
+    rows = connection.execute(
+        """
+        SELECT
+            p.arxiv_id,
+            MAX(CASE WHEN s.status = 'complete' THEN 1 ELSE 0 END) AS has_complete,
+            MAX(CASE WHEN s.status = 'failed' THEN 1 ELSE 0 END) AS has_failed
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        LEFT JOIN summaries s
+            ON s.arxiv_id = p.arxiv_id
+           AND s.template_id = ?
+           AND s.template_version = ?
+           AND s.model = ?
+           AND s.input_scope = ?
+        WHERE e.date = ?
+          AND p.metadata_status = 'complete'
+          AND COALESCE(p.abstract, '') != ''
+        GROUP BY p.arxiv_id
+        """,
+        (int(template["id"]), int(template["version"]), model, template["input_scope"], date),
+    ).fetchall()
+    complete = sum(1 for row in rows if int(row["has_complete"] or 0) == 1)
+    failed = sum(1 for row in rows if int(row["has_complete"] or 0) == 0 and int(row["has_failed"] or 0) == 1)
+    eligible = len(rows)
+    return {
+        "eligible": eligible,
+        "complete": complete,
+        "failed": failed,
+        "missing": eligible - complete - failed,
+        "template_id": int(template["id"]),
+        "template_version": int(template["version"]),
+        "template_name": template["name"],
+        "template_missing": False,
+        "required_fields": [field["key"] for field in fields],
+    }
+
+
+def _score_coverage(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    model: str,
+    rubric_version: str,
+) -> dict[str, int | str]:
+    rows = connection.execute(
+        """
+        SELECT
+            p.arxiv_id,
+            MAX(CASE WHEN ps.status = 'complete' THEN 1 ELSE 0 END) AS has_complete,
+            MAX(CASE WHEN ps.status = 'failed' THEN 1 ELSE 0 END) AS has_failed
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        LEFT JOIN paper_scores ps
+            ON ps.arxiv_id = p.arxiv_id
+           AND ps.model = ?
+           AND ps.rubric_version = ?
+        WHERE e.date = ?
+          AND p.metadata_status = 'complete'
+          AND COALESCE(p.abstract, '') != ''
+        GROUP BY p.arxiv_id
+        """,
+        (model, rubric_version, date),
+    ).fetchall()
+    complete = sum(1 for row in rows if int(row["has_complete"] or 0) == 1)
+    failed = sum(1 for row in rows if int(row["has_complete"] or 0) == 0 and int(row["has_failed"] or 0) == 1)
+    eligible = len(rows)
+    return {
+        "eligible": eligible,
+        "complete": complete,
+        "failed": failed,
+        "missing": eligible - complete - failed,
+        "rubric_version": rubric_version,
+    }
+
+
+def _eligible_daily_paper_count(connection: sqlite3.Connection, *, date: str) -> int:
+    row = connection.execute(
+        """
+        SELECT COUNT(DISTINCT p.arxiv_id) AS count
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        WHERE e.date = ?
+          AND p.metadata_status = 'complete'
+          AND COALESCE(p.abstract, '') != ''
+        """,
+        (date,),
+    ).fetchone()
+    return int(row["count"] or 0)
+
+
+def _daily_pipeline_blockers(
+    *,
+    crawl: dict[str, Any],
+    metadata: dict[str, int],
+    summary: dict[str, Any],
+    score: dict[str, int | str],
+) -> list[str]:
+    blockers: list[str] = []
+    if crawl["status"] == "no_run":
+        blockers.append("crawl_no_run")
+    elif crawl["status"] != "complete":
+        blockers.append("crawl_incomplete")
+    if metadata["pending"]:
+        blockers.append("metadata_pending")
+    if metadata["failed"]:
+        blockers.append("metadata_failed")
+    if metadata["retryable"]:
+        blockers.append("metadata_retryable")
+    if summary["template_missing"]:
+        blockers.append("summary_template_missing")
+    if summary["failed"]:
+        blockers.append("summary_failed")
+    if summary["missing"]:
+        blockers.append("summary_missing")
+    if score["failed"]:
+        blockers.append("score_failed")
+    if score["missing"]:
+        blockers.append("score_missing")
+    return blockers
+
+
+def get_daily_pipeline_status(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int | None = None,
+    template_name: str | None = None,
+    model: str = "local",
+    expected_categories: list[str] | None = None,
+    rubric_version: str = "reading_priority_v1",
+) -> dict[str, Any]:
+    crawl = get_crawl_completeness_for_date(
+        connection,
+        date=date,
+        expected_categories=expected_categories,
+    )
+    metadata = _daily_metadata_counts(connection, date=date)
+    summary = _summary_coverage(
+        connection,
+        date=date,
+        template_id=template_id,
+        template_name=template_name,
+        model=model,
+    )
+    score = _score_coverage(
+        connection,
+        date=date,
+        model=model,
+        rubric_version=rubric_version,
+    )
+    blockers = _daily_pipeline_blockers(crawl=crawl, metadata=metadata, summary=summary, score=score)
+    if metadata["total"] == 0 and crawl["status"] == "no_run":
+        status = "not_started"
+    else:
+        status = "complete" if not blockers else "partial"
+    return {
+        "date": date,
+        "status": status,
+        "blockers": blockers,
+        "crawl": crawl,
+        "metadata": metadata,
+        "summary": summary,
+        "score": score,
+    }
+
+
+def run_daily_pipeline(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    categories: list[str] | None = None,
+    expected_categories: list[str] | None = None,
+    template_id: int | None = None,
+    template_name: str | None = None,
+    model: str = "local",
+    force_summary: bool = False,
+    force_score: bool = False,
+    oai_max_pages: int = 1,
+    crawl_runner: Any | None = None,
+    crawl_retry_runner: Any | None = None,
+    metadata_runner: Any | None = None,
+    summary_runner: Any | None = None,
+    score_runner: Any | None = None,
+) -> dict[str, Any]:
+    if crawl_runner is None:
+        from arxiv_local_daily.crawler.live import run_live_daily_crawl
+
+        crawl_runner = run_live_daily_crawl
+    metadata_runner = metadata_runner or enrich_metadata_for_date_unified
+    summary_runner = summary_runner or generate_summaries_for_date
+    score_runner = score_runner or score_papers_for_date
+
+    steps: dict[str, Any] = {}
+    crawl_run_id = crawl_runner(connection, date=date, categories=categories)
+    crawl_audit = get_crawl_completeness_for_date(
+        connection,
+        date=date,
+        expected_categories=expected_categories,
+    )
+    steps["crawl"] = {"run_id": crawl_run_id, "audit": crawl_audit}
+
+    if crawl_audit["retry_categories"]:
+        if crawl_retry_runner is None:
+            retry_result = retry_incomplete_crawl_categories_for_date(
+                connection,
+                date=date,
+                expected_categories=expected_categories,
+            )
+        else:
+            retry_result = crawl_retry_runner(
+                connection,
+                date=date,
+                expected_categories=expected_categories,
+            )
+        steps["retry"] = retry_result
+        steps["crawl"]["audit_after_retry"] = get_crawl_completeness_for_date(
+            connection,
+            date=date,
+            expected_categories=expected_categories,
+        )
+
+    steps["metadata"] = metadata_runner(
+        connection,
+        date=date,
+        limit=None,
+        oai_max_pages=oai_max_pages,
+    )
+
+    try:
+        steps["summary"] = summary_runner(
+            connection,
+            date=date,
+            template_id=template_id,
+            template_name=template_name,
+            model=model,
+            limit=None,
+            force=force_summary,
+        )
+    except ValueError as exc:
+        steps["summary"] = {
+            "requested": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "error": str(exc),
+        }
+
+    steps["score"] = score_runner(
+        connection,
+        date=date,
+        model=model,
+        limit=None,
+        force=force_score,
+    )
+
+    daily_status = get_daily_pipeline_status(
+        connection,
+        date=date,
+        template_id=template_id,
+        template_name=template_name,
+        model=model,
+        expected_categories=expected_categories,
+    )
+    return {
+        "date": date,
+        "status": daily_status["status"],
+        "steps": steps,
+        "daily_status": daily_status,
+    }
+
+
 def get_crawl_completeness_for_date(
     connection: sqlite3.Connection,
     *,
