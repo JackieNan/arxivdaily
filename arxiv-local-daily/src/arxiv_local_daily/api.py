@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -13,6 +13,7 @@ from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
 from arxiv_local_daily.repositories import (
     CrawlRepository,
     DiscussionRepository,
+    MetadataSyncRepository,
     SearchRepository,
     SummaryRepository,
     TemplateRepository,
@@ -22,6 +23,7 @@ from arxiv_local_daily.services import (
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
     retry_incomplete_crawl_categories_for_date,
+    run_oai_metadata_sync,
 )
 
 
@@ -44,6 +46,13 @@ class MetadataRunRequest(BaseModel):
     limit: int = 100
 
 
+class OaiMetadataSyncStartRequest(BaseModel):
+    from_date: str | None = None
+    until_date: str | None = None
+    set_spec: str | None = None
+    max_pages: int = Field(default=1, ge=0, le=100)
+
+
 class SummaryRunRequest(BaseModel):
     date: str
     template_id: int | None = None
@@ -56,7 +65,30 @@ class SummaryRunRequest(BaseModel):
 CrawlerRunner = Callable[..., int]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
+OaiSyncRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
+
+
+def _run_oai_sync_background(
+    *,
+    db_path: Path,
+    sync_run_id: int,
+    request: OaiMetadataSyncStartRequest,
+    oai_sync_runner: OaiSyncRunner,
+) -> None:
+    connection = connect(db_path)
+    initialize_schema(connection)
+    try:
+        oai_sync_runner(
+            connection,
+            sync_run_id=sync_run_id,
+            from_date=request.from_date,
+            until_date=request.until_date,
+            set_spec=request.set_spec,
+            max_pages=request.max_pages,
+        )
+    finally:
+        connection.close()
 
 
 def create_app(
@@ -64,6 +96,7 @@ def create_app(
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
     crawl_retry_runner: CrawlRetryRunner = retry_incomplete_crawl_categories_for_date,
     metadata_runner: MetadataRunner = enrich_metadata_for_date,
+    oai_sync_runner: OaiSyncRunner = run_oai_metadata_sync,
     summary_runner: SummaryRunner = generate_summaries_for_date,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
@@ -178,6 +211,48 @@ def create_app(
         connection = get_connection()
         try:
             return metadata_runner(connection, date=request.date, limit=request.limit)
+        finally:
+            connection.close()
+
+    @app.post("/api/metadata/oai-sync/start")
+    def start_oai_metadata_sync(request: OaiMetadataSyncStartRequest, background_tasks: BackgroundTasks):
+        connection = get_connection()
+        try:
+            repo = MetadataSyncRepository(connection)
+            run_id = repo.create_run(
+                source="oai-pmh",
+                from_date=request.from_date,
+                until_date=request.until_date,
+                set_spec=request.set_spec,
+                max_pages=request.max_pages,
+            )
+            connection.commit()
+            background_tasks.add_task(
+                _run_oai_sync_background,
+                db_path=db_path,
+                sync_run_id=run_id,
+                request=request,
+                oai_sync_runner=oai_sync_runner,
+            )
+            return {"run_id": run_id, "status": "queued"}
+        finally:
+            connection.close()
+
+    @app.get("/api/metadata/oai-sync/runs")
+    def list_oai_metadata_sync_runs(limit: int = 20):
+        connection = get_connection()
+        try:
+            repo = MetadataSyncRepository(connection)
+            return {"runs": repo.list_runs(limit=limit)}
+        finally:
+            connection.close()
+
+    @app.get("/api/metadata/oai-sync/runs/{run_id}")
+    def get_oai_metadata_sync_run(run_id: int):
+        connection = get_connection()
+        try:
+            repo = MetadataSyncRepository(connection)
+            return {"run": repo.get_run(run_id)}
         finally:
             connection.close()
 

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <responseDate>2026-06-03T22:30:00Z</responseDate>
+  <request verb="ListRecords" metadataPrefix="arXiv">https://oaipmh.arxiv.org/oai</request>
+  <ListRecords>
+    <record>
+      <header>
+        <identifier>oai:arXiv.org:2606.00001</identifier>
+        <datestamp>2026-06-03</datestamp>
+        <setSpec>cs</setSpec>
+        <setSpec>cs:cs:AI</setSpec>
+      </header>
+      <metadata>
+        <arXiv xmlns="http://arxiv.org/OAI/arXiv/">
+          <id>2606.00001</id>
+          <created>2026-06-03</created>
+          <updated>2026-06-03</updated>
+          <authors>
+            <author>
+              <keyname>Lovelace</keyname>
+              <forenames>Ada</forenames>
+            </author>
+            <author>
+              <keyname>Turing</keyname>
+              <forenames>Alan</forenames>
+              <suffix>Jr.</suffix>
+            </author>
+          </authors>
+          <title>First paper title from OAI</title>
+          <abstract>First abstract from OAI with whitespace.</abstract>
+          <categories>cs.AI cs.LG</categories>
+          <license>http://creativecommons.org/licenses/by/4.0/</license>
+        </arXiv>
+      </metadata>
+    </record>
+    <record>
+      <header status="deleted">
+        <identifier>oai:arXiv.org:2606.99999</identifier>
+        <datestamp>2026-06-03</datestamp>
+      </header>
+    </record>
+    <resumptionToken cursor="0" completeListSize="3">next-token</resumptionToken>
+  </ListRecords>
+</OAI-PMH>

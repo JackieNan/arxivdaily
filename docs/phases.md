@@ -132,3 +132,23 @@ Date baseline: 2026-06-03
   - live local checks: summary missing template returns `400 {"detail":"summary template not found"}`; search returns `200`.
   - live metadata timeout check returns `retryable` with `next_run_at`.
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 8: OAI Metadata Mirror
+
+- Branch: `codex/phase-7-web-ui`
+- Commit: local Phase 8 commit on this branch.
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-8-oai-metadata-mirror.md`
+- Scope completed:
+  - persist daily listing titles immediately during crawl
+  - add OAI-PMH ListRecords URL builder, XML parser, and rate-limited client
+  - add `metadata_sync_runs` for queued/running/complete/failed OAI sync jobs
+  - upsert OAI metadata into local `papers`
+  - expose OAI sync start/list/status API routes
+  - add web controls and polling for OAI metadata sync status
+  - retain legacy arXiv API metadata enrichment as fallback
+- Verification:
+  - focused Phase 8 tests: parser/ingestion, OAI parser/client, sync service, API, and web UI all passed.
+  - `uv run pytest -v`: 89 passed, 1 warning
+  - local API smoke: OAI sync start returned `run_id=1`; status route returned `complete` with counters and `error=null`.
+  - in-app browser smoke: `Start OAI Sync` rendered and updated sync detail after a no-network `max_pages=0` run.
+- Status: implemented on branch, not yet merged to `main`.

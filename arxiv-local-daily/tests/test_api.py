@@ -12,6 +12,7 @@ from arxiv_local_daily.models import (
     SummaryTemplateInput,
 )
 from arxiv_local_daily.repositories import PaperRepository, SummaryRepository, TemplateRepository
+from arxiv_local_daily.repositories import MetadataSyncRepository
 from arxiv_local_daily.services import ingest_daily_crawl_sources, ingest_daily_listing_html
 
 
@@ -158,6 +159,69 @@ def test_post_metadata_run_uses_injected_runner(tmp_path):
     assert response.status_code == 200
     assert response.json() == {"requested": 2, "updated": 2, "missing": 0, "failed": 0}
     assert calls == [("2026-06-03", 2)]
+
+
+def test_post_oai_metadata_sync_start_creates_background_run(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_oai_sync_runner(
+        connection,
+        *,
+        sync_run_id: int,
+        from_date: str | None,
+        until_date: str | None,
+        set_spec: str | None,
+        max_pages: int,
+    ):
+        calls.append(
+            {
+                "sync_run_id": sync_run_id,
+                "from_date": from_date,
+                "until_date": until_date,
+                "set_spec": set_spec,
+                "max_pages": max_pages,
+            }
+        )
+        repo = MetadataSyncRepository(connection)
+        repo.mark_running(sync_run_id)
+        repo.finish_run(
+            sync_run_id,
+            status="complete",
+            records_seen=0,
+            records_upserted=0,
+            pages_fetched=0,
+        )
+        connection.commit()
+        return {"sync_run_id": sync_run_id, "status": "complete"}
+
+    client = TestClient(create_app(database_path=db_path, oai_sync_runner=fake_oai_sync_runner))
+
+    response = client.post(
+        "/api/metadata/oai-sync/start",
+        json={
+            "from_date": "2026-06-03",
+            "until_date": "2026-06-03",
+            "set_spec": "cs:cs:AI",
+            "max_pages": 2,
+        },
+    )
+    run_id = response.json()["run_id"]
+    status_response = client.get(f"/api/metadata/oai-sync/runs/{run_id}")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+    assert calls == [
+        {
+            "sync_run_id": run_id,
+            "from_date": "2026-06-03",
+            "until_date": "2026-06-03",
+            "set_spec": "cs:cs:AI",
+            "max_pages": 2,
+        }
+    ]
+    assert status_response.status_code == 200
+    assert status_response.json()["run"]["status"] == "complete"
 
 
 def test_list_summary_templates_starts_empty(tmp_path):

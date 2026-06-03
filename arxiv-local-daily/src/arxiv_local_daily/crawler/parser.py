@@ -36,6 +36,18 @@ def _extract_primary_category(dd: Tag | None) -> str | None:
     return match.group(1) if match else None
 
 
+def _extract_listing_title(dd: Tag | None) -> str | None:
+    if dd is None:
+        return None
+    title = dd.select_one(".list-title")
+    if title is None:
+        return None
+    text = title.get_text(" ", strip=True)
+    if text.lower().startswith("title:"):
+        text = text.split(":", 1)[1].strip()
+    return " ".join(text.split()) or None
+
+
 def parse_daily_listing(
     html: str,
     *,
@@ -67,6 +79,7 @@ def parse_daily_listing(
                 event_type=current_event_type,
                 listing_category=listing_category,
                 primary_category=_extract_primary_category(dd),
+                title=_extract_listing_title(dd),
                 source_url=source_url,
             )
         )

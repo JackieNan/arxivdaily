@@ -47,6 +47,29 @@
             <h2>Enrich</h2>
             <span id="enrich-state" class="badge">idle</span>
           </div>
+          <div class="sync-runner">
+            <h3>OAI Metadata Sync</h3>
+            <div class="compact-grid">
+              <label>
+                <span>From</span>
+                <input id="oai-from" type="date">
+              </label>
+              <label>
+                <span>Until</span>
+                <input id="oai-until" type="date">
+              </label>
+              <label>
+                <span>Set</span>
+                <input id="oai-set-spec" type="text" placeholder="cs:cs:AI">
+              </label>
+              <label>
+                <span>Pages</span>
+                <input id="oai-max-pages" type="number" min="0" max="100" value="1">
+              </label>
+            </div>
+            <button id="metadata-oai-sync" type="button">Start OAI Sync</button>
+            <pre id="metadata-sync-detail" class="operation-detail" aria-live="polite">No metadata sync run yet.</pre>
+          </div>
           <label>
             <span>Max papers/run</span>
             <input id="metadata-limit" type="number" min="1" value="100" title="Maximum paper IDs sent to arXiv API in one metadata run.">

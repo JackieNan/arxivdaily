@@ -70,6 +70,16 @@ Phase 7 adds a local web workbench:
 - crawl, audit, retry, metadata, summary, search, paper detail, and discussion controls are available in one screen
 - the UI uses the existing local API and SQLite database
 
+## Phase 8
+
+Phase 8 reduces dependency on the rate-limited legacy arXiv API:
+
+- daily listing titles are stored immediately during crawl
+- OAI-PMH ListRecords metadata pages can be synced into SQLite
+- metadata sync runs are tracked with status, counts, resumption token, and error
+- the web UI starts and polls OAI metadata sync jobs
+- legacy `Run Metadata` remains available as a fallback
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
@@ -100,7 +110,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-In the Enrich panel, `Max papers/run` limits how many crawled paper IDs are sent in one arXiv metadata API batch. It is not a daily quota. `Run Metadata` fills in title, authors, abstract, categories, and URLs before summary generation. Metadata API calls are rate-limited to one request every three seconds inside the app process. HTTP 429 responses are stored as `retryable` with a `next_run_at` timestamp instead of permanent failure. `Run Summary` needs a summary template first; use `Create Default Template` or import your own template JSON.
+In the Enrich panel, `Start OAI Sync` is the preferred metadata path. It syncs arXiv OAI-PMH metadata pages into SQLite and records run status, counts, resumption token, and error details. `Pages` limits how many OAI pages are fetched in one run. `Run Metadata` is the legacy arXiv API fallback for crawled paper IDs; `Max papers/run` limits that fallback batch size and is not a daily quota. Legacy API 429 responses are stored as `retryable` with a `next_run_at` timestamp instead of permanent failure. `Run Summary` needs a summary template first; use `Create Default Template` or import your own template JSON.
 
 The phase-one endpoints are:
 
@@ -108,6 +118,9 @@ The phase-one endpoints are:
 - `GET /api/crawl/runs/{date}`
 - `GET /api/crawl/completeness/{date}`
 - `POST /api/crawl/retry-failed`
+- `POST /api/metadata/oai-sync/start`
+- `GET /api/metadata/oai-sync/runs`
+- `GET /api/metadata/oai-sync/runs/{run_id}`
 - `GET /api/search/papers`
 - `GET /api/papers/{arxiv_id}`
 - `GET /api/summary-templates`
@@ -162,11 +175,27 @@ The retry command uses the combined audit across all runs for the date. If a lat
 
 ## Run Metadata Enrichment
 
+Preferred local metadata sync:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/metadata/oai-sync/start \
+  -H "Content-Type: application/json" \
+  -d '{"from_date":"2026-06-03","until_date":"2026-06-03","set_spec":"cs:cs:AI","max_pages":1}'
+```
+
+Check sync status:
+
+```bash
+curl http://127.0.0.1:8765/api/metadata/oai-sync/runs/1
+```
+
+Legacy API fallback:
+
 ```bash
 uv run --with-editable . arxiv-local-daily metadata --date 2026-06-03 --limit 100
 ```
 
-Metadata enrichment uses the official arXiv API `id_list` query for crawled paper IDs. Daily crawl events remain in the database even when metadata is missing or failed.
+The fallback metadata command uses the official arXiv API `id_list` query for crawled paper IDs. Daily crawl events remain in the database even when metadata is missing or failed.
 
 The metadata trigger API accepts the same date/limit shape:
 

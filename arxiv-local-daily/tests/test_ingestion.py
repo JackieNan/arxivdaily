@@ -16,17 +16,17 @@ def test_ingestion_persists_run_source_papers_and_events(db):
 
     run = db.execute("SELECT * FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
     source = db.execute("SELECT * FROM crawl_run_sources WHERE run_id = ?", (run_id,)).fetchone()
-    papers = db.execute("SELECT arxiv_id, metadata_status FROM papers ORDER BY arxiv_id").fetchall()
+    papers = db.execute("SELECT arxiv_id, metadata_status, title FROM papers ORDER BY arxiv_id").fetchall()
     events = db.execute(
         "SELECT arxiv_id, event_type, listing_category FROM daily_events ORDER BY arxiv_id"
     ).fetchall()
 
     assert run["status"] == "complete"
     assert source["parsed_count"] == 3
-    assert [(row["arxiv_id"], row["metadata_status"]) for row in papers] == [
-        ("2606.00001", "pending"),
-        ("2606.00002", "pending"),
-        ("2606.00003", "pending"),
+    assert [(row["arxiv_id"], row["metadata_status"], row["title"]) for row in papers] == [
+        ("2606.00001", "pending", "First AI Paper"),
+        ("2606.00002", "pending", "Cross Listed Paper"),
+        ("2606.00003", "pending", "Replacement Paper"),
     ]
     assert [(row["arxiv_id"], row["event_type"], row["listing_category"]) for row in events] == [
         ("2606.00001", "new", "cs.AI"),

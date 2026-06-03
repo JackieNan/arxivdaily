@@ -20,6 +20,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="operation-log"' in response.text
     assert 'id="summary-template-create"' in response.text
     assert 'id="summary-template-help"' in response.text
+    assert 'id="metadata-oai-sync"' in response.text
+    assert 'id="metadata-sync-detail"' in response.text
+    assert "OAI Metadata Sync" in response.text
     assert "Max papers/run" in response.text
 
 
@@ -37,6 +40,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert "createDefaultTemplate" in js_response.text
     assert "retryable" in js_response.text
     assert "next_run_at" in js_response.text
+    assert "startOaiSync" in js_response.text
+    assert "/api/metadata/oai-sync/start" in js_response.text
+    assert "pollOaiSyncRun" in js_response.text
     assert css_response.status_code == 200
     assert ".app-shell" in css_response.text
     assert ".operation-detail" in css_response.text

@@ -4,10 +4,17 @@ from typing import Any
 
 from arxiv_local_daily.crawler.audit import build_crawl_completeness_report
 from arxiv_local_daily.crawler.metadata import ArxivMetadataClient
+from arxiv_local_daily.crawler.oai import OaiPmhMetadataClient
 from arxiv_local_daily.crawler.parser import parse_daily_listing
 from arxiv_local_daily.db import transaction
 from arxiv_local_daily.models import CrawlSourceInput
-from arxiv_local_daily.repositories import CrawlRepository, PaperRepository, SummaryRepository, TemplateRepository
+from arxiv_local_daily.repositories import (
+    CrawlRepository,
+    MetadataSyncRepository,
+    PaperRepository,
+    SummaryRepository,
+    TemplateRepository,
+)
 from arxiv_local_daily.summary import (
     LLMClient,
     OpenAICompatibleChatClient,
@@ -194,6 +201,89 @@ def enrich_metadata_for_date(
         missing=len(missing_ids),
         failed=0,
     )
+
+
+def run_oai_metadata_sync(
+    connection: sqlite3.Connection,
+    *,
+    sync_run_id: int,
+    from_date: str | None = None,
+    until_date: str | None = None,
+    set_spec: str | None = None,
+    max_pages: int = 1,
+    oai_client: OaiPmhMetadataClient | None = None,
+) -> dict[str, Any]:
+    client = oai_client or OaiPmhMetadataClient()
+    sync_repo = MetadataSyncRepository(connection)
+    paper_repo = PaperRepository(connection)
+    records_seen = 0
+    records_upserted = 0
+    pages_fetched = 0
+    resumption_token: str | None = None
+
+    with transaction(connection):
+        sync_repo.mark_running(sync_run_id)
+
+    try:
+        while pages_fetched < max_pages:
+            page = client.fetch_list_records(
+                from_date=from_date,
+                until_date=until_date,
+                set_spec=set_spec,
+                resumption_token=resumption_token,
+            )
+            pages_fetched += 1
+            records_seen += len(page.papers)
+            resumption_token = page.resumption_token
+            page_upserted = 0
+            with transaction(connection):
+                for paper in page.papers:
+                    paper_repo.upsert_metadata(paper)
+                    page_upserted += 1
+            records_upserted += page_upserted
+            if not resumption_token:
+                break
+    except Exception as exc:
+        error = str(exc)
+        result = {
+            "sync_run_id": sync_run_id,
+            "status": "failed",
+            "records_seen": records_seen,
+            "records_upserted": records_upserted,
+            "pages_fetched": pages_fetched,
+            "resumption_token": resumption_token,
+            "error": error,
+        }
+        with transaction(connection):
+            sync_repo.finish_run(
+                sync_run_id,
+                status="failed",
+                records_seen=records_seen,
+                records_upserted=records_upserted,
+                pages_fetched=pages_fetched,
+                resumption_token=resumption_token,
+                error=error,
+            )
+        return result
+
+    result = {
+        "sync_run_id": sync_run_id,
+        "status": "complete",
+        "records_seen": records_seen,
+        "records_upserted": records_upserted,
+        "pages_fetched": pages_fetched,
+        "resumption_token": resumption_token,
+    }
+    with transaction(connection):
+        sync_repo.finish_run(
+            sync_run_id,
+            status="complete",
+            records_seen=records_seen,
+            records_upserted=records_upserted,
+            pages_fetched=pages_fetched,
+            resumption_token=resumption_token,
+        )
+    return result
 
 
 def generate_summaries_for_date(

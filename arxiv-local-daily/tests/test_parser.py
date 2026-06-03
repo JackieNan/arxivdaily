@@ -34,6 +34,22 @@ def test_parse_daily_listing_extracts_primary_category():
     assert events[1].primary_category == "cs.LG"
 
 
+def test_parse_daily_listing_extracts_listing_title():
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+
+    events = parse_daily_listing(
+        html,
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/new",
+    )
+
+    assert [event.title for event in events] == [
+        "First AI Paper",
+        "Cross Listed Paper",
+        "Replacement Paper",
+    ]
+
+
 def test_parse_daily_listing_handles_single_articles_dl_with_section_headings():
     html = """
     <div id="dlpage">

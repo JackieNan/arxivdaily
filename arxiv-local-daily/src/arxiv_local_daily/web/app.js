@@ -4,6 +4,7 @@ const ArxivDailyWorkbench = (() => {
     selectedCard: null,
     lastAudit: null,
     templates: [],
+    oaiPollTimer: null,
   };
 
   const DEFAULT_SUMMARY_TEMPLATE = {
@@ -259,6 +260,67 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
+  async function startOaiSync() {
+    const button = el("metadata-oai-sync");
+    const maxPages = Number(el("oai-max-pages").value || 1);
+    const body = {
+      from_date: el("oai-from").value || dateValue(),
+      until_date: el("oai-until").value || dateValue(),
+      max_pages: maxPages,
+    };
+    const setSpec = el("oai-set-spec").value.trim();
+    if (setSpec) body.set_spec = setSpec;
+    setBusy(button, true);
+    el("enrich-state").textContent = "queued";
+    setDetail("metadata-sync-detail", `Starting OAI sync for ${body.from_date}...`);
+    try {
+      const result = await api("/api/metadata/oai-sync/start", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setDetail("metadata-sync-detail", formatJson(result));
+      recordOperation(`OAI sync run ${result.run_id} queued`, formatJson(result));
+      pollOaiSyncRun(result.run_id);
+    } catch (error) {
+      setDetail("metadata-sync-detail", `OAI sync failed:\n${error.message}`);
+      recordOperation(`OAI sync failed: ${error.message}`);
+      el("enrich-state").textContent = "failed";
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  async function pollOaiSyncRun(runId) {
+    if (state.oaiPollTimer) {
+      clearTimeout(state.oaiPollTimer);
+      state.oaiPollTimer = null;
+    }
+    try {
+      const data = await api(`/api/metadata/oai-sync/runs/${encodeURIComponent(runId)}`);
+      const run = data.run;
+      if (!run) {
+        setDetail("metadata-sync-detail", `OAI sync run ${runId} not found.`);
+        el("enrich-state").textContent = "missing";
+        return;
+      }
+      el("enrich-state").textContent = run.status;
+      setDetail("metadata-sync-detail", formatJson(run));
+      if (run.status === "queued" || run.status === "running") {
+        state.oaiPollTimer = setTimeout(() => pollOaiSyncRun(runId), 1500);
+        return;
+      }
+      const message = run.status === "complete"
+        ? `OAI sync completed: ${run.records_upserted}/${run.records_seen}`
+        : `OAI sync ${run.status}: ${run.error || "no error detail"}`;
+      recordOperation(message, formatJson(run));
+      await runSearch({ silent: true });
+    } catch (error) {
+      setDetail("metadata-sync-detail", `OAI sync status failed:\n${error.message}`);
+      recordOperation(`OAI sync status failed: ${error.message}`);
+      el("enrich-state").textContent = "failed";
+    }
+  }
+
   async function runSummary() {
     const button = el("summary-run");
     setBusy(button, true);
@@ -482,10 +544,13 @@ const ArxivDailyWorkbench = (() => {
 
   function bind() {
     el("date-input").value = todayIso();
+    el("oai-from").value = dateValue();
+    el("oai-until").value = dateValue();
     el("crawl-run").addEventListener("click", runCrawl);
     el("crawl-audit").addEventListener("click", runAudit);
     el("crawl-retry").addEventListener("click", retryCrawl);
     el("metadata-run").addEventListener("click", runMetadata);
+    el("metadata-oai-sync").addEventListener("click", startOaiSync);
     el("summary-template-create").addEventListener("click", createDefaultTemplate);
     el("summary-run").addEventListener("click", runSummary);
     el("search-run").addEventListener("click", runSearch);
@@ -498,7 +563,7 @@ const ArxivDailyWorkbench = (() => {
     runSearch();
   }
 
-  return { bind, runSearch, runAudit };
+  return { bind, runSearch, runAudit, startOaiSync, pollOaiSyncRun };
 })();
 
 window.addEventListener("DOMContentLoaded", ArxivDailyWorkbench.bind);

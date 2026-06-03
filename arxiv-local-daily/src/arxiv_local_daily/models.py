@@ -6,6 +6,7 @@ class ParsedDailyEvent(BaseModel):
     event_type: str
     listing_category: str
     primary_category: str | None = None
+    title: str | None = None
     source_url: str
 
 

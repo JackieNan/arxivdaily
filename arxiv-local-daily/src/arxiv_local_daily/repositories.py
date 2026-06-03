@@ -135,6 +135,15 @@ class PaperRepository:
 
     def upsert_daily_event(self, *, date: str, event: ParsedDailyEvent) -> None:
         self.ensure_pending_paper(event.arxiv_id)
+        if event.title:
+            self.connection.execute(
+                """
+                UPDATE papers
+                SET title = COALESCE(title, ?), updated_row_at = CURRENT_TIMESTAMP
+                WHERE arxiv_id = ?
+                """,
+                (event.title, event.arxiv_id),
+            )
         self.connection.execute(
             """
             INSERT INTO daily_events
@@ -253,6 +262,99 @@ class PaperRepository:
             (date, limit),
         ).fetchall()
         return [row["arxiv_id"] for row in rows]
+
+
+class MetadataSyncRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def create_run(
+        self,
+        *,
+        source: str,
+        from_date: str | None = None,
+        until_date: str | None = None,
+        set_spec: str | None = None,
+        max_pages: int = 1,
+        status: str = "queued",
+    ) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO metadata_sync_runs
+                (source, status, from_date, until_date, set_spec, max_pages)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (source, status, from_date, until_date, set_spec, max_pages),
+        )
+        return int(cursor.lastrowid)
+
+    def mark_running(self, run_id: int) -> None:
+        self.connection.execute(
+            """
+            UPDATE metadata_sync_runs
+            SET status = ?, error = NULL
+            WHERE id = ?
+            """,
+            ("running", run_id),
+        )
+
+    def finish_run(
+        self,
+        run_id: int,
+        *,
+        status: str,
+        records_seen: int,
+        records_upserted: int,
+        pages_fetched: int,
+        resumption_token: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        self.connection.execute(
+            """
+            UPDATE metadata_sync_runs
+            SET
+                status = ?,
+                finished_at = CURRENT_TIMESTAMP,
+                records_seen = ?,
+                records_upserted = ?,
+                pages_fetched = ?,
+                resumption_token = ?,
+                error = ?
+            WHERE id = ?
+            """,
+            (
+                status,
+                records_seen,
+                records_upserted,
+                pages_fetched,
+                resumption_token,
+                error,
+                run_id,
+            ),
+        )
+
+    def get_run(self, run_id: int) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT *
+            FROM metadata_sync_runs
+            WHERE id = ?
+            """,
+            (run_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_runs(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT *
+            FROM metadata_sync_runs
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
 
 class TemplateRepository:

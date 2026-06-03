@@ -81,6 +81,23 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             UNIQUE (run_id, category, event_section, url)
         );
 
+        CREATE TABLE IF NOT EXISTS metadata_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            status TEXT NOT NULL,
+            from_date TEXT,
+            until_date TEXT,
+            set_spec TEXT,
+            max_pages INTEGER NOT NULL DEFAULT 1,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            records_seen INTEGER NOT NULL DEFAULT 0,
+            records_upserted INTEGER NOT NULL DEFAULT 0,
+            pages_fetched INTEGER NOT NULL DEFAULT 0,
+            resumption_token TEXT,
+            error TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS daily_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,

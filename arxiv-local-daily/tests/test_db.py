@@ -9,6 +9,7 @@ def test_schema_creates_core_tables(db):
         "crawl_run_sources",
         "crawl_runs",
         "daily_events",
+        "metadata_sync_runs",
         "papers",
         "paper_discussions",
         "summary_templates",
