@@ -7,7 +7,12 @@ from arxiv_local_daily.crawler.live import run_live_daily_crawl
 from arxiv_local_daily.db import connect, initialize_schema
 from arxiv_local_daily.models import SummaryTemplateInput
 from arxiv_local_daily.repositories import TemplateRepository
-from arxiv_local_daily.services import enrich_metadata_for_date, generate_summaries_for_date
+from arxiv_local_daily.services import (
+    enrich_metadata_for_date,
+    generate_summaries_for_date,
+    get_crawl_completeness_for_date,
+    retry_incomplete_crawl_categories_for_date,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -17,6 +22,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     crawl.add_argument("--date", required=True)
     crawl.add_argument("--category", action="append")
     crawl.add_argument("--db", default=str(default_settings().database_path))
+    crawl_audit = subparsers.add_parser("crawl-audit")
+    crawl_audit.add_argument("--date", required=True)
+    crawl_audit.add_argument("--expected-category", action="append")
+    crawl_audit.add_argument("--db", default=str(default_settings().database_path))
+    crawl_retry = subparsers.add_parser("crawl-retry-failed")
+    crawl_retry.add_argument("--date", required=True)
+    crawl_retry.add_argument("--expected-category", action="append")
+    crawl_retry.add_argument("--db", default=str(default_settings().database_path))
     metadata = subparsers.add_parser("metadata")
     metadata.add_argument("--date", required=True)
     metadata.add_argument("--limit", type=int, default=100)
@@ -47,6 +60,32 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             connection.close()
         print(f"crawl_run_id={run_id}")
+        return 0
+    if args.command == "crawl-audit":
+        connection = connect(args.db)
+        initialize_schema(connection)
+        try:
+            result = get_crawl_completeness_for_date(
+                connection,
+                date=args.date,
+                expected_categories=args.expected_category,
+            )
+        finally:
+            connection.close()
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
+    if args.command == "crawl-retry-failed":
+        connection = connect(args.db)
+        initialize_schema(connection)
+        try:
+            result = retry_incomplete_crawl_categories_for_date(
+                connection,
+                date=args.date,
+                expected_categories=args.expected_category,
+            )
+        finally:
+            connection.close()
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     if args.command == "metadata":
         connection = connect(args.db)

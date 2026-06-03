@@ -30,30 +30,30 @@
 
 ### Task 1: Crawl Completeness Report
 
-- [ ] Write tests showing no-run dates return status `no_run`.
-- [ ] Write tests showing all complete category sources return status `complete`.
-- [ ] Write tests showing failed categories return status `partial` and list retry candidates.
-- [ ] Write tests showing optional expected categories detect missing categories.
-- [ ] Implement date source rollup and `build_crawl_completeness_report`.
+- [x] Write tests showing no-run dates return status `no_run`.
+- [x] Write tests showing all complete category sources return status `complete`.
+- [x] Write tests showing failed categories return status `partial` and list retry candidates.
+- [x] Write tests showing optional expected categories detect missing categories.
+- [x] Implement date source rollup and `build_crawl_completeness_report`.
 
 ### Task 2: Retry Failed or Missing Categories
 
-- [ ] Write tests showing a retry service calls the crawl runner with categories whose effective status is not complete.
-- [ ] Write tests showing a later successful retry makes the combined audit complete.
-- [ ] Implement `retry_incomplete_crawl_categories_for_date`.
+- [x] Write tests showing a retry service calls the crawl runner with categories whose effective status is not complete.
+- [x] Write tests showing a later successful retry makes the combined audit complete.
+- [x] Implement `retry_incomplete_crawl_categories_for_date`.
 
 ### Task 3: CLI/API Controls
 
-- [ ] Write CLI parsing tests for `crawl-audit --date ... --expected-category ...`.
-- [ ] Write CLI parsing tests for `crawl-retry-failed --date ...`.
-- [ ] Write API tests for `GET /api/crawl/completeness/{date}`.
-- [ ] Write API tests for `POST /api/crawl/retry-failed`.
-- [ ] Implement CLI/API controls.
+- [x] Write CLI parsing tests for `crawl-audit --date ... --expected-category ...`.
+- [x] Write CLI parsing tests for `crawl-retry-failed --date ...`.
+- [x] Write API tests for `GET /api/crawl/completeness/{date}`.
+- [x] Write API tests for `POST /api/crawl/retry-failed`.
+- [x] Implement CLI/API controls.
 
 ### Task 4: Verification and Recording
 
-- [ ] Run focused crawl audit tests.
-- [ ] Run full `uv run pytest -v`.
-- [ ] Update README with audit/retry usage.
-- [ ] Record Phase 5 in `docs/phases.md`.
-- [ ] Commit Phase 5 locally.
+- [x] Run focused crawl audit tests.
+- [x] Run full `uv run pytest -v`.
+- [x] Update README with audit/retry usage.
+- [x] Record Phase 5 in `docs/phases.md`.
+- [x] Commit Phase 5 locally.

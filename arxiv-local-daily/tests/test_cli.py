@@ -55,3 +55,37 @@ def test_parse_args_accepts_template_import_file():
     assert args.command == "template"
     assert args.template_command == "import"
     assert args.file == "template.json"
+
+
+def test_parse_args_accepts_crawl_audit_expected_categories():
+    args = parse_args(
+        [
+            "crawl-audit",
+            "--date",
+            "2026-06-03",
+            "--expected-category",
+            "cs.AI",
+            "--expected-category",
+            "cs.LG",
+        ]
+    )
+
+    assert args.command == "crawl-audit"
+    assert args.date == "2026-06-03"
+    assert args.expected_category == ["cs.AI", "cs.LG"]
+
+
+def test_parse_args_accepts_crawl_retry_failed_expected_categories():
+    args = parse_args(
+        [
+            "crawl-retry-failed",
+            "--date",
+            "2026-06-03",
+            "--expected-category",
+            "cs.AI",
+        ]
+    )
+
+    assert args.command == "crawl-retry-failed"
+    assert args.date == "2026-06-03"
+    assert args.expected_category == ["cs.AI"]

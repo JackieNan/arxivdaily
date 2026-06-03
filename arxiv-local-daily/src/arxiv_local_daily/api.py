@@ -9,7 +9,12 @@ from arxiv_local_daily.crawler.live import run_live_daily_crawl
 from arxiv_local_daily.db import connect, initialize_schema
 from arxiv_local_daily.models import SummaryTemplateInput
 from arxiv_local_daily.repositories import CrawlRepository, SummaryRepository, TemplateRepository
-from arxiv_local_daily.services import enrich_metadata_for_date, generate_summaries_for_date
+from arxiv_local_daily.services import (
+    enrich_metadata_for_date,
+    generate_summaries_for_date,
+    get_crawl_completeness_for_date,
+    retry_incomplete_crawl_categories_for_date,
+)
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
@@ -19,6 +24,11 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
 class CrawlRunRequest(BaseModel):
     date: str
     categories: list[str] = Field(min_length=1)
+
+
+class CrawlRetryFailedRequest(BaseModel):
+    date: str
+    expected_categories: list[str] | None = None
 
 
 class MetadataRunRequest(BaseModel):
@@ -36,6 +46,7 @@ class SummaryRunRequest(BaseModel):
 
 
 CrawlerRunner = Callable[..., int]
+CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, int]]
 SummaryRunner = Callable[..., dict[str, Any]]
 
@@ -43,6 +54,7 @@ SummaryRunner = Callable[..., dict[str, Any]]
 def create_app(
     database_path: Path | str | None = None,
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
+    crawl_retry_runner: CrawlRetryRunner = retry_incomplete_crawl_categories_for_date,
     metadata_runner: MetadataRunner = enrich_metadata_for_date,
     summary_runner: SummaryRunner = generate_summaries_for_date,
 ) -> FastAPI:
@@ -88,6 +100,14 @@ def create_app(
         finally:
             connection.close()
 
+    @app.get("/api/crawl/completeness/{date}")
+    def get_crawl_completeness(date: str):
+        connection = get_connection()
+        try:
+            return get_crawl_completeness_for_date(connection, date=date)
+        finally:
+            connection.close()
+
     @app.post("/api/crawl/run")
     def run_crawl(request: CrawlRunRequest):
         connection = get_connection()
@@ -98,6 +118,18 @@ def create_app(
                 categories=request.categories,
             )
             return {"run_id": run_id}
+        finally:
+            connection.close()
+
+    @app.post("/api/crawl/retry-failed")
+    def retry_failed_crawl(request: CrawlRetryFailedRequest):
+        connection = get_connection()
+        try:
+            return crawl_retry_runner(
+                connection,
+                date=request.date,
+                expected_categories=request.expected_categories,
+            )
         finally:
             connection.close()
 

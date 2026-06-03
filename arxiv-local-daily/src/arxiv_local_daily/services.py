@@ -1,6 +1,7 @@
 import sqlite3
 from typing import Any
 
+from arxiv_local_daily.crawler.audit import build_crawl_completeness_report
 from arxiv_local_daily.crawler.metadata import ArxivMetadataClient
 from arxiv_local_daily.crawler.parser import parse_daily_listing
 from arxiv_local_daily.db import transaction
@@ -209,3 +210,39 @@ def generate_summaries_for_date(
         "template_id": template_id_value,
         "template_version": template_version,
     }
+
+
+def get_crawl_completeness_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    expected_categories: list[str] | None = None,
+) -> dict[str, Any]:
+    return build_crawl_completeness_report(
+        connection,
+        date=date,
+        expected_categories=expected_categories,
+    )
+
+
+def retry_incomplete_crawl_categories_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    expected_categories: list[str] | None = None,
+    crawl_runner: Any | None = None,
+) -> dict[str, Any]:
+    report = get_crawl_completeness_for_date(
+        connection,
+        date=date,
+        expected_categories=expected_categories,
+    )
+    categories = report["retry_categories"]
+    if not categories:
+        return {"run_id": None, "retried": 0, "categories": []}
+    if crawl_runner is None:
+        from arxiv_local_daily.crawler.live import run_live_daily_crawl
+
+        crawl_runner = run_live_daily_crawl
+    run_id = crawl_runner(connection, date=date, categories=categories)
+    return {"run_id": run_id, "retried": len(categories), "categories": categories}

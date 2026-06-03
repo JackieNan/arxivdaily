@@ -43,6 +43,15 @@ Phase 4 adds configurable AI summary generation:
 - summary persistence by paper, template version, model, and input scope
 - manual summary generation through CLI and API
 
+## Phase 5
+
+Phase 5 adds crawl completeness auditing:
+
+- daily crawl completeness reports across all runs for a date
+- failed category and missing expected-category detection
+- retry candidate generation
+- manual retry for failed or missing categories through CLI and API
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
@@ -69,6 +78,8 @@ The phase-one endpoints are:
 
 - `GET /api/days/{date}/papers`
 - `GET /api/crawl/runs/{date}`
+- `GET /api/crawl/completeness/{date}`
+- `POST /api/crawl/retry-failed`
 - `GET /api/summary-templates`
 - `POST /api/summary-templates`
 - `POST /api/summaries/run`
@@ -91,6 +102,31 @@ The all-category command discovers categories from arXiv's taxonomy page, then f
 The crawl trigger API accepts the same date/category shape:
 
 - `POST /api/crawl/run`
+
+## Audit and Retry Crawl Completeness
+
+Audit a date after a crawl:
+
+```bash
+uv run --with-editable . arxiv-local-daily crawl-audit --date 2026-06-03
+```
+
+If you know the exact categories you expected, pass them explicitly. Any expected category that has no successful source row is reported in `retry_categories`:
+
+```bash
+uv run --with-editable . arxiv-local-daily crawl-audit \
+  --date 2026-06-03 \
+  --expected-category cs.AI \
+  --expected-category cs.LG
+```
+
+Retry failed or missing categories:
+
+```bash
+uv run --with-editable . arxiv-local-daily crawl-retry-failed --date 2026-06-03
+```
+
+The retry command uses the combined audit across all runs for the date. If a later retry completes a category that failed earlier, the audit treats that category as complete.
 
 ## Run Metadata Enrichment
 
