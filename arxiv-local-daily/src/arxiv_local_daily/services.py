@@ -1,5 +1,6 @@
 import sqlite3
 
+from arxiv_local_daily.crawler.metadata import ArxivMetadataClient
 from arxiv_local_daily.crawler.parser import parse_daily_listing
 from arxiv_local_daily.db import transaction
 from arxiv_local_daily.models import CrawlSourceInput
@@ -83,3 +84,38 @@ def ingest_daily_crawl_sources(
         final_status = "complete" if failed_count == 0 else "partial"
         crawl_repo.finish_run(run_id, status=final_status, summary_counts=summary_counts)
         return run_id
+
+
+def enrich_metadata_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    metadata_client: ArxivMetadataClient | None = None,
+    limit: int = 100,
+) -> dict[str, int]:
+    client = metadata_client or ArxivMetadataClient()
+    repo = PaperRepository(connection)
+    ids = repo.list_metadata_pending_ids_for_date(date, limit=limit)
+    if not ids:
+        return {"requested": 0, "updated": 0, "missing": 0, "failed": 0}
+    try:
+        papers = client.fetch_by_ids(ids)
+    except Exception:
+        with transaction(connection):
+            for arxiv_id in ids:
+                repo.mark_metadata_status(arxiv_id, "failed")
+        return {"requested": len(ids), "updated": 0, "missing": 0, "failed": len(ids)}
+
+    returned_by_id = {paper.arxiv_id: paper for paper in papers}
+    with transaction(connection):
+        for paper in papers:
+            repo.upsert_metadata(paper)
+        missing_ids = sorted(set(ids) - set(returned_by_id))
+        for arxiv_id in missing_ids:
+            repo.mark_metadata_status(arxiv_id, "failed")
+    return {
+        "requested": len(ids),
+        "updated": len(papers),
+        "missing": len(missing_ids),
+        "failed": 0,
+    }
