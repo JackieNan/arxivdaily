@@ -2,6 +2,7 @@ import re
 from urllib.parse import urlencode
 import xml.etree.ElementTree as ET
 
+from arxiv_local_daily.crawler.http import ArxivHttpClient
 from arxiv_local_daily.models import PaperMetadata, PaperVersionInput
 
 ATOM = "{http://www.w3.org/2005/Atom}"
@@ -84,3 +85,16 @@ def parse_arxiv_atom_feed(xml: str) -> list[PaperMetadata]:
             )
         )
     return papers
+
+
+class ArxivMetadataClient:
+    def __init__(self, *, http_client: ArxivHttpClient | None = None):
+        self.http_client = http_client or ArxivHttpClient()
+
+    def fetch_by_ids(self, ids: list[str]) -> list[PaperMetadata]:
+        if not ids:
+            return []
+        response = self.http_client.fetch_text(build_arxiv_api_query_url(ids))
+        if response.status_code != 200:
+            raise ValueError(f"arXiv API metadata fetch failed: HTTP {response.status_code}")
+        return parse_arxiv_atom_feed(response.text)
