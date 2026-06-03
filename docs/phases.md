@@ -63,3 +63,15 @@ Date baseline: 2026-06-03
   - metadata CLI help smoke test succeeded.
   - live arXiv API metadata smoke test: `2606.00001` returned one parsed paper.
 - Status: merged to `main`.
+
+## Phase 4: Configurable AI Summary Worker
+
+- Branch: planned `codex/phase-4-ai-summary-worker`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-4-ai-summary-worker.md`
+- Scope planned:
+  - create and version user-editable summary templates through API/CLI
+  - build structured prompts from template fields and paper metadata
+  - parse JSON AI responses into configurable summary sections
+  - persist summaries by paper, template version, model, and input scope
+  - expose manual summary generation through CLI/API
+- Status: planned, development starting.
