@@ -5,13 +5,14 @@ from fastapi.testclient import TestClient
 from arxiv_local_daily.api import create_app
 from arxiv_local_daily.db import connect, initialize_schema
 from arxiv_local_daily.models import (
+    CrawlSourceInput,
     PaperMetadata,
     ParsedDailyEvent,
     SummaryTemplateField,
     SummaryTemplateInput,
 )
 from arxiv_local_daily.repositories import PaperRepository, SummaryRepository, TemplateRepository
-from arxiv_local_daily.services import ingest_daily_listing_html
+from arxiv_local_daily.services import ingest_daily_crawl_sources, ingest_daily_listing_html
 
 
 def _client_with_seed_data(tmp_path: Path) -> TestClient:
@@ -63,6 +64,63 @@ def test_get_crawl_runs_includes_source_details(tmp_path):
     assert data["runs"][0]["source_count"] == 1
     assert data["runs"][0]["sources"][0]["category"] == "cs.AI"
     assert data["runs"][0]["sources"][0]["parsed_count"] == 3
+
+
+def test_get_crawl_completeness_returns_combined_report(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    connection = connect(db_path)
+    initialize_schema(connection)
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+    ingest_daily_crawl_sources(
+        connection,
+        date="2026-06-03",
+        mode="all-categories",
+        sources=[
+            CrawlSourceInput(
+                category="cs.AI",
+                url="https://arxiv.org/list/cs.AI/new",
+                status="complete",
+                http_status=200,
+                html=html,
+            ),
+            CrawlSourceInput(
+                category="cs.LG",
+                url="https://arxiv.org/list/cs.LG/new",
+                status="failed",
+                http_status=503,
+                error="HTTP 503",
+            ),
+        ],
+    )
+    connection.close()
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get("/api/crawl/completeness/2026-06-03")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "partial"
+    assert data["retry_categories"] == ["cs.LG"]
+
+
+def test_post_crawl_retry_failed_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_retry_runner(connection, *, date: str, expected_categories: list[str] | None):
+        calls.append({"date": date, "expected_categories": expected_categories})
+        return {"run_id": 9, "retried": 1, "categories": ["cs.LG"]}
+
+    client = TestClient(create_app(database_path=db_path, crawl_retry_runner=fake_retry_runner))
+
+    response = client.post(
+        "/api/crawl/retry-failed",
+        json={"date": "2026-06-03", "expected_categories": ["cs.AI", "cs.LG"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"run_id": 9, "retried": 1, "categories": ["cs.LG"]}
+    assert calls == [{"date": "2026-06-03", "expected_categories": ["cs.AI", "cs.LG"]}]
 
 
 def test_post_crawl_run_uses_injected_runner(tmp_path):

@@ -87,6 +87,32 @@ class CrawlRepository:
             results.append(item)
         return results
 
+    def list_source_rows_for_date(self, date: str) -> list[dict]:
+        rows = self.connection.execute(
+            """
+            SELECT
+                r.id AS run_id,
+                r.mode AS run_mode,
+                r.status AS run_status,
+                r.started_at,
+                r.finished_at,
+                s.category,
+                s.event_section,
+                s.url,
+                s.status,
+                s.http_status,
+                s.parsed_count,
+                s.error,
+                s.retry_count
+            FROM crawl_run_sources s
+            JOIN crawl_runs r ON r.id = s.run_id
+            WHERE r.date = ?
+            ORDER BY r.id ASC, s.category ASC, s.url ASC
+            """,
+            (date,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
 
 class PaperRepository:
     def __init__(self, connection: sqlite3.Connection):
