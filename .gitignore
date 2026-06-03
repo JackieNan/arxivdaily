@@ -2,6 +2,7 @@
 .worktrees/
 daily-arXiv-ai-enhanced/
 zotero-arxiv-daily/
+arxiv-local-daily/data/
 
 .DS_Store
 __pycache__/
