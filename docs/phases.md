@@ -111,3 +111,15 @@ Date baseline: 2026-06-03
   - focused Phase 6 tests: 10 passed, 1 warning
   - `uv run pytest -v`: 75 passed, 1 warning
 - Status: merged to `main`.
+
+## Phase 7: Local Web UI
+
+- Branch: planned `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-7-web-ui.md`
+- Scope planned:
+  - serve a static local workbench from FastAPI
+  - provide crawl, audit, metadata, and summary controls
+  - provide paper search and filters
+  - show paper details, summaries, and discussions
+  - support local discussion message creation from the UI
+- Status: planned, development starting.
