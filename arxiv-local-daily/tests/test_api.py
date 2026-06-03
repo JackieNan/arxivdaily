@@ -132,7 +132,7 @@ def test_post_crawl_run_uses_injected_runner(tmp_path):
         calls.append((date, categories))
         return 42
 
-    client = TestClient(create_app(database_path=db_path, crawl_runner=fake_runner))
+    client = TestClient(create_app(database_path=db_path, crawl_runner=fake_runner, auto_enrich_after_crawl=False))
 
     response = client.post(
         "/api/crawl/run",
@@ -142,6 +142,35 @@ def test_post_crawl_run_uses_injected_runner(tmp_path):
     assert response.status_code == 200
     assert response.json() == {"run_id": 42}
     assert calls == [("2026-06-03", ["cs.AI", "cs.LG"])]
+
+
+def test_post_crawl_run_schedules_auto_metadata_enrich(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    crawl_calls: list[dict] = []
+    enrich_calls: list[dict] = []
+
+    def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        crawl_calls.append({"date": date, "categories": categories})
+        return 42
+
+    def fake_unified_runner(connection, *, date: str, limit: int | None, oai_max_pages: int):
+        enrich_calls.append({"date": date, "limit": limit, "oai_max_pages": oai_max_pages})
+        return {"run_id": 7, "status": "complete", "merged": 0}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_crawl_runner,
+            unified_metadata_runner=fake_unified_runner,
+        )
+    )
+
+    response = client.post("/api/crawl/run", json={"date": "2026-06-03"})
+
+    assert response.status_code == 200
+    assert response.json() == {"run_id": 42, "metadata_enrich": "queued"}
+    assert crawl_calls == [{"date": "2026-06-03", "categories": None}]
+    assert enrich_calls == [{"date": "2026-06-03", "limit": None, "oai_max_pages": 1}]
 
 
 def test_post_metadata_run_uses_injected_runner(tmp_path):
@@ -300,7 +329,7 @@ def test_post_summaries_run_uses_injected_runner(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     calls: list[dict] = []
 
-    def fake_summary_runner(connection, *, date: str, template_id: int | None, template_name: str | None, model: str, limit: int, force: bool):
+    def fake_summary_runner(connection, *, date: str, template_id: int | None, template_name: str | None, model: str, limit: int | None, force: bool):
         calls.append(
             {
                 "date": date,

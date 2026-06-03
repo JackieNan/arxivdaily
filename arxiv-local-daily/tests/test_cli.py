@@ -49,6 +49,14 @@ def test_parse_args_accepts_summarize_controls():
     assert args.force is True
 
 
+def test_parse_args_defaults_search_and_summarize_to_all_candidates():
+    search_args = parse_args(["search", "--date", "2026-06-03"])
+    summarize_args = parse_args(["summarize", "--date", "2026-06-03", "--template-name", "daily_research"])
+
+    assert search_args.limit is None
+    assert summarize_args.limit is None
+
+
 def test_parse_args_accepts_template_import_file():
     args = parse_args(["template", "import", "--file", "template.json"])
 

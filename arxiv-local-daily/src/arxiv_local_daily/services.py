@@ -176,7 +176,7 @@ def enrich_metadata_for_date(
     *,
     date: str,
     metadata_client: ArxivMetadataClient | None = None,
-    limit: int = 100,
+    limit: int | None = 100,
 ) -> dict[str, Any]:
     client = metadata_client or ArxivMetadataClient()
     repo = PaperRepository(connection)
@@ -355,7 +355,7 @@ def enrich_metadata_for_date_unified(
     date: str,
     metadata_client: ArxivMetadataClient | None = None,
     oai_client: OaiPmhMetadataClient | None = None,
-    limit: int = 100,
+    limit: int | None = None,
     oai_max_pages: int = 1,
 ) -> dict[str, Any]:
     paper_repo = PaperRepository(connection)
@@ -482,7 +482,7 @@ def generate_summaries_for_date(
     template_id: int | None = None,
     template_name: str | None = None,
     model: str = "local",
-    limit: int = 20,
+    limit: int | None = None,
     force: bool = False,
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
@@ -562,7 +562,7 @@ def score_papers_for_date(
     *,
     date: str,
     model: str = "local",
-    limit: int = 20,
+    limit: int | None = None,
     force: bool = False,
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,

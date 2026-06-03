@@ -261,9 +261,11 @@ class PaperRepository:
             (status, error, next_run_at, arxiv_id),
         )
 
-    def list_metadata_pending_ids_for_date(self, date: str, *, limit: int) -> list[str]:
+    def list_metadata_pending_ids_for_date(self, date: str, *, limit: int | None) -> list[str]:
+        limit_sql = "" if limit is None else "LIMIT ?"
+        params: tuple[Any, ...] = (date,) if limit is None else (date, limit)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT DISTINCT p.arxiv_id
             FROM papers p
             JOIN daily_events e ON e.arxiv_id = p.arxiv_id
@@ -275,9 +277,9 @@ class PaperRepository:
                 OR datetime(p.metadata_next_run_at) <= CURRENT_TIMESTAMP
               )
             ORDER BY p.arxiv_id
-            LIMIT ?
+            {limit_sql}
             """,
-            (date, limit),
+            params,
         ).fetchall()
         return [row["arxiv_id"] for row in rows]
 
@@ -567,11 +569,22 @@ class SummaryRepository:
         template_version: int,
         model: str,
         input_scope: str,
-        limit: int,
+        limit: int | None,
         force: bool = False,
     ) -> list[str]:
+        limit_sql = "" if limit is None else "LIMIT ?"
+        params: tuple[Any, ...] = (
+            date,
+            1 if force else 0,
+            template_id,
+            template_version,
+            model,
+            input_scope,
+        )
+        if limit is not None:
+            params = (*params, limit)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT DISTINCT p.arxiv_id
             FROM papers p
             JOIN daily_events e ON e.arxiv_id = p.arxiv_id
@@ -591,17 +604,9 @@ class SummaryRepository:
                 )
               )
             ORDER BY p.arxiv_id
-            LIMIT ?
+            {limit_sql}
             """,
-            (
-                date,
-                1 if force else 0,
-                template_id,
-                template_version,
-                model,
-                input_scope,
-                limit,
-            ),
+            params,
         ).fetchall()
         return [row["arxiv_id"] for row in rows]
 
@@ -729,11 +734,15 @@ class ScoreRepository:
         date: str,
         model: str,
         rubric_version: str,
-        limit: int,
+        limit: int | None,
         force: bool = False,
     ) -> list[str]:
+        limit_sql = "" if limit is None else "LIMIT ?"
+        params: tuple[Any, ...] = (date, 1 if force else 0, model, rubric_version)
+        if limit is not None:
+            params = (*params, limit)
         rows = self.connection.execute(
-            """
+            f"""
             SELECT DISTINCT p.arxiv_id
             FROM papers p
             JOIN daily_events e ON e.arxiv_id = p.arxiv_id
@@ -751,9 +760,9 @@ class ScoreRepository:
                 )
               )
             ORDER BY p.arxiv_id
-            LIMIT ?
+            {limit_sql}
             """,
-            (date, 1 if force else 0, model, rubric_version, limit),
+            params,
         ).fetchall()
         return [row["arxiv_id"] for row in rows]
 
@@ -891,7 +900,7 @@ class SearchRepository:
         event_type: str | None = None,
         metadata_status: str | None = None,
         summary_status: str | None = None,
-        limit: int = 50,
+        limit: int | None = None,
         sort: str = "recent",
     ) -> list[dict[str, Any]]:
         where = ["1 = 1"]
@@ -949,6 +958,8 @@ class SearchRepository:
             params.append(summary_status)
 
         order_by = "latest_score DESC, latest_date DESC, p.arxiv_id ASC" if sort == "score" else "latest_date DESC, p.arxiv_id ASC"
+        limit_sql = "" if limit is None else "LIMIT ?"
+        query_params: tuple[Any, ...] = tuple(params) if limit is None else (*params, limit)
         rows = self.connection.execute(
             f"""
             SELECT DISTINCT
@@ -983,9 +994,9 @@ class SearchRepository:
             LEFT JOIN daily_events e ON e.arxiv_id = p.arxiv_id
             WHERE {" AND ".join(where)}
             ORDER BY {order_by}
-            LIMIT ?
+            {limit_sql}
             """,
-            (*params, limit),
+            query_params,
         ).fetchall()
         return [self._paper_search_result(row) for row in rows]
 

@@ -177,3 +177,29 @@ Date baseline: 2026-06-03
   - `uv run pytest -v`: 100 passed, 1 warning
   - browser layout smoke confirmed the new left controls, center search, right detail layout and Settings/Score controls. Direct click smoke was blocked by the in-app browser coordinate translation layer.
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 10: Auto Enrich and Clean All-Paper UI
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-10-auto-enrich-clean-ui.md`
+- Scope completed:
+  - make `POST /api/crawl/run` queue unified metadata enrichment in the background after crawl
+  - process all crawled daily IDs by default in unified metadata enrichment
+  - remove user-facing Enrich, legacy metadata, metadata limit, OAI page, summary limit, and score limit controls from the web UI
+  - move Crawl and Settings into a compact top action strip
+  - keep paper list and fixed right paper detail as the primary work area
+  - return all matching search results by default in repository/API/UI/CLI
+  - run summary and score over all eligible candidates by default while retaining optional diagnostic limits in API/CLI
+  - prevent horizontal overflow in search controls, paper cards, tags, abstracts, and summary JSON
+- Important decisions:
+  - crawl is the only normal user-facing ingestion action
+  - metadata completion is an automatic post-crawl background responsibility
+  - OAI and ID API remain internal metadata sources, not separate UI workflows
+  - limits remain optional diagnostics for scripts/API callers, not normal UI controls
+- Verification:
+  - focused Phase 10 API/search/web UI tests: 5 passed, 1 warning
+  - focused all-candidate summary/score/CLI default tests: 3 passed
+  - `uv run pytest -v`: 105 passed, 1 warning
+  - browser desktop smoke: no Enrich/left rail/limit controls, top action strip present, no document horizontal overflow
+  - browser mobile smoke at 390px width: search controls fit and no horizontal document overflow
+- Status: implemented on branch, not yet merged to `main`.

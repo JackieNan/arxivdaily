@@ -66,14 +66,14 @@ class SummaryRunRequest(BaseModel):
     template_id: int | None = None
     template_name: str | None = None
     model: str = "local"
-    limit: int = 20
+    limit: int | None = None
     force: bool = False
 
 
 class ScoreRunRequest(BaseModel):
     date: str
     model: str = "local"
-    limit: int = 20
+    limit: int | None = None
     force: bool = False
 
 
@@ -108,6 +108,27 @@ def _run_oai_sync_background(
         connection.close()
 
 
+def _run_unified_metadata_background(
+    *,
+    db_path: Path,
+    date: str,
+    unified_metadata_runner: UnifiedMetadataRunner,
+    limit: int | None = None,
+    oai_max_pages: int = 1,
+) -> None:
+    connection = connect(db_path)
+    initialize_schema(connection)
+    try:
+        unified_metadata_runner(
+            connection,
+            date=date,
+            limit=limit,
+            oai_max_pages=oai_max_pages,
+        )
+    finally:
+        connection.close()
+
+
 def create_app(
     database_path: Path | str | None = None,
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
@@ -117,6 +138,7 @@ def create_app(
     oai_sync_runner: OaiSyncRunner = run_oai_metadata_sync,
     summary_runner: SummaryRunner = generate_summaries_for_date,
     score_runner: ScoreRunner = score_papers_for_date,
+    auto_enrich_after_crawl: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
     db_path = Path(database_path) if database_path is not None else default_settings().database_path
@@ -165,7 +187,7 @@ def create_app(
         event_type: str | None = None,
         metadata_status: str | None = None,
         summary_status: str | None = None,
-        limit: int = 50,
+        limit: int | None = None,
         sort: str = "recent",
     ):
         connection = get_connection()
@@ -203,7 +225,7 @@ def create_app(
             connection.close()
 
     @app.post("/api/crawl/run")
-    def run_crawl(request: CrawlRunRequest):
+    def run_crawl(request: CrawlRunRequest, background_tasks: BackgroundTasks):
         connection = get_connection()
         try:
             run_id = crawl_runner(
@@ -211,7 +233,18 @@ def create_app(
                 date=request.date,
                 categories=request.categories,
             )
-            return {"run_id": run_id}
+            response: dict[str, Any] = {"run_id": run_id}
+            if auto_enrich_after_crawl:
+                background_tasks.add_task(
+                    _run_unified_metadata_background,
+                    db_path=db_path,
+                    date=request.date,
+                    unified_metadata_runner=unified_metadata_runner,
+                    limit=None,
+                    oai_max_pages=1,
+                )
+                response["metadata_enrich"] = "queued"
+            return response
         finally:
             connection.close()
 

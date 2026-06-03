@@ -67,7 +67,7 @@ Phase 7 adds a local web workbench:
 
 - FastAPI serves the UI at `/`
 - static CSS and JavaScript are served under `/static`
-- crawl, audit, retry, metadata, summary, search, paper detail, and discussion controls are available in one screen
+- crawl, audit, retry, summary, score, search, paper detail, and discussion controls are available in one screen
 - the UI uses the existing local API and SQLite database
 
 ## Phase 8
@@ -91,6 +91,17 @@ Phase 9 unifies metadata enrichment and improves reading triage:
 - search can sort by score
 - the web UI uses left controls, center search results, and a fixed right paper detail panel
 - summary templates and scoring controls live in Settings
+
+## Phase 10
+
+Phase 10 makes crawl the only user-facing ingestion action:
+
+- `POST /api/crawl/run` queues unified metadata enrichment in the background after the crawl finishes
+- unified enrichment processes all crawled paper IDs for the day by default and merges ID API plus OAI metadata sources
+- the web UI removes the Enrich panel, left rail, metadata limits, OAI page controls, summary limit, and score limit
+- search shows all matching papers by default instead of forcing a 50-paper UI cap
+- the workbench uses a top action strip with a paper list and fixed right detail panel
+- long titles, tags, abstracts, LaTeX-like text, and JSON summaries wrap without horizontal page scrolling
 
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
@@ -122,7 +133,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-In the Enrich panel, `Enrich Metadata` is the main path. It takes the crawled daily paper IDs, checks ID API and OAI metadata sources, merges the most complete metadata into SQLite, and records missing/mismatch diagnostics. `Papers to enrich` limits how many crawled IDs are handled in one run. `OAI pages` limits how many OAI metadata pages are used for comparison. `Run Legacy Metadata` remains a fallback for ID API-only diagnostics. Summary and scoring controls live in Settings.
+Run Crawl is the main ingestion path. After the crawl finishes, the API queues unified metadata enrichment in the background, checks the crawled daily paper IDs against ID API and OAI metadata sources, merges the most complete metadata into SQLite, and records missing/mismatch diagnostics. Summary and scoring controls live in Settings and run all eligible papers by default.
 
 The phase-one endpoints are:
 
@@ -189,7 +200,9 @@ The retry command uses the combined audit across all runs for the date. If a lat
 
 ## Run Metadata Enrichment
 
-Preferred local metadata sync:
+Metadata enrichment is normally automatic after `POST /api/crawl/run`. The OAI and legacy metadata endpoints remain available for diagnostics and controlled experiments.
+
+OAI metadata sync:
 
 ```bash
 curl -X POST http://127.0.0.1:8765/api/metadata/oai-sync/start \
@@ -268,11 +281,10 @@ Then generate summaries for metadata-enriched papers from one daily crawl:
 uv run --with-editable . arxiv-local-daily summarize \
   --date 2026-06-03 \
   --template-name daily_research \
-  --model local-model \
-  --limit 20
+  --model local-model
 ```
 
-Use `--force` to regenerate existing complete summaries for the same template version, model, and input scope.
+Use `--force` to regenerate existing complete summaries for the same template version, model, and input scope. The command processes all eligible papers by default; pass `--limit` only for a controlled diagnostic run.
 
 ## Search Papers
 
@@ -286,7 +298,7 @@ uv run --with-editable . arxiv-local-daily search \
   --summary-status complete
 ```
 
-The search command returns JSON with paper metadata, latest daily event date, event types, listing categories, and summary statuses.
+The search command returns all matching papers by default as JSON with paper metadata, latest daily event date, event types, listing categories, and summary statuses. Pass `--limit` only when you intentionally want a smaller diagnostic result set.
 
 ## Discuss a Paper Locally
 

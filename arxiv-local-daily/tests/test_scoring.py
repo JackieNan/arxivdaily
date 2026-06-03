@@ -112,6 +112,38 @@ def test_score_papers_for_date_persists_scores(db):
     assert score["rationale"] == "Directly relevant."
 
 
+def test_score_papers_for_date_defaults_to_all_candidates(db):
+    for index in range(4):
+        _seed_paper(db, f"2606.{index:05d}", f"Score Candidate {index}")
+    client = FakeScoringClient(
+        [
+            """
+            {
+              "score_total": 80,
+              "score_relevance": 25,
+              "score_novelty": 15,
+              "score_technical_depth": 15,
+              "score_evidence": 10,
+              "score_actionability": 10,
+              "recommended_action": "skim",
+              "rationale": "Candidate scored."
+            }
+            """
+            for _ in range(4)
+        ]
+    )
+
+    result = score_papers_for_date(
+        db,
+        date="2026-06-03",
+        model="score-model",
+        llm_client=client,
+    )
+
+    assert result == {"requested": 4, "completed": 4, "failed": 0, "skipped": 0}
+    assert len(client.calls) == 4
+
+
 def test_search_papers_can_sort_by_latest_score(db):
     _seed_paper(db, "2606.00001", "Lower Score")
     _seed_paper(db, "2606.00002", "Higher Score")
@@ -154,3 +186,12 @@ def test_search_papers_can_sort_by_latest_score(db):
 
     assert [paper["arxiv_id"] for paper in results] == ["2606.00002", "2606.00001"]
     assert results[0]["score"]["score_total"] == 94
+
+
+def test_search_papers_returns_all_matches_when_limit_is_none(db):
+    for index in range(55):
+        _seed_paper(db, f"2606.{index:05d}", f"Paper {index:02d}")
+
+    results = SearchRepository(db).search_papers(date="2026-06-03", limit=None)
+
+    assert len(results) == 55

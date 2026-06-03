@@ -20,13 +20,13 @@
         </label>
       </header>
 
-      <main class="workspace-grid">
-        <aside id="left-rail" class="left-rail">
-          <section id="crawl-panel" class="panel control-panel">
-            <div class="panel-title">
-              <h2>Crawl</h2>
-              <span id="crawl-state" class="badge">idle</span>
-            </div>
+      <section id="top-actions" class="top-actions">
+        <section id="crawl-panel" class="panel control-panel">
+          <div class="panel-title">
+            <h2>Crawl</h2>
+            <span id="crawl-state" class="badge">idle</span>
+          </div>
+          <div class="action-grid crawl-grid">
             <label>
               <span>Categories</span>
               <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
@@ -36,61 +36,38 @@
               <button id="crawl-audit" type="button">Audit</button>
               <button id="crawl-retry" type="button">Retry</button>
             </div>
-            <div id="audit-summary" class="metric-grid">
-              <div><span>Status</span><strong>-</strong></div>
-              <div><span>Complete</span><strong>-</strong></div>
-              <div><span>Retry</span><strong>-</strong></div>
-            </div>
-          </section>
+          </div>
+          <div id="audit-summary" class="metric-grid">
+            <div><span>Status</span><strong>-</strong></div>
+            <div><span>Complete</span><strong>-</strong></div>
+            <div><span>Retry</span><strong>-</strong></div>
+          </div>
+        </section>
 
-          <section id="enrich-panel" class="panel control-panel">
-            <div class="panel-title">
-              <h2>Enrich</h2>
-              <span id="enrich-state" class="badge">idle</span>
-            </div>
-            <div class="compact-grid">
-              <label>
-                <span>Papers to enrich</span>
-                <input id="metadata-limit" type="number" min="1" value="100">
-              </label>
-              <label>
-                <span>OAI pages</span>
-                <input id="metadata-oai-pages" type="number" min="0" max="100" value="1">
-              </label>
-            </div>
-            <button id="metadata-enrich" type="button">Enrich Metadata</button>
-            <button id="metadata-run" class="secondary-button" type="button">Run Legacy Metadata</button>
-            <pre id="enrich-detail" class="operation-detail" aria-live="polite">No enrichment run yet.</pre>
-          </section>
-
-          <section id="settings-panel" class="panel control-panel">
-            <div class="panel-title">
-              <h2>Settings</h2>
-              <span class="badge">summary</span>
-            </div>
+        <section id="settings-panel" class="panel control-panel">
+          <div class="panel-title">
+            <h2>Settings</h2>
+            <span class="badge">summary + score</span>
+          </div>
+          <div class="action-grid settings-grid">
             <label>
               <span>Template name</span>
               <input id="summary-template" type="text" placeholder="daily_research">
             </label>
-            <button id="summary-template-create" type="button">Create Default Template</button>
-            <p id="summary-template-help" class="inline-status">No template loaded.</p>
             <label>
               <span>Model</span>
               <input id="summary-model" type="text" value="local">
             </label>
-            <label>
-              <span>Summary limit</span>
-              <input id="summary-limit" type="number" min="1" value="20">
-            </label>
+            <button id="summary-template-create" type="button">Create Default Template</button>
             <button id="summary-run" type="button">Run Summary</button>
-            <div class="settings-divider"></div>
-            <label>
-              <span>Score limit</span>
-              <input id="score-limit" type="number" min="1" value="20">
-            </label>
             <button id="score-run" type="button">Run Score</button>
-          </section>
-        </aside>
+          </div>
+          <p id="summary-template-help" class="inline-status">No template loaded.</p>
+          <pre id="settings-detail" class="operation-detail" aria-live="polite">No summary or score run yet.</pre>
+        </section>
+      </section>
+
+      <main class="workspace-grid">
 
         <section id="search-panel" class="panel search-panel">
           <div class="panel-title">
