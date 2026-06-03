@@ -95,3 +95,15 @@ Date baseline: 2026-06-03
   - focused Phase 5 tests: 11 passed, 1 warning
   - `uv run pytest -v`: 66 passed, 1 warning
 - Status: merged to `main`.
+
+## Phase 6: Search and Discussion
+
+- Branch: planned `codex/phase-6-search-discussion`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-6-search-discussion.md`
+- Scope planned:
+  - search papers across title, abstract, authors, categories, arXiv ID, and summaries
+  - filter results by date, category, event type, metadata status, and summary status
+  - expose paper detail with daily events, summaries, and discussions
+  - store local per-paper discussion messages
+  - expose search and discussion through CLI/API
+- Status: planned, development starting.
