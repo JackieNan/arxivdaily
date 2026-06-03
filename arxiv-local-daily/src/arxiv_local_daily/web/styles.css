@@ -511,11 +511,11 @@ mjx-container {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  color: #111827;
-  font-family: "STIX Two Math", "Cambria Math", "Times New Roman", serif;
+  color: inherit;
+  font-family: "Cambria Math", "Times New Roman", serif;
   font-style: italic;
-  line-height: 1.1;
-  vertical-align: -0.08em;
+  line-height: 1.15;
+  vertical-align: baseline;
 }
 
 .math-fallback.display {
@@ -525,7 +525,7 @@ mjx-container {
 }
 
 .math-script {
-  font-family: "Apple Chancery", "Brush Script MT", "Times New Roman", serif;
+  font-family: "Cambria Math", "Times New Roman", serif;
   font-style: italic;
 }
 
@@ -543,18 +543,10 @@ mjx-container {
 }
 
 .math-hat {
-  position: relative;
   display: inline-block;
-  padding-top: 0.1em;
-}
-
-.math-hat::before {
-  content: "^";
-  position: absolute;
-  top: -0.55em;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.8em;
+  text-decoration: overline;
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: none;
 }
 
 .discussion-list {

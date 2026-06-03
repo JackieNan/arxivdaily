@@ -232,13 +232,27 @@ Date baseline: 2026-06-03
 - Branch: `codex/phase-7-web-ui`
 - Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-12-search-scope-toggle.md`
 - Scope completed:
-  - add a search scope selector with `当日` and `总揽`
+  - add a search scope selector with `当日` and `总览`
   - keep `当日` as the default behavior and continue sending the selected date to search
-  - make `总揽` omit the date parameter so the search list covers the whole local database
+  - make `总览` omit the date parameter so the search list covers the whole local database
   - update result detail/status text to show the active scope
 - Important decisions:
   - the previous list was already day-scoped, but the UI did not make that obvious
-  - `总揽` is a repository-wide view, not a separate data source
+  - `总览` is a repository-wide view, not a separate data source
+- Verification:
+  - focused web UI tests passed
+  - `uv run pytest -v`: 105 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.
+
+## Phase 13: Copy and Math Style Polish
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-13-copy-math-style-polish.md`
+- Scope completed:
+  - correct repository-wide search scope label to `总览`
+  - update Phase 12 documentation to use the corrected label
+  - tone down fallback LaTeX CSS by removing decorative script fonts
+  - replace the floating hat pseudo-element with a simple overline
 - Verification:
   - focused web UI tests passed
   - `uv run pytest -v`: 105 passed, 1 warning

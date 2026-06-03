@@ -396,7 +396,7 @@ const ArxivDailyWorkbench = (() => {
   }
 
   function searchScopeLabel() {
-    return el("search-scope").value === "daily" ? `当日 ${dateValue()}` : "总揽";
+    return el("search-scope").value === "daily" ? `当日 ${dateValue()}` : "总览";
   }
 
   async function runSearch(options = {}) {

@@ -26,7 +26,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="search-sort"' in response.text
     assert 'id="search-scope"' in response.text
     assert '<option value="daily" selected>当日</option>' in response.text
-    assert '<option value="overview">总揽</option>' in response.text
+    assert '<option value="overview">总览</option>' in response.text
     assert "MathJax" in response.text
     assert "tex-chtml.js" in response.text
     assert "Settings" in response.text
@@ -60,7 +60,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert "关键词" in js_response.text
     assert 'el("search-scope").value === "daily"' in js_response.text
     assert 'params.set("date", dateValue())' in js_response.text
-    assert "总揽" in js_response.text
+    assert "总览" in js_response.text
+    assert "Apple Chancery" not in css_response.text
+    assert "Brush Script" not in css_response.text
+    assert '.math-hat::before' not in css_response.text
     assert 'paper.abstract || "No abstract yet."' not in js_response.text
     assert 'params.set("limit", "50")' not in js_response.text
     assert css_response.status_code == 200
