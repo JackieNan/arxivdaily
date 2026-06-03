@@ -52,6 +52,15 @@ Phase 5 adds crawl completeness auditing:
 - retry candidate generation
 - manual retry for failed or missing categories through CLI and API
 
+## Phase 6
+
+Phase 6 adds search and discussion:
+
+- local paper search across metadata and summary JSON
+- filters for date, category, event type, metadata status, and summary status
+- paper detail records with events, summaries, and discussions
+- local per-paper discussion messages
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
@@ -80,10 +89,14 @@ The phase-one endpoints are:
 - `GET /api/crawl/runs/{date}`
 - `GET /api/crawl/completeness/{date}`
 - `POST /api/crawl/retry-failed`
+- `GET /api/search/papers`
+- `GET /api/papers/{arxiv_id}`
 - `GET /api/summary-templates`
 - `POST /api/summary-templates`
 - `POST /api/summaries/run`
 - `GET /api/papers/{arxiv_id}/summaries`
+- `GET /api/papers/{arxiv_id}/discussions`
+- `POST /api/papers/{arxiv_id}/discussions`
 
 ## Run Limited Live Crawl
 
@@ -198,3 +211,35 @@ uv run --with-editable . arxiv-local-daily summarize \
 ```
 
 Use `--force` to regenerate existing complete summaries for the same template version, model, and input scope.
+
+## Search Papers
+
+Search metadata and persisted summaries:
+
+```bash
+uv run --with-editable . arxiv-local-daily search \
+  --query "daily triage" \
+  --date 2026-06-03 \
+  --category cs.AI \
+  --summary-status complete
+```
+
+The search command returns JSON with paper metadata, latest daily event date, event types, listing categories, and summary statuses.
+
+## Discuss a Paper Locally
+
+Add a discussion message:
+
+```bash
+uv run --with-editable . arxiv-local-daily discuss add \
+  --arxiv-id 2606.00001 \
+  --role user \
+  --content "Why is this paper useful?" \
+  --tag question
+```
+
+List discussion messages:
+
+```bash
+uv run --with-editable . arxiv-local-daily discuss list --arxiv-id 2606.00001
+```

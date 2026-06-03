@@ -7,8 +7,14 @@ from pydantic import BaseModel, Field
 from arxiv_local_daily.config import default_settings
 from arxiv_local_daily.crawler.live import run_live_daily_crawl
 from arxiv_local_daily.db import connect, initialize_schema
-from arxiv_local_daily.models import SummaryTemplateInput
-from arxiv_local_daily.repositories import CrawlRepository, SummaryRepository, TemplateRepository
+from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
+from arxiv_local_daily.repositories import (
+    CrawlRepository,
+    DiscussionRepository,
+    SearchRepository,
+    SummaryRepository,
+    TemplateRepository,
+)
 from arxiv_local_daily.services import (
     enrich_metadata_for_date,
     generate_summaries_for_date,
@@ -87,6 +93,32 @@ def create_app(
                 (date,),
             ).fetchall()
             papers = [_row_to_dict(row) for row in rows]
+            return {"count": len(papers), "papers": papers}
+        finally:
+            connection.close()
+
+    @app.get("/api/search/papers")
+    def search_papers(
+        q: str | None = None,
+        date: str | None = None,
+        category: str | None = None,
+        event_type: str | None = None,
+        metadata_status: str | None = None,
+        summary_status: str | None = None,
+        limit: int = 50,
+    ):
+        connection = get_connection()
+        try:
+            repo = SearchRepository(connection)
+            papers = repo.search_papers(
+                query=q,
+                date=date,
+                category=category,
+                event_type=event_type,
+                metadata_status=metadata_status,
+                summary_status=summary_status,
+                limit=limit,
+            )
             return {"count": len(papers), "papers": papers}
         finally:
             connection.close()
@@ -179,12 +211,43 @@ def create_app(
         finally:
             connection.close()
 
+    @app.get("/api/papers/{arxiv_id}")
+    def get_paper_detail(arxiv_id: str):
+        connection = get_connection()
+        try:
+            detail = SearchRepository(connection).get_paper_detail(arxiv_id)
+            if detail is None:
+                return {"paper": None, "events": [], "summaries": [], "discussions": []}
+            return detail
+        finally:
+            connection.close()
+
     @app.get("/api/papers/{arxiv_id}/summaries")
     def list_paper_summaries(arxiv_id: str):
         connection = get_connection()
         try:
             repo = SummaryRepository(connection)
             return {"summaries": repo.list_summaries_for_paper(arxiv_id)}
+        finally:
+            connection.close()
+
+    @app.get("/api/papers/{arxiv_id}/discussions")
+    def list_paper_discussions(arxiv_id: str):
+        connection = get_connection()
+        try:
+            repo = DiscussionRepository(connection)
+            return {"discussions": repo.list_messages(arxiv_id)}
+        finally:
+            connection.close()
+
+    @app.post("/api/papers/{arxiv_id}/discussions")
+    def create_paper_discussion(arxiv_id: str, message: PaperDiscussionInput):
+        connection = get_connection()
+        try:
+            repo = DiscussionRepository(connection)
+            message_id = repo.add_message(arxiv_id, message)
+            connection.commit()
+            return {"message_id": message_id}
         finally:
             connection.close()
 
