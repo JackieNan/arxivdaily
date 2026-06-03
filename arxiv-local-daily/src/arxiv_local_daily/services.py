@@ -101,7 +101,7 @@ def enrich_metadata_for_date(
     date: str,
     metadata_client: ArxivMetadataClient | None = None,
     limit: int = 100,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     client = metadata_client or ArxivMetadataClient()
     repo = PaperRepository(connection)
     ids = repo.list_metadata_pending_ids_for_date(date, limit=limit)
@@ -109,11 +109,17 @@ def enrich_metadata_for_date(
         return {"requested": 0, "updated": 0, "missing": 0, "failed": 0}
     try:
         papers = client.fetch_by_ids(ids)
-    except Exception:
+    except Exception as exc:
         with transaction(connection):
             for arxiv_id in ids:
                 repo.mark_metadata_status(arxiv_id, "failed")
-        return {"requested": len(ids), "updated": 0, "missing": 0, "failed": len(ids)}
+        return {
+            "requested": len(ids),
+            "updated": 0,
+            "missing": 0,
+            "failed": len(ids),
+            "error": str(exc),
+        }
 
     returned_by_id = {paper.arxiv_id: paper for paper in papers}
     with transaction(connection):

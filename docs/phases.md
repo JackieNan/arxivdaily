@@ -123,6 +123,7 @@ Date baseline: 2026-06-03
   - show paper details, summaries, and discussions
   - support local discussion message creation from the UI
   - show structured operation details for enrich/search errors and empty states
+  - expose metadata failure reasons and default summary template creation in the UI
 - Verification:
   - focused Phase 7 tests: 3 passed, 1 warning
   - `uv run pytest -v`: 78 passed, 1 warning

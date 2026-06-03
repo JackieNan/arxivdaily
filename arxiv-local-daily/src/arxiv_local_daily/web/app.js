@@ -3,6 +3,49 @@ const ArxivDailyWorkbench = (() => {
     selectedPaperId: null,
     selectedCard: null,
     lastAudit: null,
+    templates: [],
+  };
+
+  const DEFAULT_SUMMARY_TEMPLATE = {
+    name: "daily_research",
+    language: "Chinese",
+    system_prompt: "Summarize the arXiv paper for a local research reading database. Answer in concise Chinese and return only JSON.",
+    input_scope: "abstract",
+    is_default: true,
+    fields: [
+      {
+        key: "tldr",
+        label: "TLDR",
+        order: 1,
+        prompt: "Give one concise sentence about the main contribution.",
+        field_type: "short_sentence",
+        enabled: true,
+      },
+      {
+        key: "method",
+        label: "Method",
+        order: 2,
+        prompt: "Explain the core method in two bullets.",
+        field_type: "bullets",
+        enabled: true,
+      },
+      {
+        key: "value",
+        label: "Value",
+        order: 3,
+        prompt: "Explain why this paper may matter for research triage.",
+        field_type: "bullets",
+        enabled: true,
+      },
+      {
+        key: "limits",
+        label: "Limits",
+        order: 4,
+        prompt: "List obvious limitations or missing evidence.",
+        field_type: "bullets",
+        enabled: true,
+      },
+    ],
   };
 
   const el = (id) => document.getElementById(id);
@@ -54,6 +97,50 @@ const ArxivDailyWorkbench = (() => {
 
   function formatJson(value) {
     return JSON.stringify(value, null, 2);
+  }
+
+  async function loadSummaryTemplates() {
+    try {
+      const data = await api("/api/summary-templates");
+      state.templates = data.templates || [];
+      if (state.templates.length) {
+        const defaultTemplate = state.templates.find((template) => template.is_default) || state.templates[0];
+        el("summary-template").value = defaultTemplate.name;
+        setDetail(
+          "summary-template-help",
+          `Template ${defaultTemplate.name} v${defaultTemplate.version} ready.`
+        );
+      } else {
+        setDetail("summary-template-help", "Create a template before running summaries.");
+      }
+    } catch (error) {
+      setDetail("summary-template-help", `Template load failed: ${error.message}`);
+    }
+  }
+
+  async function createDefaultTemplate() {
+    const button = el("summary-template-create");
+    setBusy(button, true);
+    try {
+      const result = await api("/api/summary-templates", {
+        method: "POST",
+        body: JSON.stringify(DEFAULT_SUMMARY_TEMPLATE),
+      });
+      el("summary-template").value = DEFAULT_SUMMARY_TEMPLATE.name;
+      setDetail(
+        "summary-template-help",
+        `Template ${DEFAULT_SUMMARY_TEMPLATE.name} v${result.version} ready.`
+      );
+      setDetail("enrich-detail", formatJson(result));
+      recordOperation(`Created summary template ${DEFAULT_SUMMARY_TEMPLATE.name}`, formatJson(result));
+      await loadSummaryTemplates();
+    } catch (error) {
+      setDetail("summary-template-help", `Template create failed: ${error.message}`);
+      setDetail("enrich-detail", `Template create failed:\n${error.message}`);
+      recordOperation(`Template create failed: ${error.message}`);
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function splitList(value) {
@@ -138,6 +225,9 @@ const ArxivDailyWorkbench = (() => {
   async function runMetadata() {
     const button = el("metadata-run");
     setBusy(button, true);
+    el("enrich-state").textContent = "running";
+    setDetail("enrich-detail", `Metadata running for up to ${Number(el("metadata-limit").value || 100)} papers...`);
+    recordOperation("Metadata running");
     try {
       const result = await api("/api/metadata/run", {
         method: "POST",
@@ -146,10 +236,14 @@ const ArxivDailyWorkbench = (() => {
           limit: Number(el("metadata-limit").value || 100),
         }),
       });
-      el("enrich-state").textContent = `${result.updated}/${result.requested}`;
+      const stateText = result.requested && result.failed === result.requested ? "failed" : `${result.updated}/${result.requested}`;
+      el("enrich-state").textContent = stateText;
       setDetail("enrich-detail", formatJson(result));
-      recordOperation(`Metadata updated ${result.updated} of ${result.requested}`, formatJson(result));
-      await runSearch();
+      const message = result.error
+        ? `Metadata failed for ${result.failed} of ${result.requested}`
+        : `Metadata updated ${result.updated} of ${result.requested}`;
+      recordOperation(message, formatJson(result));
+      await runSearch({ silent: true });
     } catch (error) {
       setDetail("enrich-detail", `Metadata failed:\n${error.message}`);
       recordOperation(`Metadata failed: ${error.message}`);
@@ -177,9 +271,12 @@ const ArxivDailyWorkbench = (() => {
       el("enrich-state").textContent = `${result.completed}/${result.requested}`;
       setDetail("enrich-detail", formatJson(result));
       recordOperation(`Summaries completed ${result.completed} of ${result.requested}`, formatJson(result));
-      await runSearch();
+      await runSearch({ silent: true });
     } catch (error) {
-      setDetail("enrich-detail", `Summary failed:\n${error.message}`);
+      const templateHint = error.message === "summary template not found"
+        ? "\nCreate a default template or import your own template first."
+        : "";
+      setDetail("enrich-detail", `Summary failed:\n${error.message}${templateHint}`);
       recordOperation(`Summary failed: ${error.message}`);
       el("enrich-state").textContent = "failed";
     } finally {
@@ -204,7 +301,8 @@ const ArxivDailyWorkbench = (() => {
     return params;
   }
 
-  async function runSearch() {
+  async function runSearch(options = {}) {
+    const silent = options.silent === true;
     const button = el("search-run");
     setBusy(button, true);
     try {
@@ -215,11 +313,11 @@ const ArxivDailyWorkbench = (() => {
         ? `Showing ${data.count} papers for ${dateValue()}.`
         : `No matching papers for ${dateValue()} with current filters.`;
       setDetail("search-detail", detail);
-      recordOperation(`Search returned ${data.count} papers`, detail);
+      if (!silent) recordOperation(`Search returned ${data.count} papers`, detail);
     } catch (error) {
       setDetail("search-detail", `Search failed:\n${error.message}`);
       el("paper-results").innerHTML = `<p class="empty-state">Search failed: ${escapeHtml(error.message)}</p>`;
-      recordOperation(`Search failed: ${error.message}`);
+      if (!silent) recordOperation(`Search failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -382,12 +480,14 @@ const ArxivDailyWorkbench = (() => {
     el("crawl-audit").addEventListener("click", runAudit);
     el("crawl-retry").addEventListener("click", retryCrawl);
     el("metadata-run").addEventListener("click", runMetadata);
+    el("summary-template-create").addEventListener("click", createDefaultTemplate);
     el("summary-run").addEventListener("click", runSummary);
     el("search-run").addEventListener("click", runSearch);
     el("discussion-add").addEventListener("click", addDiscussion);
     el("search-query").addEventListener("keydown", (event) => {
       if (event.key === "Enter") runSearch();
     });
+    loadSummaryTemplates();
     runAudit();
     runSearch();
   }

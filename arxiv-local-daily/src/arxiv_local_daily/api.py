@@ -55,7 +55,7 @@ class SummaryRunRequest(BaseModel):
 
 CrawlerRunner = Callable[..., int]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
-MetadataRunner = Callable[..., dict[str, int]]
+MetadataRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
 
 

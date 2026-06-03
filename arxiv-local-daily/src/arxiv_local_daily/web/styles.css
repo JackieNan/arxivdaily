@@ -218,6 +218,12 @@ label span {
   gap: 8px;
 }
 
+.inline-status {
+  margin: -2px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .button-row {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

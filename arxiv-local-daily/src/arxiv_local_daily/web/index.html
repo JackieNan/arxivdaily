@@ -48,8 +48,8 @@
             <span id="enrich-state" class="badge">idle</span>
           </div>
           <label>
-            <span>Limit</span>
-            <input id="metadata-limit" type="number" min="1" value="100">
+            <span>Max papers/run</span>
+            <input id="metadata-limit" type="number" min="1" value="100" title="Maximum paper IDs sent to arXiv API in one metadata run.">
           </label>
           <button id="metadata-run" type="button">Run Metadata</button>
           <div class="summary-runner">
@@ -57,6 +57,8 @@
               <span>Template</span>
               <input id="summary-template" type="text" placeholder="daily_research">
             </label>
+            <button id="summary-template-create" type="button">Create Default Template</button>
+            <p id="summary-template-help" class="inline-status">No template loaded.</p>
             <label>
               <span>Model</span>
               <input id="summary-model" type="text" value="local">

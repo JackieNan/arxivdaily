@@ -61,3 +61,11 @@
 - [x] Add visible operation detail areas for enrich and search flows.
 - [x] Parse JSON error payloads in the web UI instead of showing generic failed states.
 - [x] Verify search still returns `200` and metadata `failed` badges are paper state, not request failure.
+
+### Task 6: Enrich Usability
+
+- [x] Reproduce metadata runs returning `200` with all papers failed but no visible error reason.
+- [x] Return the metadata client error in the enrichment result payload.
+- [x] Clarify the metadata limit as max papers per run.
+- [x] Add a UI action to create a default `daily_research` summary template.
+- [x] Keep background search refresh from overwriting enrich operation details.

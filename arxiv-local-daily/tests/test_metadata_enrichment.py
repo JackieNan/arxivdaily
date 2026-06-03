@@ -107,7 +107,13 @@ def test_enrich_metadata_for_date_marks_batch_failed_when_client_errors(db):
         "SELECT arxiv_id, metadata_status FROM papers ORDER BY arxiv_id LIMIT 2"
     ).fetchall()
 
-    assert result == {"requested": 2, "updated": 0, "missing": 0, "failed": 2}
+    assert result == {
+        "requested": 2,
+        "updated": 0,
+        "missing": 0,
+        "failed": 2,
+        "error": "api unavailable",
+    }
     assert [(row["arxiv_id"], row["metadata_status"]) for row in statuses] == [
         ("2606.00001", "failed"),
         ("2606.00002", "failed"),
