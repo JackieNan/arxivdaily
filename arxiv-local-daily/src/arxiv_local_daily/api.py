@@ -20,10 +20,12 @@ from arxiv_local_daily.repositories import (
 )
 from arxiv_local_daily.services import (
     enrich_metadata_for_date,
+    enrich_metadata_for_date_unified,
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
     retry_incomplete_crawl_categories_for_date,
     run_oai_metadata_sync,
+    score_papers_for_date,
 )
 
 
@@ -46,6 +48,12 @@ class MetadataRunRequest(BaseModel):
     limit: int = 100
 
 
+class MetadataEnrichRequest(BaseModel):
+    date: str
+    limit: int = 100
+    oai_max_pages: int = Field(default=1, ge=0, le=100)
+
+
 class OaiMetadataSyncStartRequest(BaseModel):
     from_date: str | None = None
     until_date: str | None = None
@@ -62,11 +70,20 @@ class SummaryRunRequest(BaseModel):
     force: bool = False
 
 
+class ScoreRunRequest(BaseModel):
+    date: str
+    model: str = "local"
+    limit: int = 20
+    force: bool = False
+
+
 CrawlerRunner = Callable[..., int]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
+UnifiedMetadataRunner = Callable[..., dict[str, Any]]
 OaiSyncRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
+ScoreRunner = Callable[..., dict[str, Any]]
 
 
 def _run_oai_sync_background(
@@ -96,8 +113,10 @@ def create_app(
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
     crawl_retry_runner: CrawlRetryRunner = retry_incomplete_crawl_categories_for_date,
     metadata_runner: MetadataRunner = enrich_metadata_for_date,
+    unified_metadata_runner: UnifiedMetadataRunner = enrich_metadata_for_date_unified,
     oai_sync_runner: OaiSyncRunner = run_oai_metadata_sync,
     summary_runner: SummaryRunner = generate_summaries_for_date,
+    score_runner: ScoreRunner = score_papers_for_date,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
     db_path = Path(database_path) if database_path is not None else default_settings().database_path
@@ -147,6 +166,7 @@ def create_app(
         metadata_status: str | None = None,
         summary_status: str | None = None,
         limit: int = 50,
+        sort: str = "recent",
     ):
         connection = get_connection()
         try:
@@ -159,6 +179,7 @@ def create_app(
                 metadata_status=metadata_status,
                 summary_status=summary_status,
                 limit=limit,
+                sort=sort,
             )
             return {"count": len(papers), "papers": papers}
         finally:
@@ -211,6 +232,19 @@ def create_app(
         connection = get_connection()
         try:
             return metadata_runner(connection, date=request.date, limit=request.limit)
+        finally:
+            connection.close()
+
+    @app.post("/api/metadata/enrich")
+    def enrich_metadata(request: MetadataEnrichRequest):
+        connection = get_connection()
+        try:
+            return unified_metadata_runner(
+                connection,
+                date=request.date,
+                limit=request.limit,
+                oai_max_pages=request.oai_max_pages,
+            )
         finally:
             connection.close()
 
@@ -271,6 +305,20 @@ def create_app(
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        finally:
+            connection.close()
+
+    @app.post("/api/scores/run")
+    def run_scores(request: ScoreRunRequest):
+        connection = get_connection()
+        try:
+            return score_runner(
+                connection,
+                date=request.date,
+                model=request.model,
+                limit=request.limit,
+                force=request.force,
+            )
         finally:
             connection.close()
 

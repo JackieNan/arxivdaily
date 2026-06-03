@@ -56,6 +56,16 @@ button:disabled {
   opacity: 0.65;
 }
 
+.secondary-button {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--accent-strong);
+}
+
+.secondary-button:hover {
+  background: #eef6f8;
+}
+
 input,
 select,
 textarea {
@@ -139,11 +149,8 @@ label span {
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(240px, 320px) minmax(0, 1fr);
-  grid-template-areas:
-    "crawl enrich search"
-    "detail detail search"
-    "discussion discussion search";
+  grid-template-columns: minmax(260px, 320px) minmax(360px, 1fr) minmax(340px, 440px);
+  grid-template-areas: "controls search detail";
   gap: 12px;
   align-items: start;
 }
@@ -162,24 +169,30 @@ label span {
   gap: 10px;
 }
 
-#crawl-panel {
-  grid-area: crawl;
-}
-
-.control-panel:nth-of-type(2) {
-  grid-area: enrich;
+.left-rail {
+  grid-area: controls;
+  display: grid;
+  gap: 12px;
 }
 
 .search-panel {
   grid-area: search;
 }
 
-.detail-panel {
+.right-rail {
   grid-area: detail;
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 24px);
 }
 
-.discussion-panel {
-  grid-area: discussion;
+.detail-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100vh - 260px);
+  min-height: 420px;
 }
 
 .panel-title {
@@ -212,24 +225,10 @@ label span {
 
 .button-row,
 .search-controls,
-.sync-runner,
 .summary-runner,
 .discussion-form {
   display: grid;
   gap: 8px;
-}
-
-.sync-runner {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 10px;
-}
-
-.sync-runner h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0;
 }
 
 .compact-grid {
@@ -276,7 +275,7 @@ label span {
 }
 
 .search-controls {
-  grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(82px, 0.65fr)) minmax(80px, 88px);
+  grid-template-columns: minmax(150px, 1.4fr) repeat(5, minmax(78px, 0.6fr)) minmax(80px, 88px);
   align-items: end;
 }
 
@@ -299,6 +298,8 @@ label span {
   background: #fff;
   padding: 10px;
   cursor: pointer;
+  color: var(--text);
+  text-align: left;
 }
 
 .paper-card:hover,
@@ -306,10 +307,33 @@ label span {
   border-color: var(--accent);
 }
 
-.paper-card h3 {
+.paper-card-head,
+.paper-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.paper-card-title {
   margin: 0;
-  font-size: 14px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1.3;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.paper-card-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .paper-meta,
@@ -324,18 +348,44 @@ label span {
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  padding: 2px 7px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.compact-tags .tag {
+  color: #7a8490;
+  font-size: 10px;
+}
+
+.score-badge {
+  flex: 0 0 auto;
+  border: 1px solid #b9d8c4;
+  border-radius: 999px;
+  background: #eef8f1;
+  color: var(--good);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.score-badge.large {
+  margin-top: 2px;
   font-size: 12px;
 }
 
 .paper-content {
   display: grid;
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .paper-content h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
+  line-height: 1.25;
 }
 
 .paper-content p {
@@ -345,6 +395,16 @@ label span {
 .section-block {
   display: grid;
   gap: 6px;
+}
+
+.score-block {
+  border-left: 3px solid #b9d8c4;
+  padding-left: 8px;
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--line);
 }
 
 .section-block h4 {
@@ -404,14 +464,21 @@ label span {
   .workspace-grid {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
-      "crawl enrich"
-      "search search"
-      "detail detail"
-      "discussion discussion";
+      "controls search"
+      "detail detail";
   }
 
   .result-list {
     max-height: 460px;
+  }
+
+  .right-rail {
+    position: static;
+    max-height: none;
+  }
+
+  .detail-panel {
+    max-height: none;
   }
 }
 
@@ -432,11 +499,9 @@ label span {
   .workspace-grid {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "crawl"
-      "enrich"
+      "controls"
       "search"
-      "detail"
-      "discussion";
+      "detail";
   }
 
   .search-controls,

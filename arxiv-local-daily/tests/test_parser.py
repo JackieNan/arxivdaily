@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from arxiv_local_daily.crawler.parser import parse_daily_listing
+from arxiv_local_daily.crawler.parser import parse_daily_listing, parse_daily_listing_count
 
 
 def test_parse_daily_listing_extracts_all_event_types():
@@ -48,6 +48,24 @@ def test_parse_daily_listing_extracts_listing_title():
         "Cross Listed Paper",
         "Replacement Paper",
     ]
+
+
+def test_parse_daily_listing_count_extracts_declared_total_entries():
+    html = """
+    <div id="dlpage">
+      <h3>New submissions (showing 1 of 25 entries)</h3>
+      <h3>Cross submissions (showing 1 of 3 entries)</h3>
+      <h3>Replacement submissions (showing 1 of 2 entries)</h3>
+    </div>
+    """
+
+    assert parse_daily_listing_count(html) == 30
+
+
+def test_parse_daily_listing_count_returns_none_when_total_is_absent():
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+
+    assert parse_daily_listing_count(html) is None
 
 
 def test_parse_daily_listing_handles_single_articles_dl_with_section_headings():

@@ -44,16 +44,31 @@ class CrawlRepository:
         status: str,
         http_status: int | None,
         parsed_count: int,
+        expected_count: int | None = None,
+        missing_count: int = 0,
         error: str | None = None,
         retry_count: int = 0,
     ) -> None:
         self.connection.execute(
             """
             INSERT INTO crawl_run_sources
-                (run_id, category, event_section, url, status, http_status, parsed_count, error, retry_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (run_id, category, event_section, url, status, http_status, parsed_count,
+                 expected_count, missing_count, error, retry_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, category, event_section, url, status, http_status, parsed_count, error, retry_count),
+            (
+                run_id,
+                category,
+                event_section,
+                url,
+                status,
+                http_status,
+                parsed_count,
+                expected_count,
+                missing_count,
+                error,
+                retry_count,
+            ),
         )
 
     def list_runs_for_date(self, date: str) -> list[dict]:
@@ -80,7 +95,8 @@ class CrawlRepository:
         for run in runs:
             sources = self.connection.execute(
                 """
-                SELECT category, event_section, url, status, http_status, parsed_count, error, retry_count
+                SELECT category, event_section, url, status, http_status, parsed_count,
+                       expected_count, missing_count, error, retry_count
                 FROM crawl_run_sources
                 WHERE run_id = ?
                 ORDER BY category, url
@@ -107,6 +123,8 @@ class CrawlRepository:
                 s.status,
                 s.http_status,
                 s.parsed_count,
+                s.expected_count,
+                s.missing_count,
                 s.error,
                 s.retry_count
             FROM crawl_run_sources s
@@ -263,6 +281,21 @@ class PaperRepository:
         ).fetchall()
         return [row["arxiv_id"] for row in rows]
 
+    def list_daily_ids_for_date(self, date: str, *, limit: int | None = None) -> list[str]:
+        limit_sql = "" if limit is None else "LIMIT ?"
+        params: tuple[Any, ...] = (date,) if limit is None else (date, limit)
+        rows = self.connection.execute(
+            f"""
+            SELECT DISTINCT arxiv_id
+            FROM daily_events
+            WHERE date = ?
+            ORDER BY arxiv_id
+            {limit_sql}
+            """,
+            params,
+        ).fetchall()
+        return [row["arxiv_id"] for row in rows]
+
 
 class MetadataSyncRepository:
     def __init__(self, connection: sqlite3.Connection):
@@ -355,6 +388,100 @@ class MetadataSyncRepository:
             (limit,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+class MetadataEnrichmentRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def create_run(self, *, date: str, status: str = "running") -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO metadata_enrichment_runs (date, status)
+            VALUES (?, ?)
+            """,
+            (date, status),
+        )
+        return int(cursor.lastrowid)
+
+    def finish_run(
+        self,
+        run_id: int,
+        *,
+        status: str,
+        crawl_count: int,
+        id_api_count: int,
+        oai_count: int,
+        merged_count: int,
+        missing_after_merge_count: int,
+        oai_missing_count: int,
+        oai_extra_count: int,
+        mismatch_count: int,
+        error: str | None = None,
+    ) -> None:
+        self.connection.execute(
+            """
+            UPDATE metadata_enrichment_runs
+            SET
+                status = ?,
+                finished_at = CURRENT_TIMESTAMP,
+                crawl_count = ?,
+                id_api_count = ?,
+                oai_count = ?,
+                merged_count = ?,
+                missing_after_merge_count = ?,
+                oai_missing_count = ?,
+                oai_extra_count = ?,
+                mismatch_count = ?,
+                error = ?
+            WHERE id = ?
+            """,
+            (
+                status,
+                crawl_count,
+                id_api_count,
+                oai_count,
+                merged_count,
+                missing_after_merge_count,
+                oai_missing_count,
+                oai_extra_count,
+                mismatch_count,
+                error,
+                run_id,
+            ),
+        )
+
+    def record_source(self, *, run_id: int, source: str, metadata: PaperMetadata) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO metadata_source_records (run_id, source, arxiv_id, payload_json)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(run_id, source, arxiv_id) DO UPDATE SET
+                payload_json = excluded.payload_json
+            """,
+            (
+                run_id,
+                source,
+                metadata.arxiv_id,
+                json.dumps(metadata.model_dump(), ensure_ascii=False, sort_keys=True),
+            ),
+        )
+
+    def record_report(
+        self,
+        *,
+        run_id: int,
+        report_type: str,
+        arxiv_id: str,
+        details: dict[str, Any],
+    ) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO metadata_merge_reports (run_id, report_type, arxiv_id, details_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (run_id, report_type, arxiv_id, json.dumps(details, ensure_ascii=False, sort_keys=True)),
+        )
 
 
 class TemplateRepository:
@@ -592,6 +719,127 @@ class SummaryRepository:
         return summaries
 
 
+class ScoreRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def list_score_candidate_ids_for_date(
+        self,
+        *,
+        date: str,
+        model: str,
+        rubric_version: str,
+        limit: int,
+        force: bool = False,
+    ) -> list[str]:
+        rows = self.connection.execute(
+            """
+            SELECT DISTINCT p.arxiv_id
+            FROM papers p
+            JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            WHERE e.date = ?
+              AND p.metadata_status = 'complete'
+              AND COALESCE(p.abstract, '') != ''
+              AND (
+                ? = 1 OR NOT EXISTS (
+                    SELECT 1
+                    FROM paper_scores ps
+                    WHERE ps.arxiv_id = p.arxiv_id
+                      AND ps.model = ?
+                      AND ps.rubric_version = ?
+                      AND ps.status = 'complete'
+                )
+              )
+            ORDER BY p.arxiv_id
+            LIMIT ?
+            """,
+            (date, 1 if force else 0, model, rubric_version, limit),
+        ).fetchall()
+        return [row["arxiv_id"] for row in rows]
+
+    def get_paper_for_score(self, arxiv_id: str) -> sqlite3.Row | None:
+        return self.connection.execute(
+            """
+            SELECT arxiv_id, title, abstract, primary_category, categories_json
+            FROM papers
+            WHERE arxiv_id = ?
+            """,
+            (arxiv_id,),
+        ).fetchone()
+
+    def get_latest_summary_content(self, arxiv_id: str) -> dict[str, Any]:
+        row = self.connection.execute(
+            """
+            SELECT content_json
+            FROM summaries
+            WHERE arxiv_id = ?
+              AND status = 'complete'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (arxiv_id,),
+        ).fetchone()
+        return json.loads(row["content_json"]) if row is not None else {}
+
+    def upsert_score(
+        self,
+        *,
+        arxiv_id: str,
+        model: str,
+        rubric_version: str,
+        content: dict[str, Any],
+        status: str,
+    ) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO paper_scores
+                (arxiv_id, rubric_version, model, score_total, score_relevance, score_novelty,
+                 score_technical_depth, score_evidence, score_actionability, recommended_action,
+                 rationale, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(arxiv_id, rubric_version, model) DO UPDATE SET
+                score_total = excluded.score_total,
+                score_relevance = excluded.score_relevance,
+                score_novelty = excluded.score_novelty,
+                score_technical_depth = excluded.score_technical_depth,
+                score_evidence = excluded.score_evidence,
+                score_actionability = excluded.score_actionability,
+                recommended_action = excluded.recommended_action,
+                rationale = excluded.rationale,
+                status = excluded.status,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                arxiv_id,
+                rubric_version,
+                model,
+                int(content["score_total"]),
+                int(content["score_relevance"]),
+                int(content["score_novelty"]),
+                int(content["score_technical_depth"]),
+                int(content["score_evidence"]),
+                int(content["score_actionability"]),
+                str(content["recommended_action"]),
+                str(content["rationale"]),
+                status,
+            ),
+        )
+        return int(cursor.lastrowid)
+
+    def get_latest_score(self, arxiv_id: str) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT *
+            FROM paper_scores
+            WHERE arxiv_id = ?
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (arxiv_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+
 class DiscussionRepository:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection
@@ -644,6 +892,7 @@ class SearchRepository:
         metadata_status: str | None = None,
         summary_status: str | None = None,
         limit: int = 50,
+        sort: str = "recent",
     ) -> list[dict[str, Any]]:
         where = ["1 = 1"]
         params: list[Any] = []
@@ -699,6 +948,7 @@ class SearchRepository:
             )
             params.append(summary_status)
 
+        order_by = "latest_score DESC, latest_date DESC, p.arxiv_id ASC" if sort == "score" else "latest_date DESC, p.arxiv_id ASC"
         rows = self.connection.execute(
             f"""
             SELECT DISTINCT
@@ -720,11 +970,19 @@ class SearchRepository:
                     SELECT MAX(de.date)
                     FROM daily_events de
                     WHERE de.arxiv_id = p.arxiv_id
-                ) AS latest_date
+                ) AS latest_date,
+                (
+                    SELECT ps.score_total
+                    FROM paper_scores ps
+                    WHERE ps.arxiv_id = p.arxiv_id
+                      AND ps.status = 'complete'
+                    ORDER BY ps.updated_at DESC, ps.id DESC
+                    LIMIT 1
+                ) AS latest_score
             FROM papers p
             LEFT JOIN daily_events e ON e.arxiv_id = p.arxiv_id
             WHERE {" AND ".join(where)}
-            ORDER BY latest_date DESC, p.arxiv_id ASC
+            ORDER BY {order_by}
             LIMIT ?
             """,
             (*params, limit),
@@ -774,12 +1032,14 @@ class SearchRepository:
             "paper": self._paper_dict(paper_row),
             "events": events,
             "summaries": SummaryRepository(self.connection).list_summaries_for_paper(arxiv_id),
+            "score": ScoreRepository(self.connection).get_latest_score(arxiv_id),
             "discussions": DiscussionRepository(self.connection).list_messages(arxiv_id),
         }
 
     def _paper_search_result(self, row: sqlite3.Row) -> dict[str, Any]:
         item = self._paper_dict(row)
         item["latest_date"] = row["latest_date"]
+        item["score"] = ScoreRepository(self.connection).get_latest_score(row["arxiv_id"])
         item["event_types"] = self._list_daily_event_values(row["arxiv_id"], "event_type")
         item["listing_categories"] = self._list_daily_event_values(row["arxiv_id"], "listing_category")
         item["summary_statuses"] = self._list_summary_statuses(row["arxiv_id"])

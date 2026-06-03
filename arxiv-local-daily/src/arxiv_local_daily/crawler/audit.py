@@ -20,8 +20,23 @@ def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dic
             "status": "complete",
             "run_id": row["run_id"],
             "parsed_count": row["parsed_count"],
+            "expected_count": row["expected_count"],
+            "missing_count": row["missing_count"],
             "http_status": row["http_status"],
             "error": None,
+        }
+    incomplete_rows = [row for row in rows if row["status"] == "incomplete"]
+    if incomplete_rows:
+        row = incomplete_rows[-1]
+        return {
+            "category": category,
+            "status": "incomplete",
+            "run_id": row["run_id"],
+            "parsed_count": row["parsed_count"],
+            "expected_count": row["expected_count"],
+            "missing_count": row["missing_count"],
+            "http_status": row["http_status"],
+            "error": row["error"] or "parsed count below expected count",
         }
     if rows:
         row = rows[-1]
@@ -30,6 +45,8 @@ def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dic
             "status": "failed",
             "run_id": row["run_id"],
             "parsed_count": row["parsed_count"],
+            "expected_count": row["expected_count"],
+            "missing_count": row["missing_count"],
             "http_status": row["http_status"],
             "error": row["error"],
         }
@@ -38,6 +55,8 @@ def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dic
         "status": "missing",
         "run_id": None,
         "parsed_count": 0,
+        "expected_count": None,
+        "missing_count": 0,
         "http_status": None,
         "error": "not attempted",
     }
@@ -71,10 +90,13 @@ def build_crawl_completeness_report(
     failed_categories = [
         category["category"] for category in category_reports if category["status"] == "failed"
     ]
+    incomplete_categories = [
+        category["category"] for category in category_reports if category["status"] == "incomplete"
+    ]
     missing_categories = [
         category["category"] for category in category_reports if category["status"] == "missing"
     ]
-    retry_categories = _unique_sorted(failed_categories + missing_categories)
+    retry_categories = _unique_sorted(failed_categories + incomplete_categories + missing_categories)
     run_ids = sorted({int(row["run_id"]) for row in source_rows})
 
     if not source_rows and not expected:
@@ -94,9 +116,11 @@ def build_crawl_completeness_report(
         "attempted_category_count": len(attempted_categories),
         "complete_category_count": len(complete_categories),
         "failed_category_count": len(failed_categories),
+        "incomplete_category_count": len(incomplete_categories),
         "missing_category_count": len(missing_categories),
         "complete_categories": complete_categories,
         "failed_categories": failed_categories,
+        "incomplete_categories": incomplete_categories,
         "missing_categories": missing_categories,
         "retry_categories": retry_categories,
         "categories": category_reports,

@@ -11,6 +11,10 @@ class SummaryParseError(ValueError):
     pass
 
 
+class ScoreParseError(ValueError):
+    pass
+
+
 class LLMClient(Protocol):
     def complete(self, *, model: str, messages: list[dict[str, str]]) -> str:
         pass
@@ -93,6 +97,73 @@ def parse_summary_response(text: str, *, expected_keys: list[str]) -> dict[str, 
     if not expected_keys:
         return loaded
     return {key: loaded.get(key, "") for key in expected_keys}
+
+
+SCORE_KEYS = [
+    "score_total",
+    "score_relevance",
+    "score_novelty",
+    "score_technical_depth",
+    "score_evidence",
+    "score_actionability",
+    "recommended_action",
+    "rationale",
+]
+
+
+def build_score_messages(
+    *,
+    paper: Mapping[str, Any] | Any,
+    summary: Mapping[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    summary = summary or {}
+    system_message = (
+        "You assign a reading-priority score for arXiv paper triage. "
+        "Return only valid JSON with the requested score fields. "
+        "This is not an objective paper-quality score; it is a practical reading priority score."
+    )
+    user_message = "\n".join(
+        [
+            f"arXiv ID: {_value(paper, 'arxiv_id', '')}",
+            f"Title: {_value(paper, 'title', '')}",
+            f"Primary category: {_value(paper, 'primary_category', '')}",
+            f"Abstract: {_value(paper, 'abstract', '')}",
+            f"Summary JSON: {json.dumps(summary, ensure_ascii=False, sort_keys=True)}",
+            "",
+            "Rubric:",
+            "- score_relevance: 0-30, fit to research interests and today's triage.",
+            "- score_novelty: 0-20, novelty of problem, method, or insight.",
+            "- score_technical_depth: 0-20, technical substance and method depth.",
+            "- score_evidence: 0-15, experimental, theoretical, or empirical support.",
+            "- score_actionability: 0-15, value of reading or discussing today.",
+            "- score_total: integer 0-100, sum of the five component scores.",
+            "- recommended_action: one of read, skim, skip, discuss.",
+            "- rationale: one concise sentence explaining the score.",
+        ]
+    )
+    return [{"role": "system", "content": system_message}, {"role": "user", "content": user_message}]
+
+
+def parse_score_response(text: str) -> dict[str, Any]:
+    stripped = text.strip()
+    match = FENCED_JSON_RE.match(stripped)
+    if match:
+        stripped = match.group(1).strip()
+    try:
+        loaded = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise ScoreParseError("score response is not valid JSON") from exc
+    if not isinstance(loaded, dict):
+        raise ScoreParseError("score response must be a JSON object")
+    missing = [key for key in SCORE_KEYS if key not in loaded]
+    if missing:
+        raise ScoreParseError(f"score response missing keys: {', '.join(missing)}")
+    parsed = dict(loaded)
+    for key in SCORE_KEYS[:6]:
+        parsed[key] = int(parsed[key])
+    if parsed["score_total"] < 0 or parsed["score_total"] > 100:
+        raise ScoreParseError("score_total must be between 0 and 100")
+    return parsed
 
 
 class OpenAICompatibleChatClient:

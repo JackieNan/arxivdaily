@@ -21,63 +21,55 @@
       </header>
 
       <main class="workspace-grid">
-        <section id="crawl-panel" class="panel control-panel">
-          <div class="panel-title">
-            <h2>Crawl</h2>
-            <span id="crawl-state" class="badge">idle</span>
-          </div>
-          <label>
-            <span>Categories</span>
-            <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
-          </label>
-          <div class="button-row">
-            <button id="crawl-run" type="button">Run Crawl</button>
-            <button id="crawl-audit" type="button">Audit</button>
-            <button id="crawl-retry" type="button">Retry</button>
-          </div>
-          <div id="audit-summary" class="metric-grid">
-            <div><span>Status</span><strong>-</strong></div>
-            <div><span>Complete</span><strong>-</strong></div>
-            <div><span>Retry</span><strong>-</strong></div>
-          </div>
-        </section>
+        <aside id="left-rail" class="left-rail">
+          <section id="crawl-panel" class="panel control-panel">
+            <div class="panel-title">
+              <h2>Crawl</h2>
+              <span id="crawl-state" class="badge">idle</span>
+            </div>
+            <label>
+              <span>Categories</span>
+              <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
+            </label>
+            <div class="button-row">
+              <button id="crawl-run" type="button">Run Crawl</button>
+              <button id="crawl-audit" type="button">Audit</button>
+              <button id="crawl-retry" type="button">Retry</button>
+            </div>
+            <div id="audit-summary" class="metric-grid">
+              <div><span>Status</span><strong>-</strong></div>
+              <div><span>Complete</span><strong>-</strong></div>
+              <div><span>Retry</span><strong>-</strong></div>
+            </div>
+          </section>
 
-        <section class="panel control-panel">
-          <div class="panel-title">
-            <h2>Enrich</h2>
-            <span id="enrich-state" class="badge">idle</span>
-          </div>
-          <div class="sync-runner">
-            <h3>OAI Metadata Sync</h3>
+          <section id="enrich-panel" class="panel control-panel">
+            <div class="panel-title">
+              <h2>Enrich</h2>
+              <span id="enrich-state" class="badge">idle</span>
+            </div>
             <div class="compact-grid">
               <label>
-                <span>From</span>
-                <input id="oai-from" type="date">
+                <span>Papers to enrich</span>
+                <input id="metadata-limit" type="number" min="1" value="100">
               </label>
               <label>
-                <span>Until</span>
-                <input id="oai-until" type="date">
-              </label>
-              <label>
-                <span>Set</span>
-                <input id="oai-set-spec" type="text" placeholder="cs:cs:AI">
-              </label>
-              <label>
-                <span>Pages</span>
-                <input id="oai-max-pages" type="number" min="0" max="100" value="1">
+                <span>OAI pages</span>
+                <input id="metadata-oai-pages" type="number" min="0" max="100" value="1">
               </label>
             </div>
-            <button id="metadata-oai-sync" type="button">Start OAI Sync</button>
-            <pre id="metadata-sync-detail" class="operation-detail" aria-live="polite">No metadata sync run yet.</pre>
-          </div>
-          <label>
-            <span>Max papers/run</span>
-            <input id="metadata-limit" type="number" min="1" value="100" title="Maximum paper IDs sent to arXiv API in one metadata run.">
-          </label>
-          <button id="metadata-run" type="button">Run Metadata</button>
-          <div class="summary-runner">
+            <button id="metadata-enrich" type="button">Enrich Metadata</button>
+            <button id="metadata-run" class="secondary-button" type="button">Run Legacy Metadata</button>
+            <pre id="enrich-detail" class="operation-detail" aria-live="polite">No enrichment run yet.</pre>
+          </section>
+
+          <section id="settings-panel" class="panel control-panel">
+            <div class="panel-title">
+              <h2>Settings</h2>
+              <span class="badge">summary</span>
+            </div>
             <label>
-              <span>Template</span>
+              <span>Template name</span>
               <input id="summary-template" type="text" placeholder="daily_research">
             </label>
             <button id="summary-template-create" type="button">Create Default Template</button>
@@ -87,13 +79,18 @@
               <input id="summary-model" type="text" value="local">
             </label>
             <label>
-              <span>Limit</span>
+              <span>Summary limit</span>
               <input id="summary-limit" type="number" min="1" value="20">
             </label>
             <button id="summary-run" type="button">Run Summary</button>
-          </div>
-          <pre id="enrich-detail" class="operation-detail" aria-live="polite">No enrichment run yet.</pre>
-        </section>
+            <div class="settings-divider"></div>
+            <label>
+              <span>Score limit</span>
+              <input id="score-limit" type="number" min="1" value="20">
+            </label>
+            <button id="score-run" type="button">Run Score</button>
+          </section>
+        </aside>
 
         <section id="search-panel" class="panel search-panel">
           <div class="panel-title">
@@ -135,48 +132,57 @@
                 <option value="failed">failed</option>
               </select>
             </label>
+            <label>
+              <span>Sort</span>
+              <select id="search-sort">
+                <option value="score">score</option>
+                <option value="recent">recent</option>
+              </select>
+            </label>
             <button id="search-run" type="button">Search</button>
           </div>
           <pre id="search-detail" class="operation-detail" aria-live="polite">No search yet.</pre>
           <div id="paper-results" class="result-list" aria-live="polite"></div>
         </section>
 
-        <section id="paper-detail" class="panel detail-panel">
-          <div class="panel-title">
-            <h2>Paper</h2>
-            <span id="paper-id" class="badge">none</span>
-          </div>
-          <article id="paper-content" class="paper-content">
-            <p class="empty-state">No paper selected.</p>
-          </article>
-        </section>
+        <aside id="right-rail" class="right-rail">
+          <section id="paper-detail" class="panel detail-panel">
+            <div class="panel-title">
+              <h2>Paper</h2>
+              <span id="paper-id" class="badge">none</span>
+            </div>
+            <article id="paper-content" class="paper-content">
+              <p class="empty-state">No paper selected.</p>
+            </article>
+          </section>
 
-        <section id="discussion-panel" class="panel discussion-panel">
-          <div class="panel-title">
-            <h2>Discussion</h2>
-            <span id="discussion-count" class="badge">0</span>
-          </div>
-          <div id="discussion-list" class="discussion-list"></div>
-          <div class="discussion-form">
-            <label>
-              <span>Role</span>
-              <select id="discussion-role">
-                <option value="user">user</option>
-                <option value="assistant">assistant</option>
-                <option value="system">system</option>
-              </select>
-            </label>
-            <label class="wide">
-              <span>Message</span>
-              <textarea id="discussion-content" rows="4"></textarea>
-            </label>
-            <label>
-              <span>Tags</span>
-              <input id="discussion-tags" type="text" placeholder="question, followup">
-            </label>
-            <button id="discussion-add" type="button">Add Message</button>
-          </div>
-        </section>
+          <section id="discussion-panel" class="panel discussion-panel">
+            <div class="panel-title">
+              <h2>Discussion</h2>
+              <span id="discussion-count" class="badge">0</span>
+            </div>
+            <div id="discussion-list" class="discussion-list"></div>
+            <div class="discussion-form">
+              <label>
+                <span>Role</span>
+                <select id="discussion-role">
+                  <option value="user">user</option>
+                  <option value="assistant">assistant</option>
+                  <option value="system">system</option>
+                </select>
+              </label>
+              <label class="wide">
+                <span>Message</span>
+                <textarea id="discussion-content" rows="4"></textarea>
+              </label>
+              <label>
+                <span>Tags</span>
+                <input id="discussion-tags" type="text" placeholder="question, followup">
+              </label>
+              <button id="discussion-add" type="button">Add Message</button>
+            </div>
+          </section>
+        </aside>
       </main>
     </div>
     <script src="/static/app.js"></script>

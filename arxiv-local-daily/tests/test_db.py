@@ -10,8 +10,12 @@ def test_schema_creates_core_tables(db):
         "crawl_runs",
         "daily_events",
         "metadata_sync_runs",
+        "metadata_enrichment_runs",
+        "metadata_merge_reports",
+        "metadata_source_records",
         "papers",
         "paper_discussions",
+        "paper_scores",
         "summary_templates",
         "summaries",
     }.issubset(table_names)

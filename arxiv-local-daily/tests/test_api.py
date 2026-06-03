@@ -161,6 +161,40 @@ def test_post_metadata_run_uses_injected_runner(tmp_path):
     assert calls == [("2026-06-03", 2)]
 
 
+def test_post_metadata_enrich_uses_injected_unified_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_unified_runner(connection, *, date: str, limit: int, oai_max_pages: int):
+        calls.append({"date": date, "limit": limit, "oai_max_pages": oai_max_pages})
+        return {"run_id": 3, "status": "complete", "merged": 2}
+
+    client = TestClient(create_app(database_path=db_path, unified_metadata_runner=fake_unified_runner))
+
+    response = client.post("/api/metadata/enrich", json={"date": "2026-06-03", "limit": 2, "oai_max_pages": 1})
+
+    assert response.status_code == 200
+    assert response.json() == {"run_id": 3, "status": "complete", "merged": 2}
+    assert calls == [{"date": "2026-06-03", "limit": 2, "oai_max_pages": 1}]
+
+
+def test_post_scores_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_score_runner(connection, *, date: str, model: str, limit: int, force: bool):
+        calls.append({"date": date, "model": model, "limit": limit, "force": force})
+        return {"requested": 1, "completed": 1, "failed": 0, "skipped": 0}
+
+    client = TestClient(create_app(database_path=db_path, score_runner=fake_score_runner))
+
+    response = client.post("/api/scores/run", json={"date": "2026-06-03", "model": "score-model", "limit": 1, "force": True})
+
+    assert response.status_code == 200
+    assert response.json()["completed"] == 1
+    assert calls == [{"date": "2026-06-03", "model": "score-model", "limit": 1, "force": True}]
+
+
 def test_post_oai_metadata_sync_start_creates_background_run(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     calls: list[dict] = []

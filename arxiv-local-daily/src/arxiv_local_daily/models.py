@@ -30,6 +30,8 @@ class CrawlSourceInput(BaseModel):
     html: str | None = None
     error: str | None = None
     retry_count: int = 0
+    expected_count: int | None = None
+    missing_count: int = 0
 
 
 class PaperVersionInput(BaseModel):

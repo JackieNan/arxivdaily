@@ -152,3 +152,28 @@ Date baseline: 2026-06-03
   - local API smoke: OAI sync start returned `run_id=1`; status route returned `complete` with counters and `error=null`.
   - in-app browser smoke: `Start OAI Sync` rendered and updated sync detail after a no-network `max_pages=0` run.
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 9: Complete Enrich, Scoring, and Triage UI
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-9-complete-enrich-score-ui.md`
+- Scope completed:
+  - add page-declared crawl counts and `incomplete` source status when parsed count is below expected count
+  - extend crawl audit with incomplete category counts and retry candidates
+  - add unified metadata enrichment run records, source records, and merge reports
+  - merge metadata from crawled listing, arXiv ID API, and OAI source records into local `papers`
+  - record OAI missing, OAI extra, and source mismatch reports for diagnostics
+  - add paper reading-priority scores with default rubric dimensions: relevance, novelty, technical depth, evidence, and actionability
+  - add score sorting to search
+  - move summary template/model controls into Settings
+  - reorganize the web UI into left controls, center search, and right fixed paper detail
+  - redesign search cards and paper detail to show compact metadata and scores
+- Important decisions:
+  - crawl listing is the source of truth for today's paper set
+  - OAI and ID API are metadata sources inside one enrich workflow, not separate user-facing workflows
+  - scoring is a reading-priority score, not an objective paper-quality score
+- Verification:
+  - focused crawl/audit, unified enrich, scoring, API, and web UI tests passed
+  - `uv run pytest -v`: 100 passed, 1 warning
+  - browser layout smoke confirmed the new left controls, center search, right detail layout and Settings/Score controls. Direct click smoke was blocked by the in-app browser coordinate translation layer.
+- Status: implemented on branch, not yet merged to `main`.

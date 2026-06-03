@@ -1,6 +1,8 @@
 from pathlib import Path
 
+from arxiv_local_daily.models import CrawlSourceInput
 from arxiv_local_daily.services import ingest_daily_listing_html
+from arxiv_local_daily.services import ingest_daily_crawl_sources
 
 
 def test_ingestion_persists_run_source_papers_and_events(db):
@@ -23,6 +25,8 @@ def test_ingestion_persists_run_source_papers_and_events(db):
 
     assert run["status"] == "complete"
     assert source["parsed_count"] == 3
+    assert source["expected_count"] is None
+    assert source["missing_count"] == 0
     assert [(row["arxiv_id"], row["metadata_status"], row["title"]) for row in papers] == [
         ("2606.00001", "pending", "First AI Paper"),
         ("2606.00002", "pending", "Cross Listed Paper"),
@@ -58,3 +62,33 @@ def test_ingestion_rerun_does_not_duplicate_events(db):
 
     assert event_count == 3
     assert run_count == 2
+
+
+def test_ingestion_marks_source_incomplete_when_expected_count_is_not_met(db):
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+
+    run_id = ingest_daily_crawl_sources(
+        db,
+        date="2026-06-03",
+        mode="all-categories",
+        sources=[
+            CrawlSourceInput(
+                category="cs.AI",
+                event_section="all",
+                url="https://arxiv.org/list/cs.AI/new",
+                status="complete",
+                http_status=200,
+                html=html,
+                expected_count=4,
+            )
+        ],
+    )
+
+    run = db.execute("SELECT * FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
+    source = db.execute("SELECT * FROM crawl_run_sources WHERE run_id = ?", (run_id,)).fetchone()
+
+    assert run["status"] == "partial"
+    assert source["status"] == "incomplete"
+    assert source["parsed_count"] == 3
+    assert source["expected_count"] == 4
+    assert source["missing_count"] == 1

@@ -16,6 +16,18 @@ def _complete_source(category: str) -> CrawlSourceInput:
     )
 
 
+def _incomplete_source(category: str) -> CrawlSourceInput:
+    return CrawlSourceInput(
+        category=category,
+        event_section="all",
+        url=f"https://arxiv.org/list/{category}/new",
+        status="complete",
+        http_status=200,
+        html=Path("tests/fixtures/list_cs_ai_new.html").read_text(),
+        expected_count=4,
+    )
+
+
 def _failed_source(category: str) -> CrawlSourceInput:
     return CrawlSourceInput(
         category=category,
@@ -79,6 +91,29 @@ def test_crawl_completeness_report_lists_failed_retry_categories(db):
     assert report["retry_categories"] == ["cs.LG"]
     assert report["categories"][1]["category"] == "cs.LG"
     assert report["categories"][1]["status"] == "failed"
+
+
+def test_crawl_completeness_report_marks_count_mismatch_incomplete(db):
+    ingest_daily_crawl_sources(
+        db,
+        date="2026-06-03",
+        mode="all-categories",
+        sources=[_incomplete_source("cs.AI")],
+    )
+
+    report = build_crawl_completeness_report(
+        db,
+        date="2026-06-03",
+        expected_categories=["cs.AI"],
+    )
+
+    assert report["status"] == "partial"
+    assert report["incomplete_category_count"] == 1
+    assert report["retry_categories"] == ["cs.AI"]
+    assert report["categories"][0]["status"] == "incomplete"
+    assert report["categories"][0]["parsed_count"] == 3
+    assert report["categories"][0]["expected_count"] == 4
+    assert report["categories"][0]["missing_count"] == 1
 
 
 def test_crawl_completeness_report_detects_missing_expected_categories(db):

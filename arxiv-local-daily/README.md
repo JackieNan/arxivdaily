@@ -80,6 +80,18 @@ Phase 8 reduces dependency on the rate-limited legacy arXiv API:
 - the web UI starts and polls OAI metadata sync jobs
 - legacy `Run Metadata` remains available as a fallback
 
+## Phase 9
+
+Phase 9 unifies metadata enrichment and improves reading triage:
+
+- crawl sources store page-declared counts and become `incomplete` when parsed count is lower
+- unified `Enrich Metadata` compares crawled IDs against ID API and OAI metadata sources
+- enrichment reports record missing-after-merge, OAI-missing, OAI-extra, and mismatch diagnostics
+- paper scores store a 0-100 reading-priority score plus component scores, rationale, and recommended action
+- search can sort by score
+- the web UI uses left controls, center search results, and a fixed right paper detail panel
+- summary templates and scoring controls live in Settings
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
 ## Deferred
@@ -110,7 +122,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-In the Enrich panel, `Start OAI Sync` is the preferred metadata path. It syncs arXiv OAI-PMH metadata pages into SQLite and records run status, counts, resumption token, and error details. `Pages` limits how many OAI pages are fetched in one run. `Run Metadata` is the legacy arXiv API fallback for crawled paper IDs; `Max papers/run` limits that fallback batch size and is not a daily quota. Legacy API 429 responses are stored as `retryable` with a `next_run_at` timestamp instead of permanent failure. `Run Summary` needs a summary template first; use `Create Default Template` or import your own template JSON.
+In the Enrich panel, `Enrich Metadata` is the main path. It takes the crawled daily paper IDs, checks ID API and OAI metadata sources, merges the most complete metadata into SQLite, and records missing/mismatch diagnostics. `Papers to enrich` limits how many crawled IDs are handled in one run. `OAI pages` limits how many OAI metadata pages are used for comparison. `Run Legacy Metadata` remains a fallback for ID API-only diagnostics. Summary and scoring controls live in Settings.
 
 The phase-one endpoints are:
 
@@ -118,6 +130,7 @@ The phase-one endpoints are:
 - `GET /api/crawl/runs/{date}`
 - `GET /api/crawl/completeness/{date}`
 - `POST /api/crawl/retry-failed`
+- `POST /api/metadata/enrich`
 - `POST /api/metadata/oai-sync/start`
 - `GET /api/metadata/oai-sync/runs`
 - `GET /api/metadata/oai-sync/runs/{run_id}`
@@ -126,6 +139,7 @@ The phase-one endpoints are:
 - `GET /api/summary-templates`
 - `POST /api/summary-templates`
 - `POST /api/summaries/run`
+- `POST /api/scores/run`
 - `GET /api/papers/{arxiv_id}/summaries`
 - `GET /api/papers/{arxiv_id}/discussions`
 - `POST /api/papers/{arxiv_id}/discussions`

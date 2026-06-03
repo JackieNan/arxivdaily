@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup, Tag
 from arxiv_local_daily.models import ParsedDailyEvent
 
 CATEGORY_RE = re.compile(r"\(([a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9-]+)?)\)")
+COUNT_RE = re.compile(r"\bof\s+([0-9,]+)\s+entr(?:y|ies)\b", re.IGNORECASE)
 
 
 def _heading_to_event_type(text: str) -> str | None:
@@ -84,3 +85,14 @@ def parse_daily_listing(
             )
         )
     return events
+
+
+def parse_daily_listing_count(html: str) -> int | None:
+    soup = BeautifulSoup(html, "html.parser")
+    totals: list[int] = []
+    for heading in soup.select("h2, h3, h4"):
+        text = heading.get_text(" ", strip=True)
+        match = COUNT_RE.search(text)
+        if match:
+            totals.append(int(match.group(1).replace(",", "")))
+    return sum(totals) if totals else None

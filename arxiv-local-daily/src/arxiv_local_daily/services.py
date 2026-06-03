@@ -5,21 +5,25 @@ from typing import Any
 from arxiv_local_daily.crawler.audit import build_crawl_completeness_report
 from arxiv_local_daily.crawler.metadata import ArxivMetadataClient
 from arxiv_local_daily.crawler.oai import OaiPmhMetadataClient
-from arxiv_local_daily.crawler.parser import parse_daily_listing
+from arxiv_local_daily.crawler.parser import parse_daily_listing, parse_daily_listing_count
 from arxiv_local_daily.db import transaction
-from arxiv_local_daily.models import CrawlSourceInput
+from arxiv_local_daily.models import CrawlSourceInput, PaperMetadata
 from arxiv_local_daily.repositories import (
     CrawlRepository,
+    MetadataEnrichmentRepository,
     MetadataSyncRepository,
     PaperRepository,
+    ScoreRepository,
     SummaryRepository,
     TemplateRepository,
 )
 from arxiv_local_daily.summary import (
     LLMClient,
     OpenAICompatibleChatClient,
+    build_score_messages,
     build_summary_messages,
     enabled_template_fields,
+    parse_score_response,
     parse_summary_response,
 )
 
@@ -84,6 +88,9 @@ def ingest_daily_listing_html(
         listing_category=listing_category,
         source_url=source_url,
     )
+    expected_count = parse_daily_listing_count(html)
+    missing_count = max((expected_count or len(events)) - len(events), 0)
+    source_status = "incomplete" if expected_count is not None and missing_count > 0 else "complete"
     counts: dict[str, int] = {}
     for event in events:
         counts[event.event_type] = counts.get(event.event_type, 0) + 1
@@ -99,11 +106,13 @@ def ingest_daily_listing_html(
             category=listing_category,
             event_section="all",
             url=source_url,
-            status="complete",
+            status=source_status,
             http_status=200,
             parsed_count=len(events),
+            expected_count=expected_count,
+            missing_count=missing_count,
         )
-        crawl_repo.finish_run(run_id, status="complete", summary_counts=counts)
+        crawl_repo.finish_run(run_id, status=source_status if source_status == "complete" else "partial", summary_counts=counts)
         return run_id
 
 
@@ -122,6 +131,9 @@ def ingest_daily_crawl_sources(
         run_id = crawl_repo.create_run(date=date, mode=mode, status="running")
         for source in sources:
             parsed_count = 0
+            expected_count = source.expected_count
+            missing_count = source.missing_count
+            source_status = source.status
             if source.status == "complete" and source.html is not None:
                 events = parse_daily_listing(
                     source.html,
@@ -129,19 +141,28 @@ def ingest_daily_crawl_sources(
                     source_url=source.url,
                 )
                 parsed_count = len(events)
+                if expected_count is None:
+                    expected_count = parse_daily_listing_count(source.html)
+                missing_count = max((expected_count or parsed_count) - parsed_count, 0)
+                if expected_count is not None and missing_count > 0:
+                    source_status = "incomplete"
                 for event in events:
                     summary_counts[event.event_type] = summary_counts.get(event.event_type, 0) + 1
                     paper_repo.upsert_daily_event(date=date, event=event)
             else:
+                source_status = source.status
+            if source_status != "complete":
                 failed_count += 1
             crawl_repo.record_source(
                 run_id=run_id,
                 category=source.category,
                 event_section=source.event_section,
                 url=source.url,
-                status=source.status,
+                status=source_status,
                 http_status=source.http_status,
                 parsed_count=parsed_count,
+                expected_count=expected_count,
+                missing_count=missing_count,
                 error=source.error,
                 retry_count=source.retry_count,
             )
@@ -286,6 +307,174 @@ def run_oai_metadata_sync(
     return result
 
 
+def _metadata_completeness_score(metadata: PaperMetadata) -> int:
+    score = 0
+    for value in [
+        metadata.title,
+        metadata.abstract,
+        metadata.primary_category,
+        metadata.abs_url,
+        metadata.pdf_url,
+        metadata.published_at,
+        metadata.updated_at,
+    ]:
+        if value:
+            score += 1
+    score += min(len(metadata.authors), 3)
+    score += min(len(metadata.categories), 3)
+    return score
+
+
+def _choose_metadata(
+    arxiv_id: str,
+    *,
+    id_api_by_id: dict[str, PaperMetadata],
+    oai_by_id: dict[str, PaperMetadata],
+) -> PaperMetadata | None:
+    candidates = [metadata for metadata in [id_api_by_id.get(arxiv_id), oai_by_id.get(arxiv_id)] if metadata is not None]
+    if not candidates:
+        return None
+    return sorted(candidates, key=_metadata_completeness_score, reverse=True)[0]
+
+
+def _metadata_mismatch(id_metadata: PaperMetadata, oai_metadata: PaperMetadata) -> dict[str, Any] | None:
+    mismatches: dict[str, Any] = {}
+    for field in ["title", "abstract", "primary_category"]:
+        left = getattr(id_metadata, field)
+        right = getattr(oai_metadata, field)
+        if left and right and left != right:
+            mismatches[field] = {"id_api": left, "oai": right}
+    if id_metadata.categories and oai_metadata.categories and id_metadata.categories != oai_metadata.categories:
+        mismatches["categories"] = {"id_api": id_metadata.categories, "oai": oai_metadata.categories}
+    return mismatches or None
+
+
+def enrich_metadata_for_date_unified(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    metadata_client: ArxivMetadataClient | None = None,
+    oai_client: OaiPmhMetadataClient | None = None,
+    limit: int = 100,
+    oai_max_pages: int = 1,
+) -> dict[str, Any]:
+    paper_repo = PaperRepository(connection)
+    enrich_repo = MetadataEnrichmentRepository(connection)
+    id_client = metadata_client or ArxivMetadataClient()
+    oai = oai_client or OaiPmhMetadataClient()
+    crawl_ids = paper_repo.list_daily_ids_for_date(date, limit=limit)
+    with transaction(connection):
+        run_id = enrich_repo.create_run(date=date)
+
+    id_api_papers: list[PaperMetadata] = []
+    oai_papers: list[PaperMetadata] = []
+    error: str | None = None
+    try:
+        if crawl_ids:
+            id_api_papers = id_client.fetch_by_ids(crawl_ids)
+        resumption_token: str | None = None
+        pages_fetched = 0
+        while pages_fetched < oai_max_pages:
+            page = oai.fetch_list_records(
+                from_date=date,
+                until_date=date,
+                resumption_token=resumption_token,
+            )
+            pages_fetched += 1
+            oai_papers.extend(page.papers)
+            resumption_token = page.resumption_token
+            if not resumption_token:
+                break
+    except Exception as exc:
+        error = str(exc)
+
+    id_api_by_id = {paper.arxiv_id: paper for paper in id_api_papers}
+    oai_by_id = {paper.arxiv_id: paper for paper in oai_papers}
+    crawl_id_set = set(crawl_ids)
+    id_api_id_set = set(id_api_by_id)
+    oai_id_set = set(oai_by_id)
+    merged_count = 0
+    missing_after_merge: list[str] = []
+    oai_missing = sorted(crawl_id_set - oai_id_set)
+    oai_extra = sorted(oai_id_set - crawl_id_set)
+    mismatch_count = 0
+
+    with transaction(connection):
+        for paper in id_api_papers:
+            enrich_repo.record_source(run_id=run_id, source="id_api", metadata=paper)
+        for paper in oai_papers:
+            enrich_repo.record_source(run_id=run_id, source="oai", metadata=paper)
+
+        for arxiv_id in crawl_ids:
+            chosen = _choose_metadata(arxiv_id, id_api_by_id=id_api_by_id, oai_by_id=oai_by_id)
+            if chosen is None:
+                missing_after_merge.append(arxiv_id)
+                paper_repo.mark_metadata_status(arxiv_id, "failed", error="not returned by metadata sources")
+                enrich_repo.record_report(
+                    run_id=run_id,
+                    report_type="missing_after_merge",
+                    arxiv_id=arxiv_id,
+                    details={"sources_checked": ["id_api", "oai"]},
+                )
+                continue
+            paper_repo.upsert_metadata(chosen)
+            merged_count += 1
+            if arxiv_id in id_api_by_id and arxiv_id in oai_by_id:
+                mismatch = _metadata_mismatch(id_api_by_id[arxiv_id], oai_by_id[arxiv_id])
+                if mismatch:
+                    mismatch_count += 1
+                    enrich_repo.record_report(
+                        run_id=run_id,
+                        report_type="mismatch",
+                        arxiv_id=arxiv_id,
+                        details=mismatch,
+                    )
+
+        for arxiv_id in oai_missing:
+            enrich_repo.record_report(
+                run_id=run_id,
+                report_type="oai_missing",
+                arxiv_id=arxiv_id,
+                details={"meaning": "paper was crawled but not returned by OAI in this run"},
+            )
+        for arxiv_id in oai_extra:
+            enrich_repo.record_report(
+                run_id=run_id,
+                report_type="oai_extra",
+                arxiv_id=arxiv_id,
+                details={"meaning": "OAI returned a paper outside the crawled daily set"},
+            )
+
+        status = "failed" if error and merged_count == 0 else "partial" if error or missing_after_merge else "complete"
+        enrich_repo.finish_run(
+            run_id,
+            status=status,
+            crawl_count=len(crawl_ids),
+            id_api_count=len(id_api_id_set),
+            oai_count=len(oai_id_set),
+            merged_count=merged_count,
+            missing_after_merge_count=len(missing_after_merge),
+            oai_missing_count=len(oai_missing),
+            oai_extra_count=len(oai_extra),
+            mismatch_count=mismatch_count,
+            error=error,
+        )
+
+    return {
+        "run_id": run_id,
+        "status": status,
+        "crawl_count": len(crawl_ids),
+        "id_api_count": len(id_api_id_set),
+        "oai_count": len(oai_id_set),
+        "merged": merged_count,
+        "missing_after_merge": len(missing_after_merge),
+        "oai_missing_count": len(oai_missing),
+        "oai_extra_count": len(oai_extra),
+        "mismatch_count": mismatch_count,
+        "error": error,
+    }
+
+
 def generate_summaries_for_date(
     connection: sqlite3.Connection,
     *,
@@ -366,6 +555,70 @@ def generate_summaries_for_date(
         "template_id": template_id_value,
         "template_version": template_version,
     }
+
+
+def score_papers_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    model: str = "local",
+    limit: int = 20,
+    force: bool = False,
+    rubric_version: str = "reading_priority_v1",
+    llm_client: LLMClient | None = None,
+) -> dict[str, Any]:
+    score_repo = ScoreRepository(connection)
+    candidate_ids = score_repo.list_score_candidate_ids_for_date(
+        date=date,
+        model=model,
+        rubric_version=rubric_version,
+        limit=limit,
+        force=force,
+    )
+    client = llm_client or OpenAICompatibleChatClient.from_env()
+    completed = 0
+    failed = 0
+    skipped = 0
+
+    for arxiv_id in candidate_ids:
+        paper = score_repo.get_paper_for_score(arxiv_id)
+        if paper is None:
+            skipped += 1
+            continue
+        try:
+            response_text = client.complete(
+                model=model,
+                messages=build_score_messages(
+                    paper=paper,
+                    summary=score_repo.get_latest_summary_content(arxiv_id),
+                ),
+            )
+            content = parse_score_response(response_text)
+            status = "complete"
+            completed += 1
+        except Exception as exc:
+            content = {
+                "score_total": 0,
+                "score_relevance": 0,
+                "score_novelty": 0,
+                "score_technical_depth": 0,
+                "score_evidence": 0,
+                "score_actionability": 0,
+                "recommended_action": "skip",
+                "rationale": str(exc),
+            }
+            status = "failed"
+            failed += 1
+        with transaction(connection):
+            score_repo.upsert_score(
+                arxiv_id=arxiv_id,
+                model=model,
+                rubric_version=rubric_version,
+                content=content,
+                status=status,
+            )
+
+    return {"requested": len(candidate_ids), "completed": completed, "failed": failed, "skipped": skipped}
 
 
 def get_crawl_completeness_for_date(

@@ -4,7 +4,6 @@ const ArxivDailyWorkbench = (() => {
     selectedCard: null,
     lastAudit: null,
     templates: [],
-    oaiPollTimer: null,
   };
 
   const DEFAULT_SUMMARY_TEMPLATE = {
@@ -223,12 +222,40 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
+  async function enrichMetadata() {
+    const button = el("metadata-enrich");
+    setBusy(button, true);
+    el("enrich-state").textContent = "running";
+    setDetail("enrich-detail", `Enriching metadata for up to ${Number(el("metadata-limit").value || 100)} crawled papers...`);
+    recordOperation("Metadata enrich running");
+    try {
+      const result = await api("/api/metadata/enrich", {
+        method: "POST",
+        body: JSON.stringify({
+          date: dateValue(),
+          limit: Number(el("metadata-limit").value || 100),
+          oai_max_pages: Number(el("metadata-oai-pages").value || 1),
+        }),
+      });
+      el("enrich-state").textContent = result.status || "complete";
+      setDetail("enrich-detail", formatJson(result));
+      recordOperation(`Metadata merged ${result.merged || 0} of ${result.crawl_count || 0}`, formatJson(result));
+      await runSearch({ silent: true });
+    } catch (error) {
+      setDetail("enrich-detail", `Metadata enrich failed:\n${error.message}`);
+      recordOperation(`Metadata enrich failed: ${error.message}`);
+      el("enrich-state").textContent = "failed";
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   async function runMetadata() {
     const button = el("metadata-run");
     setBusy(button, true);
-    el("enrich-state").textContent = "running";
-    setDetail("enrich-detail", `Metadata running for up to ${Number(el("metadata-limit").value || 100)} papers...`);
-    recordOperation("Metadata running");
+    el("enrich-state").textContent = "legacy";
+    setDetail("enrich-detail", `Legacy metadata running for up to ${Number(el("metadata-limit").value || 100)} papers...`);
+    recordOperation("Legacy metadata running");
     try {
       const result = await api("/api/metadata/run", {
         method: "POST",
@@ -257,67 +284,6 @@ const ArxivDailyWorkbench = (() => {
       el("enrich-state").textContent = "failed";
     } finally {
       setBusy(button, false);
-    }
-  }
-
-  async function startOaiSync() {
-    const button = el("metadata-oai-sync");
-    const maxPages = Number(el("oai-max-pages").value || 1);
-    const body = {
-      from_date: el("oai-from").value || dateValue(),
-      until_date: el("oai-until").value || dateValue(),
-      max_pages: maxPages,
-    };
-    const setSpec = el("oai-set-spec").value.trim();
-    if (setSpec) body.set_spec = setSpec;
-    setBusy(button, true);
-    el("enrich-state").textContent = "queued";
-    setDetail("metadata-sync-detail", `Starting OAI sync for ${body.from_date}...`);
-    try {
-      const result = await api("/api/metadata/oai-sync/start", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      setDetail("metadata-sync-detail", formatJson(result));
-      recordOperation(`OAI sync run ${result.run_id} queued`, formatJson(result));
-      pollOaiSyncRun(result.run_id);
-    } catch (error) {
-      setDetail("metadata-sync-detail", `OAI sync failed:\n${error.message}`);
-      recordOperation(`OAI sync failed: ${error.message}`);
-      el("enrich-state").textContent = "failed";
-    } finally {
-      setBusy(button, false);
-    }
-  }
-
-  async function pollOaiSyncRun(runId) {
-    if (state.oaiPollTimer) {
-      clearTimeout(state.oaiPollTimer);
-      state.oaiPollTimer = null;
-    }
-    try {
-      const data = await api(`/api/metadata/oai-sync/runs/${encodeURIComponent(runId)}`);
-      const run = data.run;
-      if (!run) {
-        setDetail("metadata-sync-detail", `OAI sync run ${runId} not found.`);
-        el("enrich-state").textContent = "missing";
-        return;
-      }
-      el("enrich-state").textContent = run.status;
-      setDetail("metadata-sync-detail", formatJson(run));
-      if (run.status === "queued" || run.status === "running") {
-        state.oaiPollTimer = setTimeout(() => pollOaiSyncRun(runId), 1500);
-        return;
-      }
-      const message = run.status === "complete"
-        ? `OAI sync completed: ${run.records_upserted}/${run.records_seen}`
-        : `OAI sync ${run.status}: ${run.error || "no error detail"}`;
-      recordOperation(message, formatJson(run));
-      await runSearch({ silent: true });
-    } catch (error) {
-      setDetail("metadata-sync-detail", `OAI sync status failed:\n${error.message}`);
-      recordOperation(`OAI sync status failed: ${error.message}`);
-      el("enrich-state").textContent = "failed";
     }
   }
 
@@ -352,6 +318,29 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
+  async function runScore() {
+    const button = el("score-run");
+    setBusy(button, true);
+    try {
+      const result = await api("/api/scores/run", {
+        method: "POST",
+        body: JSON.stringify({
+          date: dateValue(),
+          model: el("summary-model").value.trim() || "local",
+          limit: Number(el("score-limit").value || 20),
+        }),
+      });
+      setDetail("enrich-detail", formatJson(result));
+      recordOperation(`Scores completed ${result.completed} of ${result.requested}`, formatJson(result));
+      await runSearch({ silent: true });
+    } catch (error) {
+      setDetail("enrich-detail", `Score failed:\n${error.message}`);
+      recordOperation(`Score failed: ${error.message}`);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   function searchParams() {
     const params = new URLSearchParams();
     const pairs = [
@@ -361,6 +350,7 @@ const ArxivDailyWorkbench = (() => {
       ["event_type", el("search-event").value],
       ["metadata_status", el("search-metadata").value],
       ["summary_status", el("search-summary").value],
+      ["sort", el("search-sort").value],
     ];
     for (const [key, value] of pairs) {
       if (value) params.set(key, value);
@@ -402,8 +392,13 @@ const ArxivDailyWorkbench = (() => {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "paper-card";
+      const score = paper.score && paper.score.status === "complete" ? paper.score : null;
+      const hint = paper.metadata_error || paper.abstract || "No abstract yet.";
       card.innerHTML = `
-        <h3>${escapeHtml(paper.title || paper.arxiv_id)}</h3>
+        <div class="paper-card-head">
+          <h3 class="paper-card-title">${escapeHtml(paper.title || paper.arxiv_id)}</h3>
+          ${score ? `<span class="score-badge">${escapeHtml(score.score_total)} ${escapeHtml(score.recommended_action)}</span>` : ""}
+        </div>
         <div class="paper-meta">
           <span class="tag">${escapeHtml(paper.arxiv_id)}</span>
           <span class="tag">${escapeHtml(paper.metadata_status)}</span>
@@ -412,6 +407,7 @@ const ArxivDailyWorkbench = (() => {
         <div class="tag-row">
           ${(paper.listing_categories || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
         </div>
+        <p class="paper-card-hint">${escapeHtml(hint)}</p>
       `;
       card.addEventListener("click", () => selectPaper(paper.arxiv_id, card));
       container.appendChild(card);
@@ -445,12 +441,18 @@ const ArxivDailyWorkbench = (() => {
       return;
     }
     const summaries = detail.summaries || [];
+    const score = detail.score;
     el("paper-content").innerHTML = `
-      <h3>${escapeHtml(paper.title || paper.arxiv_id)}</h3>
-      <div class="tag-row">
+      <div class="paper-hero">
+        <h3>${escapeHtml(paper.title || paper.arxiv_id)}</h3>
+        ${score ? `<span class="score-badge large">${escapeHtml(score.score_total)} ${escapeHtml(score.recommended_action)}</span>` : ""}
+      </div>
+      <div class="tag-row compact-tags">
+        <span class="tag">${escapeHtml(paper.arxiv_id)}</span>
         <span class="tag">${escapeHtml(paper.metadata_status)}</span>
         ${(paper.categories || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
       </div>
+      ${score ? `<div class="section-block score-block"><h4>Score</h4><p>${escapeHtml(score.rationale)}</p></div>` : ""}
       <div class="section-block">
         <h4>Authors</h4>
         <p>${escapeHtml((paper.authors || []).join(", ") || "-")}</p>
@@ -544,15 +546,14 @@ const ArxivDailyWorkbench = (() => {
 
   function bind() {
     el("date-input").value = todayIso();
-    el("oai-from").value = dateValue();
-    el("oai-until").value = dateValue();
     el("crawl-run").addEventListener("click", runCrawl);
     el("crawl-audit").addEventListener("click", runAudit);
     el("crawl-retry").addEventListener("click", retryCrawl);
+    el("metadata-enrich").addEventListener("click", enrichMetadata);
     el("metadata-run").addEventListener("click", runMetadata);
-    el("metadata-oai-sync").addEventListener("click", startOaiSync);
     el("summary-template-create").addEventListener("click", createDefaultTemplate);
     el("summary-run").addEventListener("click", runSummary);
+    el("score-run").addEventListener("click", runScore);
     el("search-run").addEventListener("click", runSearch);
     el("discussion-add").addEventListener("click", addDiscussion);
     el("search-query").addEventListener("keydown", (event) => {
@@ -563,7 +564,7 @@ const ArxivDailyWorkbench = (() => {
     runSearch();
   }
 
-  return { bind, runSearch, runAudit, startOaiSync, pollOaiSyncRun };
+  return { bind, runSearch, runAudit, enrichMetadata, runScore };
 })();
 
 window.addEventListener("DOMContentLoaded", ArxivDailyWorkbench.bind);
