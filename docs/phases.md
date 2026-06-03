@@ -50,6 +50,7 @@ Date baseline: 2026-06-03
 ## Phase 3: arXiv API Metadata Enrichment
 
 - Branch: `codex/phase-3-metadata-enrichment`
+- Main merge commit: `9671398 merge phase three metadata enrichment`
 - Plan: `docs/superpowers/plans/2026-06-03-arxiv-local-daily-phase-3-metadata-enrichment.md`
 - Scope completed:
   - fetch metadata from the arXiv API for known arXiv IDs
@@ -61,4 +62,4 @@ Date baseline: 2026-06-03
   - `uv run pytest -v`: 44 passed, 1 warning
   - metadata CLI help smoke test succeeded.
   - live arXiv API metadata smoke test: `2606.00001` returned one parsed paper.
-- Status: implemented on branch, not yet merged to `main`.
+- Status: merged to `main`.
