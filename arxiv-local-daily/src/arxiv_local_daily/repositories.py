@@ -272,8 +272,7 @@ class PaperRepository:
             WHERE e.date = ?
               AND p.metadata_status != 'complete'
               AND (
-                p.metadata_status != 'retryable'
-                OR p.metadata_next_run_at IS NULL
+                p.metadata_next_run_at IS NULL
                 OR datetime(p.metadata_next_run_at) <= CURRENT_TIMESTAMP
               )
             ORDER BY p.arxiv_id

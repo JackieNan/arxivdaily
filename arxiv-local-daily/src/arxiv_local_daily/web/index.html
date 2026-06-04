@@ -41,27 +41,27 @@
       </header>
 
       <section id="top-actions" class="top-actions">
-        <section id="crawl-panel" class="panel control-panel">
+        <section id="automation-panel" class="panel control-panel">
           <div class="panel-title">
-            <h2>Crawl</h2>
-            <span id="crawl-state" class="badge">idle</span>
+            <h2>Daily Automation</h2>
+            <span id="automation-state" class="badge">idle</span>
           </div>
-          <div class="action-grid crawl-grid">
+          <div class="action-grid automation-grid">
             <label>
               <span>Categories</span>
               <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
             </label>
-            <div class="button-row">
-              <button id="crawl-run" type="button">Run Crawl</button>
-              <button id="crawl-audit" type="button">Audit</button>
-              <button id="crawl-retry" type="button">Retry</button>
-            </div>
+            <button id="automation-refresh" class="secondary-button" type="button">Refresh</button>
           </div>
-          <div id="audit-summary" class="metric-grid">
+          <div id="automation-summary" class="metric-grid automation-summary">
             <div><span>Status</span><strong>-</strong></div>
+            <div><span>Papers</span><strong>-</strong></div>
             <div><span>Categories</span><strong>-</strong></div>
-            <div><span>Retry</span><strong>-</strong></div>
+            <div><span>Metadata</span><strong>-</strong></div>
+            <div><span>Summary</span><strong>-</strong></div>
+            <div><span>Score</span><strong>-</strong></div>
           </div>
+          <p id="automation-note" class="inline-status">Automation starts crawl and keeps fetching metadata until every daily paper is complete or waiting for retry.</p>
         </section>
 
         <section id="settings-panel" class="panel control-panel">
@@ -160,25 +160,6 @@
               </div>
             </div>
           </section>
-        </section>
-
-        <section id="daily-panel" class="panel control-panel">
-          <div class="panel-title">
-            <h2>Daily</h2>
-            <span id="daily-state" class="badge">idle</span>
-          </div>
-          <div class="action-grid daily-grid">
-            <button id="daily-run" type="button">Run Daily Update</button>
-          </div>
-          <div id="daily-summary" class="metric-grid daily-summary">
-            <div><span>Status</span><strong>-</strong></div>
-            <div><span>Papers</span><strong>-</strong></div>
-            <div><span>Categories</span><strong>-</strong></div>
-            <div><span>Metadata</span><strong>-</strong></div>
-            <div><span>Summary</span><strong>-</strong></div>
-            <div><span>Score</span><strong>-</strong></div>
-          </div>
-          <p id="daily-note" class="inline-status">Daily status refreshes automatically after crawl, summary, and score work.</p>
         </section>
       </section>
 

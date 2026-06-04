@@ -147,30 +147,65 @@ def test_post_crawl_run_uses_injected_runner(tmp_path):
 def test_post_crawl_run_schedules_auto_metadata_enrich(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     crawl_calls: list[dict] = []
-    enrich_calls: list[dict] = []
+    completion_calls: list[dict] = []
 
     def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
         crawl_calls.append({"date": date, "categories": categories})
         return 42
 
-    def fake_unified_runner(connection, *, date: str, limit: int | None, oai_max_pages: int):
-        enrich_calls.append({"date": date, "limit": limit, "oai_max_pages": oai_max_pages})
-        return {"run_id": 7, "status": "complete", "merged": 0}
+    def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        completion_calls.append(
+            {"date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages, "max_rounds": max_rounds}
+        )
+        return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
     client = TestClient(
         create_app(
             database_path=db_path,
             crawl_runner=fake_crawl_runner,
-            unified_metadata_runner=fake_unified_runner,
+            metadata_completion_runner=fake_completion_runner,
         )
     )
 
     response = client.post("/api/crawl/run", json={"date": "2026-06-03"})
 
     assert response.status_code == 200
-    assert response.json() == {"run_id": 42, "metadata_enrich": "queued"}
+    assert response.json() == {"run_id": 42, "metadata_completion": "queued"}
     assert crawl_calls == [{"date": "2026-06-03", "categories": None}]
-    assert enrich_calls == [{"date": "2026-06-03", "limit": None, "oai_max_pages": 1}]
+    assert completion_calls == [{"date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1, "max_rounds": None}]
+
+
+def test_post_daily_automation_start_runs_crawl_then_metadata_completion(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        calls.append({"step": "crawl", "date": date, "categories": categories})
+        return 43
+
+    def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
+        return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_crawl_runner,
+            metadata_completion_runner=fake_completion_runner,
+        )
+    )
+
+    response = client.post(
+        "/api/daily/automation/start",
+        json={"date": "2026-06-04", "categories": ["cs.AI"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"date": "2026-06-04", "status": "queued"}
+    assert calls == [
+        {"step": "crawl", "date": "2026-06-04", "categories": ["cs.AI"]},
+        {"step": "metadata", "date": "2026-06-04", "batch_size": 100, "oai_max_pages": 1},
+    ]
 
 
 def test_get_daily_status_reports_summary_coverage(tmp_path):

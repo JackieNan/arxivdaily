@@ -343,3 +343,28 @@ Date baseline: 2026-06-03
   - `uv run pytest -v`: 109 passed, 1 warning
   - browser smoke at 599px viewport confirmed no horizontal overflow, one Daily button, no raw Daily/Settings detail panes, and a working expandable template editor
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 18: Daily Automation and Metadata Completion
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-04-arxiv-local-daily-phase-18-daily-automation-metadata-completion.md`
+- Scope completed:
+  - add `complete_metadata_for_date` as a batched metadata completion loop
+  - fetch incomplete metadata in batches of 100 daily IDs by default
+  - change unified metadata enrichment to support `only_incomplete`
+  - mark HTTP 429/timeout source failures as `retryable` with `metadata_next_run_at`
+  - make failed metadata rows respect retry windows so background work does not spin
+  - queue metadata completion after crawl instead of a one-shot unified enrich pass
+  - add `POST /api/daily/automation/start` to crawl-if-needed and then complete metadata
+  - merge the former Crawl and Daily panels into one `Daily Automation` panel
+  - start daily automation automatically on page load and date changes
+- Important decisions:
+  - metadata completion is a background reliability responsibility, not a manual button workflow
+  - source limits should produce retryable state, not permanent all-paper failure
+  - Crawl and Daily are one daily automation pipeline in the UI
+- Verification:
+  - focused metadata/API/web UI tests passed
+  - `uv run pytest -v`: 112 passed, 1 warning
+  - browser smoke at 342px viewport confirmed one Daily Automation panel, no old Crawl/Daily panels, and no horizontal overflow
+  - live local smoke showed the old failed metadata set begin recovering: 56 complete, 144 retryable, 1771 still failed
+- Status: implemented on branch, not yet merged to `main`.

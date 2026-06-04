@@ -1,6 +1,10 @@
 from arxiv_local_daily.crawler.oai import OaiListRecordsPage
 from arxiv_local_daily.models import CrawlSourceInput, PaperMetadata
-from arxiv_local_daily.services import enrich_metadata_for_date_unified, ingest_daily_crawl_sources
+from arxiv_local_daily.services import (
+    complete_metadata_for_date,
+    enrich_metadata_for_date_unified,
+    ingest_daily_crawl_sources,
+)
 
 
 class FakeMetadataClient:
@@ -11,6 +15,20 @@ class FakeMetadataClient:
     def fetch_by_ids(self, ids: list[str]) -> list[PaperMetadata]:
         self.calls.append(ids)
         return self.papers
+
+
+class EchoMetadataClient:
+    def __init__(self):
+        self.calls: list[list[str]] = []
+
+    def fetch_by_ids(self, ids: list[str]) -> list[PaperMetadata]:
+        self.calls.append(ids)
+        return [_metadata(arxiv_id, title=f"Metadata {arxiv_id}") for arxiv_id in ids]
+
+
+class RateLimitedMetadataClient:
+    def fetch_by_ids(self, ids: list[str]) -> list[PaperMetadata]:
+        raise RuntimeError("HTTP 429 Too Many Requests")
 
 
 class FakeOaiClient:
@@ -127,3 +145,99 @@ def test_unified_metadata_enrichment_merges_sources_and_records_report(db):
         ("oai_extra", "2606.99999"),
         ("oai_missing", "2606.00002"),
     ]
+
+
+def test_unified_metadata_enrichment_marks_retryable_source_errors(db):
+    ingest_daily_crawl_sources(
+        db,
+        date="2026-06-04",
+        mode="all-categories",
+        sources=[
+            CrawlSourceInput(
+                category="cs.AI",
+                url="https://arxiv.org/list/cs.AI/new",
+                status="complete",
+                http_status=200,
+                html="""
+                <div id="dlpage">
+                  <h3>New submissions</h3>
+                  <dl>
+                    <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00001">arXiv:2606.00001</a></span></dt>
+                    <dd><div class="list-title">Title: Paper one</div></dd>
+                    <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00002">arXiv:2606.00002</a></span></dt>
+                    <dd><div class="list-title">Title: Paper two</div></dd>
+                  </dl>
+                </div>
+                """,
+            )
+        ],
+    )
+
+    result = enrich_metadata_for_date_unified(
+        db,
+        date="2026-06-04",
+        metadata_client=RateLimitedMetadataClient(),
+        oai_client=FakeOaiClient([]),
+        only_incomplete=True,
+        oai_max_pages=0,
+    )
+
+    assert result["status"] == "retryable"
+    rows = db.execute(
+        """
+        SELECT metadata_status, metadata_attempts, metadata_next_run_at, metadata_error
+        FROM papers
+        ORDER BY arxiv_id
+        """
+    ).fetchall()
+    assert [row["metadata_status"] for row in rows] == ["retryable", "retryable"]
+    assert [row["metadata_attempts"] for row in rows] == [1, 1]
+    assert rows[0]["metadata_next_run_at"] is not None
+    assert "HTTP 429" in rows[0]["metadata_error"]
+
+
+def test_complete_metadata_for_date_runs_batches_until_all_complete(db):
+    html = """
+    <div id="dlpage">
+      <h3>New submissions</h3>
+      <dl>
+        <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00001">arXiv:2606.00001</a></span></dt>
+        <dd><div class="list-title">Title: Paper one</div></dd>
+        <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00002">arXiv:2606.00002</a></span></dt>
+        <dd><div class="list-title">Title: Paper two</div></dd>
+        <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00003">arXiv:2606.00003</a></span></dt>
+        <dd><div class="list-title">Title: Paper three</div></dd>
+      </dl>
+    </div>
+    """
+    ingest_daily_crawl_sources(
+        db,
+        date="2026-06-04",
+        mode="all-categories",
+        sources=[
+            CrawlSourceInput(
+                category="cs.AI",
+                url="https://arxiv.org/list/cs.AI/new",
+                status="complete",
+                http_status=200,
+                html=html,
+            )
+        ],
+    )
+    id_client = EchoMetadataClient()
+
+    result = complete_metadata_for_date(
+        db,
+        date="2026-06-04",
+        batch_size=2,
+        max_rounds=5,
+        metadata_client=id_client,
+        oai_client=FakeOaiClient([]),
+        oai_max_pages=0,
+        sleep_fn=lambda seconds: None,
+    )
+
+    assert result["status"] == "complete"
+    assert result["rounds"] == 2
+    assert result["metadata"]["complete"] == 3
+    assert id_client.calls == [["2606.00001", "2606.00002"], ["2606.00003"]]

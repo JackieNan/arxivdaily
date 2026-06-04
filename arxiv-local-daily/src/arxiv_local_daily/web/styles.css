@@ -158,8 +158,8 @@ label span {
 
 .top-actions {
   display: grid;
-  grid-template-columns: minmax(260px, 0.78fr) minmax(380px, 1.04fr) minmax(280px, 0.88fr);
-  grid-template-areas: "crawl settings daily";
+  grid-template-columns: minmax(360px, 0.92fr) minmax(420px, 1.08fr);
+  grid-template-areas: "automation settings";
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -188,16 +188,12 @@ label span {
   gap: 10px;
 }
 
-#crawl-panel {
-  grid-area: crawl;
+#automation-panel {
+  grid-area: automation;
 }
 
 #settings-panel {
   grid-area: settings;
-}
-
-#daily-panel {
-  grid-area: daily;
 }
 
 .top-actions .panel {
@@ -297,8 +293,8 @@ label span {
   align-items: end;
 }
 
-.crawl-grid {
-  grid-template-columns: minmax(140px, 1fr) minmax(190px, auto);
+.automation-grid {
+  grid-template-columns: minmax(140px, 1fr) minmax(96px, auto);
 }
 
 .settings-grid {
@@ -313,11 +309,6 @@ label span {
 #template-editor-toggle,
 #summary-score-run {
   grid-column: 1 / -1;
-}
-
-.daily-grid {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 7px;
 }
 
 .template-editor {
@@ -393,7 +384,7 @@ label span {
   gap: 8px;
 }
 
-.daily-summary {
+.automation-summary {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
@@ -726,8 +717,7 @@ mjx-container {
   .top-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
-      "crawl daily"
-      "settings settings";
+      "automation settings";
   }
 
   .workspace-grid {
@@ -772,13 +762,13 @@ mjx-container {
       "detail";
   }
 
-  .crawl-grid {
+  .automation-grid {
     grid-template-columns: 1fr;
   }
 
   .settings-grid,
   .search-controls,
-  .daily-grid {
+  .automation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -787,7 +777,7 @@ mjx-container {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .daily-summary {
+  .automation-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -808,14 +798,13 @@ mjx-container {
   .top-actions {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "crawl"
-      "settings"
-      "daily";
+      "automation"
+      "settings";
   }
 
   .settings-grid,
   .search-controls,
-  .daily-grid {
+  .automation-grid {
     grid-template-columns: 1fr;
   }
 
@@ -823,7 +812,7 @@ mjx-container {
     grid-column: auto;
   }
 
-  .daily-summary {
+  .automation-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

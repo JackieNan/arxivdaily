@@ -19,6 +19,7 @@ from arxiv_local_daily.repositories import (
     TemplateRepository,
 )
 from arxiv_local_daily.services import (
+    complete_metadata_for_date,
     enrich_metadata_for_date,
     enrich_metadata_for_date_unified,
     generate_summaries_for_date,
@@ -91,6 +92,13 @@ class DailyPipelineRunRequest(BaseModel):
     oai_max_pages: int = Field(default=1, ge=0, le=100)
 
 
+class DailyAutomationStartRequest(BaseModel):
+    date: str
+    categories: list[str] | None = None
+    batch_size: int = Field(default=100, ge=1, le=500)
+    oai_max_pages: int = Field(default=1, ge=0, le=100)
+
+
 CrawlerRunner = Callable[..., int]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
@@ -99,6 +107,7 @@ OaiSyncRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
 ScoreRunner = Callable[..., dict[str, Any]]
 DailyPipelineRunner = Callable[..., dict[str, Any]]
+MetadataCompletionRunner = Callable[..., dict[str, Any]]
 
 
 def _run_oai_sync_background(
@@ -123,22 +132,49 @@ def _run_oai_sync_background(
         connection.close()
 
 
-def _run_unified_metadata_background(
+def _run_metadata_completion_background(
     *,
     db_path: Path,
     date: str,
-    unified_metadata_runner: UnifiedMetadataRunner,
-    limit: int | None = None,
+    metadata_completion_runner: MetadataCompletionRunner,
+    batch_size: int = 100,
     oai_max_pages: int = 1,
+    max_rounds: int | None = None,
 ) -> None:
     connection = connect(db_path)
     initialize_schema(connection)
     try:
-        unified_metadata_runner(
+        metadata_completion_runner(
             connection,
             date=date,
-            limit=limit,
+            batch_size=batch_size,
             oai_max_pages=oai_max_pages,
+            max_rounds=max_rounds,
+        )
+    finally:
+        connection.close()
+
+
+def _run_daily_automation_background(
+    *,
+    db_path: Path,
+    request: DailyAutomationStartRequest,
+    crawl_runner: CrawlerRunner,
+    metadata_completion_runner: MetadataCompletionRunner,
+) -> None:
+    connection = connect(db_path)
+    initialize_schema(connection)
+    try:
+        crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
+        if crawl_report["status"] != "complete":
+            crawl_runner(connection, date=request.date, categories=request.categories)
+            connection.commit()
+        metadata_completion_runner(
+            connection,
+            date=request.date,
+            batch_size=request.batch_size,
+            oai_max_pages=request.oai_max_pages,
+            max_rounds=None,
         )
     finally:
         connection.close()
@@ -154,6 +190,7 @@ def create_app(
     summary_runner: SummaryRunner = generate_summaries_for_date,
     score_runner: ScoreRunner = score_papers_for_date,
     daily_pipeline_runner: DailyPipelineRunner = run_daily_pipeline,
+    metadata_completion_runner: MetadataCompletionRunner = complete_metadata_for_date,
     auto_enrich_after_crawl: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
@@ -252,17 +289,29 @@ def create_app(
             response: dict[str, Any] = {"run_id": run_id}
             if auto_enrich_after_crawl:
                 background_tasks.add_task(
-                    _run_unified_metadata_background,
+                    _run_metadata_completion_background,
                     db_path=db_path,
                     date=request.date,
-                    unified_metadata_runner=unified_metadata_runner,
-                    limit=None,
+                    metadata_completion_runner=metadata_completion_runner,
+                    batch_size=100,
                     oai_max_pages=1,
+                    max_rounds=None,
                 )
-                response["metadata_enrich"] = "queued"
+                response["metadata_completion"] = "queued"
             return response
         finally:
             connection.close()
+
+    @app.post("/api/daily/automation/start")
+    def start_daily_automation(request: DailyAutomationStartRequest, background_tasks: BackgroundTasks):
+        background_tasks.add_task(
+            _run_daily_automation_background,
+            db_path=db_path,
+            request=request,
+            crawl_runner=crawl_runner,
+            metadata_completion_runner=metadata_completion_runner,
+        )
+        return {"date": request.date, "status": "queued"}
 
     @app.post("/api/crawl/retry-failed")
     def retry_failed_crawl(request: CrawlRetryFailedRequest):

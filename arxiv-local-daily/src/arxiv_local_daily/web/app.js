@@ -2,7 +2,6 @@ const ArxivDailyWorkbench = (() => {
   const state = {
     selectedPaperId: null,
     selectedCard: null,
-    lastAudit: null,
     templates: [],
   };
 
@@ -308,72 +307,26 @@ const ArxivDailyWorkbench = (() => {
     return el("date-input").value || todayIso();
   }
 
-  async function runCrawl() {
-    const button = el("crawl-run");
+  async function startDailyAutomation(options = {}) {
+    const silent = options.silent === true;
+    const button = silent ? null : el("automation-refresh");
     setBusy(button, true);
     try {
       const categories = splitList(el("crawl-categories").value);
       const body = { date: dateValue() };
       if (categories.length) body.categories = categories;
-      const result = await api("/api/crawl/run", {
+      const result = await api("/api/daily/automation/start", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      el("crawl-state").textContent = `run ${result.run_id}`;
-      const suffix = result.metadata_enrich ? "; metadata enrich queued" : "";
-      recordOperation(`Crawl run ${result.run_id} created${suffix}`);
-      await runAudit();
+      el("automation-state").textContent = result.status;
+      if (!silent) recordOperation(`Daily automation ${result.status}`);
       await loadDailyStatus({ silent: true });
       await runSearch();
     } catch (error) {
-      recordOperation(`Crawl failed: ${error.message}`);
-      el("crawl-state").textContent = "failed";
-    } finally {
-      setBusy(button, false);
-    }
-  }
-
-  async function runAudit() {
-    const button = el("crawl-audit");
-    setBusy(button, true);
-    try {
-      const report = await api(`/api/crawl/completeness/${encodeURIComponent(dateValue())}`);
-      state.lastAudit = report;
-      renderAudit(report);
-      recordOperation(`Audit: ${report.complete_category_count}/${report.expected_category_count} categories ${report.status}`);
-    } catch (error) {
-      recordOperation(`Audit failed: ${error.message}`);
-    } finally {
-      setBusy(button, false);
-    }
-  }
-
-  function renderAudit(report) {
-    const cells = el("audit-summary").querySelectorAll("strong");
-    cells[0].textContent = report.status;
-    cells[0].className = `status-${report.status}`;
-    cells[1].textContent = `${report.complete_category_count}/${report.expected_category_count}`;
-    cells[2].textContent = String(report.retry_categories.length);
-    el("crawl-state").textContent = report.status;
-  }
-
-  async function retryCrawl() {
-    const button = el("crawl-retry");
-    setBusy(button, true);
-    try {
-      const expected = splitList(el("crawl-categories").value);
-      const body = { date: dateValue() };
-      if (expected.length) body.expected_categories = expected;
-      const result = await api("/api/crawl/retry-failed", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      recordOperation(`Retried ${result.retried} categories`);
-      await runAudit();
-      await loadDailyStatus({ silent: true });
-      await runSearch();
-    } catch (error) {
-      recordOperation(`Retry failed: ${error.message}`);
+      el("automation-state").textContent = "failed";
+      setDetail("automation-note", `Automation failed: ${error.message}`);
+      if (!silent) recordOperation(`Daily automation failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -437,24 +390,9 @@ const ArxivDailyWorkbench = (() => {
     return params;
   }
 
-  function dailyPipelineBody() {
-    const categories = splitList(el("crawl-categories").value);
-    const templateName = el("summary-template").value.trim();
-    const body = {
-      date: dateValue(),
-      model: el("summary-model").value.trim() || "local",
-    };
-    if (categories.length) {
-      body.categories = categories;
-      body.expected_categories = categories;
-    }
-    if (templateName) body.template_name = templateName;
-    return body;
-  }
-
   async function loadDailyStatus(options = {}) {
     const silent = options.silent === true;
-    const button = silent ? null : el("daily-run");
+    const button = silent ? null : el("automation-refresh");
     setBusy(button, true);
     try {
       const params = dailyStatusParams();
@@ -463,8 +401,8 @@ const ArxivDailyWorkbench = (() => {
       if (!silent) recordOperation(`Daily: ${dailyStatusText(status)}`);
       return status;
     } catch (error) {
-      el("daily-state").textContent = "failed";
-      setDetail("daily-note", `Daily status failed: ${error.message}`);
+      el("automation-state").textContent = "failed";
+      setDetail("automation-note", `Daily status failed: ${error.message}`);
       if (!silent) recordOperation(`Daily status failed: ${error.message}`);
       return null;
     } finally {
@@ -472,28 +410,8 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
-  async function runDailyPipeline() {
-    const button = el("daily-run");
-    setBusy(button, true);
-    try {
-      const result = await api("/api/daily/pipeline/run", {
-        method: "POST",
-        body: JSON.stringify(dailyPipelineBody()),
-      });
-      if (result.daily_status) renderDailyStatus(result.daily_status);
-      recordOperation(`Daily update: ${result.status}`);
-      await runSearch({ silent: true });
-    } catch (error) {
-      el("daily-state").textContent = "failed";
-      setDetail("daily-note", `Daily update failed: ${error.message}`);
-      recordOperation(`Daily update failed: ${error.message}`);
-    } finally {
-      setBusy(button, false);
-    }
-  }
-
   function renderDailyStatus(status) {
-    const cells = el("daily-summary").querySelectorAll("strong");
+    const cells = el("automation-summary").querySelectorAll("strong");
     cells[0].textContent = status.status;
     cells[0].className = `status-${status.status}`;
     cells[1].textContent = String(status.metadata.total);
@@ -501,9 +419,9 @@ const ArxivDailyWorkbench = (() => {
     cells[3].textContent = metadataCoverageText(status, { compact: true });
     cells[4].textContent = `${status.summary.complete}/${status.summary.eligible}`;
     cells[5].textContent = `${status.score.complete}/${status.score.eligible}`;
-    setDetail("daily-note", dailyStatusText(status));
-    el("daily-state").textContent = status.status;
-    el("daily-state").className = `badge status-${status.status}`;
+    setDetail("automation-note", dailyStatusText(status));
+    el("automation-state").textContent = status.status;
+    el("automation-state").className = `badge status-${status.status}`;
   }
 
   function metadataCoverageText(status, options = {}) {
@@ -747,10 +665,14 @@ const ArxivDailyWorkbench = (() => {
 
   function bind() {
     el("date-input").value = todayIso();
-    el("crawl-run").addEventListener("click", runCrawl);
-    el("crawl-audit").addEventListener("click", runAudit);
-    el("crawl-retry").addEventListener("click", retryCrawl);
-    el("daily-run").addEventListener("click", runDailyPipeline);
+    el("automation-refresh").addEventListener("click", () => {
+      loadDailyStatus();
+      runSearch({ silent: true });
+    });
+    el("date-input").addEventListener("change", () => startDailyAutomation());
+    el("crawl-categories").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") startDailyAutomation();
+    });
     el("template-editor-toggle").addEventListener("click", toggleTemplateEditor);
     el("summary-template-save").addEventListener("click", saveSummaryTemplate);
     el("summary-score-run").addEventListener("click", runSummaryAndScore);
@@ -762,12 +684,10 @@ const ArxivDailyWorkbench = (() => {
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();
-    runAudit();
-    loadDailyStatus({ silent: true });
-    runSearch();
+    startDailyAutomation({ silent: true });
   }
 
-  return { bind, runSearch, runAudit, runSummaryAndScore, loadDailyStatus, runDailyPipeline };
+  return { bind, runSearch, startDailyAutomation, runSummaryAndScore, loadDailyStatus };
 })();
 
 window.addEventListener("DOMContentLoaded", ArxivDailyWorkbench.bind);

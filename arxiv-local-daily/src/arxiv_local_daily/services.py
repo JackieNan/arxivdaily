@@ -357,21 +357,32 @@ def enrich_metadata_for_date_unified(
     oai_client: OaiPmhMetadataClient | None = None,
     limit: int | None = None,
     oai_max_pages: int = 1,
+    only_incomplete: bool = False,
 ) -> dict[str, Any]:
     paper_repo = PaperRepository(connection)
     enrich_repo = MetadataEnrichmentRepository(connection)
     id_client = metadata_client or ArxivMetadataClient()
     oai = oai_client or OaiPmhMetadataClient()
-    crawl_ids = paper_repo.list_daily_ids_for_date(date, limit=limit)
+    crawl_ids = (
+        paper_repo.list_metadata_pending_ids_for_date(date, limit=limit)
+        if only_incomplete
+        else paper_repo.list_daily_ids_for_date(date, limit=limit)
+    )
     with transaction(connection):
         run_id = enrich_repo.create_run(date=date)
 
     id_api_papers: list[PaperMetadata] = []
     oai_papers: list[PaperMetadata] = []
-    error: str | None = None
+    errors: list[str] = []
+    retryable_error = False
     try:
         if crawl_ids:
             id_api_papers = id_client.fetch_by_ids(crawl_ids)
+    except Exception as exc:
+        errors.append(f"id_api: {exc}")
+        retryable_error = retryable_error or _is_retryable_metadata_error(exc)
+
+    try:
         resumption_token: str | None = None
         pages_fetched = 0
         while pages_fetched < oai_max_pages:
@@ -386,7 +397,8 @@ def enrich_metadata_for_date_unified(
             if not resumption_token:
                 break
     except Exception as exc:
-        error = str(exc)
+        errors.append(f"oai: {exc}")
+        retryable_error = retryable_error or _is_retryable_metadata_error(exc)
 
     id_api_by_id = {paper.arxiv_id: paper for paper in id_api_papers}
     oai_by_id = {paper.arxiv_id: paper for paper in oai_papers}
@@ -395,9 +407,12 @@ def enrich_metadata_for_date_unified(
     oai_id_set = set(oai_by_id)
     merged_count = 0
     missing_after_merge: list[str] = []
+    retryable_after_merge: list[str] = []
     oai_missing = sorted(crawl_id_set - oai_id_set)
     oai_extra = sorted(oai_id_set - crawl_id_set)
     mismatch_count = 0
+    next_run_at = _utc_after(METADATA_RATE_LIMIT_BACKOFF_SECONDS) if retryable_error else None
+    error = "; ".join(errors) if errors else None
 
     with transaction(connection):
         for paper in id_api_papers:
@@ -408,13 +423,33 @@ def enrich_metadata_for_date_unified(
         for arxiv_id in crawl_ids:
             chosen = _choose_metadata(arxiv_id, id_api_by_id=id_api_by_id, oai_by_id=oai_by_id)
             if chosen is None:
-                missing_after_merge.append(arxiv_id)
-                paper_repo.mark_metadata_status(arxiv_id, "failed", error="not returned by metadata sources")
+                if retryable_error:
+                    retryable_after_merge.append(arxiv_id)
+                    paper_repo.mark_metadata_status(
+                        arxiv_id,
+                        "retryable",
+                        error=error or "metadata sources temporarily unavailable",
+                        next_run_at=next_run_at,
+                        increment_attempts=True,
+                    )
+                    report_type = "retryable_after_merge"
+                    details = {"sources_checked": ["id_api", "oai"], "error": error}
+                else:
+                    missing_after_merge.append(arxiv_id)
+                    paper_repo.mark_metadata_status(
+                        arxiv_id,
+                        "failed",
+                        error="not returned by metadata sources",
+                        next_run_at=_utc_after(METADATA_RATE_LIMIT_BACKOFF_SECONDS),
+                        increment_attempts=True,
+                    )
+                    report_type = "missing_after_merge"
+                    details = {"sources_checked": ["id_api", "oai"]}
                 enrich_repo.record_report(
                     run_id=run_id,
-                    report_type="missing_after_merge",
+                    report_type=report_type,
                     arxiv_id=arxiv_id,
-                    details={"sources_checked": ["id_api", "oai"]},
+                    details=details,
                 )
                 continue
             paper_repo.upsert_metadata(chosen)
@@ -445,7 +480,12 @@ def enrich_metadata_for_date_unified(
                 details={"meaning": "OAI returned a paper outside the crawled daily set"},
             )
 
-        status = "failed" if error and merged_count == 0 else "partial" if error or missing_after_merge else "complete"
+        if retryable_after_merge and merged_count == 0:
+            status = "retryable"
+        elif error and merged_count == 0:
+            status = "failed"
+        else:
+            status = "partial" if error or missing_after_merge or retryable_after_merge else "complete"
         enrich_repo.finish_run(
             run_id,
             status=status,
@@ -468,10 +508,96 @@ def enrich_metadata_for_date_unified(
         "oai_count": len(oai_id_set),
         "merged": merged_count,
         "missing_after_merge": len(missing_after_merge),
+        "retryable_after_merge": len(retryable_after_merge),
         "oai_missing_count": len(oai_missing),
         "oai_extra_count": len(oai_extra),
         "mismatch_count": mismatch_count,
         "error": error,
+        "next_run_at": next_run_at,
+    }
+
+
+def complete_metadata_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    batch_size: int = 100,
+    max_rounds: int | None = None,
+    oai_max_pages: int = 1,
+    metadata_client: ArxivMetadataClient | None = None,
+    oai_client: OaiPmhMetadataClient | None = None,
+    metadata_runner: Any | None = None,
+    sleep_fn: Any | None = None,
+) -> dict[str, Any]:
+    runner = metadata_runner or enrich_metadata_for_date_unified
+    rounds: list[dict[str, Any]] = []
+    round_count = 0
+
+    while max_rounds is None or round_count < max_rounds:
+        metadata = _daily_metadata_counts(connection, date=date)
+        if metadata["total"] == 0:
+            return {
+                "date": date,
+                "status": "no_papers",
+                "rounds": round_count,
+                "metadata": metadata,
+                "runs": rounds,
+            }
+        if metadata["complete"] == metadata["total"]:
+            return {
+                "date": date,
+                "status": "complete",
+                "rounds": round_count,
+                "metadata": metadata,
+                "runs": rounds,
+            }
+
+        ids = PaperRepository(connection).list_metadata_pending_ids_for_date(date, limit=batch_size)
+        if not ids:
+            return {
+                "date": date,
+                "status": "waiting",
+                "rounds": round_count,
+                "metadata": metadata,
+                "runs": rounds,
+            }
+
+        kwargs: dict[str, Any] = {
+            "date": date,
+            "limit": batch_size,
+            "oai_max_pages": oai_max_pages,
+        }
+        if runner is enrich_metadata_for_date_unified:
+            kwargs["only_incomplete"] = True
+        if metadata_client is not None:
+            kwargs["metadata_client"] = metadata_client
+        if oai_client is not None:
+            kwargs["oai_client"] = oai_client
+
+        result = runner(connection, **kwargs)
+        rounds.append(result)
+        round_count += 1
+        connection.commit()
+
+        if result.get("status") == "retryable" and result.get("merged", 0) == 0:
+            if sleep_fn is not None:
+                sleep_fn(METADATA_RATE_LIMIT_BACKOFF_SECONDS)
+            else:
+                return {
+                    "date": date,
+                    "status": "waiting",
+                    "rounds": round_count,
+                    "metadata": _daily_metadata_counts(connection, date=date),
+                    "runs": rounds,
+                    "next_run_at": result.get("next_run_at"),
+                }
+
+    return {
+        "date": date,
+        "status": "max_rounds",
+        "rounds": round_count,
+        "metadata": _daily_metadata_counts(connection, date=date),
+        "runs": rounds,
     }
 
 
