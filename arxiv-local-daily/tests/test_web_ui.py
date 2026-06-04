@@ -21,12 +21,20 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="discussion-panel"' in response.text
     assert 'id="search-detail"' in response.text
     assert 'id="operation-log"' in response.text
-    assert 'id="summary-template-create"' in response.text
+    assert 'id="template-editor-toggle"' in response.text
+    assert 'id="template-editor"' in response.text
+    assert 'id="summary-template-save"' in response.text
     assert 'id="summary-template-help"' in response.text
-    assert 'id="daily-status-run"' in response.text
-    assert 'id="daily-pipeline-run"' in response.text
+    assert 'id="summary-score-run"' in response.text
+    assert 'id="daily-run"' in response.text
     assert 'id="daily-summary"' in response.text
-    assert 'id="score-run"' in response.text
+    assert 'id="daily-note"' in response.text
+    assert 'id="summary-run"' not in response.text
+    assert 'id="score-run"' not in response.text
+    assert 'id="daily-status-run"' not in response.text
+    assert 'id="daily-pipeline-run"' not in response.text
+    assert 'id="daily-detail"' not in response.text
+    assert 'id="settings-detail"' not in response.text
     assert 'id="search-sort"' in response.text
     assert 'id="search-scope"' in response.text
     assert '<option value="daily" selected>当日</option>' in response.text
@@ -51,15 +59,24 @@ def test_static_web_assets_are_served(tmp_path):
     assert "readErrorMessage" in js_response.text
     assert "DEFAULT_SUMMARY_TEMPLATE" in js_response.text
     assert "loadSummaryTemplates" in js_response.text
-    assert "createDefaultTemplate" in js_response.text
+    assert "toggleTemplateEditor" in js_response.text
+    assert "saveSummaryTemplate" in js_response.text
+    assert "readTemplateEditorFields" in js_response.text
+    assert "runSummaryAndScore" in js_response.text
     assert "retryable" in js_response.text
     assert "next_run_at" in js_response.text
-    assert "runScore" in js_response.text
     assert "runDailyPipeline" in js_response.text
     assert "loadDailyStatus" in js_response.text
     assert "/api/daily/status/" in js_response.text
     assert "/api/daily/pipeline/run" in js_response.text
+    assert "/api/summaries/run" in js_response.text
     assert "/api/scores/run" in js_response.text
+    assert 'el("daily-run")' in js_response.text
+    assert 'el("daily-status-run")' not in js_response.text
+    assert 'setDetail("daily-detail"' not in js_response.text
+    assert 'setDetail("settings-detail"' not in js_response.text
+    assert "status.metadata.failed" in js_response.text
+    assert "status.crawl.complete_category_count" in js_response.text
     assert 'setDetail("operation-log", message);' in js_response.text
     assert 'detail ? `${message}\\n${detail}` : message' not in js_response.text
     assert "score-badge" in js_response.text
@@ -94,7 +111,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".top-actions button" in css_response.text
     assert ".daily-grid" in css_response.text
     assert ".daily-summary" in css_response.text
-    assert "#summary-template-create" in css_response.text
+    assert ".template-editor" in css_response.text
+    assert ".template-field-row" in css_response.text
+    assert ".summary-score-grid" in css_response.text
+    assert "#template-editor-toggle" in css_response.text
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css_response.text
     assert "grid-column: 1 / -1;" in css_response.text
     assert "minmax(150px, 1fr) minmax(92px" not in css_response.text

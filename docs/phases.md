@@ -321,3 +321,25 @@ Date baseline: 2026-06-03
   - SQLite reset confirmed papers, daily events, metadata runs/source records, summaries, scores, and crawl runs are 0; summary templates remain 2
   - local API smoke confirmed daily status is `not_started` and search returns `count=0`
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 17: Daily and Settings UI Semantics
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-04-arxiv-local-daily-phase-17-daily-settings-ui-semantics.md`
+- Scope completed:
+  - clarify that 155 is the all-category crawl coverage count, not the daily paper count
+  - show daily paper count from the daily metadata/paper total
+  - replace `Daily Status` and `Run Daily Pipeline` with one `Run Daily Update` action
+  - remove raw Daily and Settings detail panes from the main UI
+  - replace `Create Default Template` with a hidden second-level template editor
+  - allow template module labels, prompts, and enabled flags to be edited and saved
+  - combine manual summary and score execution into one `Run Summary + Score` action
+- Important decisions:
+  - Daily should be an operational summary, not a raw API inspector
+  - crawl coverage and paper count must be shown as separate concepts
+  - summary template editing belongs in a second-level panel because it is not a routine daily action
+- Verification:
+  - focused web UI tests passed
+  - `uv run pytest -v`: 109 passed, 1 warning
+  - browser smoke at 599px viewport confirmed no horizontal overflow, one Daily button, no raw Daily/Settings detail panes, and a working expandable template editor
+- Status: implemented on branch, not yet merged to `main`.

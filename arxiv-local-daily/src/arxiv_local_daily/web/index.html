@@ -59,7 +59,7 @@
           </div>
           <div id="audit-summary" class="metric-grid">
             <div><span>Status</span><strong>-</strong></div>
-            <div><span>Complete</span><strong>-</strong></div>
+            <div><span>Categories</span><strong>-</strong></div>
             <div><span>Retry</span><strong>-</strong></div>
           </div>
         </section>
@@ -69,7 +69,7 @@
             <h2>Settings</h2>
             <span class="badge">summary + score</span>
           </div>
-          <div class="action-grid settings-grid">
+          <div class="action-grid settings-grid summary-score-grid">
             <label>
               <span>Template name</span>
               <input id="summary-template" type="text" placeholder="daily_research">
@@ -78,12 +78,88 @@
               <span>Model</span>
               <input id="summary-model" type="text" value="local">
             </label>
-            <button id="summary-template-create" type="button">Create Default Template</button>
-            <button id="summary-run" type="button">Run Summary</button>
-            <button id="score-run" type="button">Run Score</button>
+            <button id="template-editor-toggle" class="secondary-button" type="button">Edit Template</button>
+            <button id="summary-score-run" type="button">Run Summary + Score</button>
           </div>
           <p id="summary-template-help" class="inline-status">No template loaded.</p>
-          <pre id="settings-detail" class="operation-detail" aria-live="polite">No summary or score run yet.</pre>
+          <section id="template-editor" class="template-editor" hidden>
+            <div class="template-editor-title">
+              <h3>Template Modules</h3>
+              <button id="summary-template-save" type="button">Save Template</button>
+            </div>
+            <div class="template-field-list">
+              <div class="template-field-row" data-template-key="keywords" data-template-type="keywords">
+                <label class="template-enabled">
+                  <input data-template-enabled type="checkbox" checked>
+                  <span>Enable</span>
+                </label>
+                <label>
+                  <span>Module</span>
+                  <input data-template-label type="text" value="关键词">
+                </label>
+                <label class="wide">
+                  <span>Prompt</span>
+                  <textarea data-template-prompt rows="2">提炼 5-8 个中文关键词。保留必要英文术语、模型名和 LaTeX 符号。</textarea>
+                </label>
+              </div>
+              <div class="template-field-row" data-template-key="tldr" data-template-type="short_sentence">
+                <label class="template-enabled">
+                  <input data-template-enabled type="checkbox" checked>
+                  <span>Enable</span>
+                </label>
+                <label>
+                  <span>Module</span>
+                  <input data-template-label type="text" value="一句话结论">
+                </label>
+                <label class="wide">
+                  <span>Prompt</span>
+                  <textarea data-template-prompt rows="2">用一句中文概括论文的核心贡献。</textarea>
+                </label>
+              </div>
+              <div class="template-field-row" data-template-key="method" data-template-type="bullets">
+                <label class="template-enabled">
+                  <input data-template-enabled type="checkbox" checked>
+                  <span>Enable</span>
+                </label>
+                <label>
+                  <span>Module</span>
+                  <input data-template-label type="text" value="核心方法">
+                </label>
+                <label class="wide">
+                  <span>Prompt</span>
+                  <textarea data-template-prompt rows="2">用 2-3 个中文要点解释核心方法。</textarea>
+                </label>
+              </div>
+              <div class="template-field-row" data-template-key="value" data-template-type="bullets">
+                <label class="template-enabled">
+                  <input data-template-enabled type="checkbox" checked>
+                  <span>Enable</span>
+                </label>
+                <label>
+                  <span>Module</span>
+                  <input data-template-label type="text" value="阅读价值">
+                </label>
+                <label class="wide">
+                  <span>Prompt</span>
+                  <textarea data-template-prompt rows="2">用中文说明为什么这篇论文值得阅读或暂时跳过。</textarea>
+                </label>
+              </div>
+              <div class="template-field-row" data-template-key="limits" data-template-type="bullets">
+                <label class="template-enabled">
+                  <input data-template-enabled type="checkbox" checked>
+                  <span>Enable</span>
+                </label>
+                <label>
+                  <span>Module</span>
+                  <input data-template-label type="text" value="局限">
+                </label>
+                <label class="wide">
+                  <span>Prompt</span>
+                  <textarea data-template-prompt rows="2">用中文列出明显局限、缺失证据或需要进一步确认的点。</textarea>
+                </label>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section id="daily-panel" class="panel control-panel">
@@ -92,16 +168,17 @@
             <span id="daily-state" class="badge">idle</span>
           </div>
           <div class="action-grid daily-grid">
-            <button id="daily-status-run" type="button">Daily Status</button>
-            <button id="daily-pipeline-run" type="button">Run Daily Pipeline</button>
+            <button id="daily-run" type="button">Run Daily Update</button>
           </div>
           <div id="daily-summary" class="metric-grid daily-summary">
             <div><span>Status</span><strong>-</strong></div>
+            <div><span>Papers</span><strong>-</strong></div>
+            <div><span>Categories</span><strong>-</strong></div>
             <div><span>Metadata</span><strong>-</strong></div>
             <div><span>Summary</span><strong>-</strong></div>
             <div><span>Score</span><strong>-</strong></div>
           </div>
-          <pre id="daily-detail" class="operation-detail" aria-live="polite">No daily status yet.</pre>
+          <p id="daily-note" class="inline-status">Daily status refreshes automatically after crawl, summary, and score work.</p>
         </section>
       </section>
 
