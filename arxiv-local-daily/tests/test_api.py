@@ -175,7 +175,7 @@ def test_post_crawl_run_schedules_auto_metadata_enrich(tmp_path):
     assert completion_calls == [{"date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1, "max_rounds": None}]
 
 
-def test_post_daily_automation_start_runs_crawl_then_metadata_completion(tmp_path):
+def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     calls: list[dict] = []
 
@@ -187,17 +187,47 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_completion(tmp_pat
         calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        batch_size: int,
+        max_rounds: int | None,
+    ):
+        calls.append(
+            {
+                "step": "ai",
+                "date": date,
+                "template_id": template_id,
+                "template_name": template_name,
+                "model": model,
+                "batch_size": batch_size,
+                "max_rounds": max_rounds,
+            }
+        )
+        return {"status": "complete", "summary": {"complete": 0}, "score": {"complete": 0}}
+
     client = TestClient(
         create_app(
             database_path=db_path,
             crawl_runner=fake_crawl_runner,
             metadata_completion_runner=fake_completion_runner,
+            ai_triage_completion_runner=fake_ai_runner,
         )
     )
 
     response = client.post(
         "/api/daily/automation/start",
-        json={"date": "2026-06-04", "categories": ["cs.AI"]},
+        json={
+            "date": "2026-06-04",
+            "categories": ["cs.AI"],
+            "template_name": "daily_research",
+            "model": "gpt-test",
+            "ai_batch_size": 7,
+        },
     )
 
     assert response.status_code == 200
@@ -205,6 +235,15 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_completion(tmp_pat
     assert calls == [
         {"step": "crawl", "date": "2026-06-04", "categories": ["cs.AI"]},
         {"step": "metadata", "date": "2026-06-04", "batch_size": 100, "oai_max_pages": 1},
+        {
+            "step": "ai",
+            "date": "2026-06-04",
+            "template_id": None,
+            "template_name": "daily_research",
+            "model": "gpt-test",
+            "batch_size": 7,
+            "max_rounds": None,
+        },
     ]
 
 
@@ -334,6 +373,58 @@ def test_post_daily_pipeline_run_uses_injected_runner(tmp_path):
             "force_summary": True,
             "force_score": True,
             "oai_max_pages": 2,
+        }
+    ]
+
+
+def test_post_ai_triage_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        limit: int | None,
+        force: bool,
+    ):
+        calls.append(
+            {
+                "date": date,
+                "template_id": template_id,
+                "template_name": template_name,
+                "model": model,
+                "limit": limit,
+                "force": force,
+            }
+        )
+        return {"requested": 2, "completed": 2, "failed": 0, "skipped": 0}
+
+    client = TestClient(create_app(database_path=db_path, ai_triage_runner=fake_ai_runner))
+
+    response = client.post(
+        "/api/ai-triage/run",
+        json={
+            "date": "2026-06-03",
+            "template_name": "daily_research",
+            "model": "gpt-test",
+            "force": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"requested": 2, "completed": 2, "failed": 0, "skipped": 0}
+    assert calls == [
+        {
+            "date": "2026-06-03",
+            "template_id": None,
+            "template_name": "daily_research",
+            "model": "gpt-test",
+            "limit": None,
+            "force": True,
         }
     ]
 

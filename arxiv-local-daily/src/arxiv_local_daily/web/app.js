@@ -314,7 +314,10 @@ const ArxivDailyWorkbench = (() => {
     try {
       const categories = splitList(el("crawl-categories").value);
       const body = { date: dateValue() };
+      const templateName = el("summary-template").value.trim();
       if (categories.length) body.categories = categories;
+      if (templateName) body.template_name = templateName;
+      body.model = el("summary-model").value.trim() || "local";
       const result = await api("/api/daily/automation/start", {
         method: "POST",
         body: JSON.stringify(body),
@@ -342,20 +345,10 @@ const ArxivDailyWorkbench = (() => {
     return body;
   }
 
-  async function runSummaryRequest() {
-    return api("/api/summaries/run", {
+  async function runAiTriageRequest() {
+    return api("/api/ai-triage/run", {
       method: "POST",
       body: JSON.stringify(summaryRequestBody()),
-    });
-  }
-
-  async function runScoreRequest() {
-    return api("/api/scores/run", {
-      method: "POST",
-      body: JSON.stringify({
-        date: dateValue(),
-        model: el("summary-model").value.trim() || "local",
-      }),
     });
   }
 
@@ -363,9 +356,10 @@ const ArxivDailyWorkbench = (() => {
     const button = el("summary-score-run");
     setBusy(button, true);
     try {
-      const summary = await runSummaryRequest();
-      const score = await runScoreRequest();
-      const message = `Summary ${summary.completed}/${summary.requested}; score ${score.completed}/${score.requested}`;
+      const triage = await runAiTriageRequest();
+      const message = triage.status === "not_configured"
+        ? "LLM API not configured"
+        : `AI triage ${triage.completed}/${triage.requested}; failed ${triage.failed}`;
       setDetail("summary-template-help", message);
       recordOperation(message);
       await loadDailyStatus({ silent: true });
@@ -434,7 +428,7 @@ const ArxivDailyWorkbench = (() => {
     const blockers = status.blockers && status.blockers.length
       ? `Blockers: ${status.blockers.join(", ")}.`
       : "No blockers.";
-    return `Papers ${status.metadata.total}; categories ${status.crawl.complete_category_count}/${status.crawl.expected_category_count}; metadata ${metadataCoverageText(status)}. ${blockers}`;
+    return `Papers ${status.metadata.total}; categories ${status.crawl.complete_category_count}/${status.crawl.expected_category_count}; metadata ${metadataCoverageText(status)}; summary ${status.summary.complete}/${status.summary.eligible}; score ${status.score.complete}/${status.score.eligible}. ${blockers}`;
   }
 
   function searchParams() {

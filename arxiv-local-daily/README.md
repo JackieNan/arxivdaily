@@ -143,7 +143,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-Run Crawl is the main ingestion path. After the crawl finishes, the API queues unified metadata enrichment in the background, checks the crawled daily paper IDs against ID API and OAI metadata sources, merges the most complete metadata into SQLite, and records missing/mismatch diagnostics. Summary and scoring controls live in Settings and run all eligible papers by default. Run Summary after metadata completion to populate Chinese keyword chips in the paper list.
+Daily Automation is the main ingestion path. It crawls the selected date when needed, keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
 
 The phase-one endpoints are:
 
@@ -159,6 +159,9 @@ The phase-one endpoints are:
 - `GET /api/papers/{arxiv_id}`
 - `GET /api/summary-templates`
 - `POST /api/summary-templates`
+- `POST /api/daily/automation/start`
+- `GET /api/daily/status/{date}`
+- `POST /api/ai-triage/run`
 - `POST /api/summaries/run`
 - `POST /api/scores/run`
 - `GET /api/papers/{arxiv_id}/summaries`
@@ -278,16 +281,34 @@ uv run --with-editable . arxiv-local-daily template import --file template.json
 
 The built-in default template created from the web Settings panel includes a `keywords` field. The paper list reads that field from the latest complete summary and displays it as Chinese keyword chips.
 
-## Run AI Summary Generation
+## Run AI Summary and Scoring
 
-The summary worker calls an OpenAI-compatible chat-completions endpoint. Configure it with environment variables:
+AI triage calls an OpenAI-compatible chat-completions endpoint. Configure it with environment variables:
 
 ```bash
 export ARXIV_DAILY_LLM_BASE_URL="http://localhost:11434/v1"
 export ARXIV_DAILY_LLM_API_KEY=""
 ```
 
-Then generate summaries for metadata-enriched papers from one daily crawl:
+For the default OpenAI API URL, set `ARXIV_DAILY_LLM_API_KEY`. For a custom local or proxy base URL, the app allows unauthenticated requests. If neither an API key nor a custom base URL is configured, automatic AI triage returns `not_configured` and does not write failed summary/score rows.
+
+Trigger the normal background flow from the web UI or API:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-03","template_name":"daily_research","model":"local-model"}'
+```
+
+You can also run a direct AI triage pass for metadata-enriched papers:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/ai-triage/run \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-03","template_name":"daily_research","model":"local-model"}'
+```
+
+The older summary-only CLI remains available for diagnostics:
 
 ```bash
 uv run --with-editable . arxiv-local-daily summarize \

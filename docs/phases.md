@@ -368,3 +368,28 @@ Date baseline: 2026-06-03
   - browser smoke at 342px viewport confirmed one Daily Automation panel, no old Crawl/Daily panels, and no horizontal overflow
   - live local smoke showed the old failed metadata set begin recovering: 56 complete, 144 retryable, 1771 still failed
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 19: LLM API Triage Automation
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-04-arxiv-local-daily-phase-19-llm-api-triage-automation.md`
+- Scope completed:
+  - add a combined AI triage prompt that returns one JSON object with `summary` and `score`
+  - parse combined LLM responses and persist the configurable Chinese summary/keywords plus reading-priority score
+  - add `generate_ai_triage_for_date` for one-pass manual AI triage over eligible papers
+  - add `complete_ai_triage_for_date` for batched completion until daily AI coverage is complete
+  - avoid writing failed summary/score rows when no LLM API is configured
+  - connect daily automation as crawl-if-needed -> metadata completion -> AI triage completion
+  - add `POST /api/ai-triage/run`
+  - make Settings `Run Summary + Score` use the combined AI triage endpoint
+  - pass the selected template and model into daily automation
+  - update README API/setup notes for OpenAI-compatible LLM configuration
+- Important decisions:
+  - summary and score should be generated in one LLM call per paper
+  - existing summary and score tables remain the source of truth
+  - AI triage is skipped as `not_configured` if the default OpenAI URL has no API key and no custom base URL is set
+  - PDF/full-text long-chain reading remains a later phase, separate from daily abstract-based triage
+- Verification:
+  - focused AI triage/API/web UI tests: 9 passed, 1 warning
+  - `uv run pytest -v`: 118 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

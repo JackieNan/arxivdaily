@@ -19,9 +19,11 @@ from arxiv_local_daily.repositories import (
     TemplateRepository,
 )
 from arxiv_local_daily.services import (
+    complete_ai_triage_for_date,
     complete_metadata_for_date,
     enrich_metadata_for_date,
     enrich_metadata_for_date_unified,
+    generate_ai_triage_for_date,
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
     get_daily_pipeline_status,
@@ -80,6 +82,15 @@ class ScoreRunRequest(BaseModel):
     force: bool = False
 
 
+class AiTriageRunRequest(BaseModel):
+    date: str
+    template_id: int | None = None
+    template_name: str | None = None
+    model: str = "local"
+    limit: int | None = None
+    force: bool = False
+
+
 class DailyPipelineRunRequest(BaseModel):
     date: str
     categories: list[str] | None = None
@@ -97,6 +108,10 @@ class DailyAutomationStartRequest(BaseModel):
     categories: list[str] | None = None
     batch_size: int = Field(default=100, ge=1, le=500)
     oai_max_pages: int = Field(default=1, ge=0, le=100)
+    template_id: int | None = None
+    template_name: str | None = None
+    model: str = "local"
+    ai_batch_size: int = Field(default=20, ge=1, le=100)
 
 
 CrawlerRunner = Callable[..., int]
@@ -106,8 +121,10 @@ UnifiedMetadataRunner = Callable[..., dict[str, Any]]
 OaiSyncRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
 ScoreRunner = Callable[..., dict[str, Any]]
+AiTriageRunner = Callable[..., dict[str, Any]]
 DailyPipelineRunner = Callable[..., dict[str, Any]]
 MetadataCompletionRunner = Callable[..., dict[str, Any]]
+AiTriageCompletionRunner = Callable[..., dict[str, Any]]
 
 
 def _run_oai_sync_background(
@@ -161,6 +178,7 @@ def _run_daily_automation_background(
     request: DailyAutomationStartRequest,
     crawl_runner: CrawlerRunner,
     metadata_completion_runner: MetadataCompletionRunner,
+    ai_triage_completion_runner: AiTriageCompletionRunner,
 ) -> None:
     connection = connect(db_path)
     initialize_schema(connection)
@@ -169,13 +187,23 @@ def _run_daily_automation_background(
         if crawl_report["status"] != "complete":
             crawl_runner(connection, date=request.date, categories=request.categories)
             connection.commit()
-        metadata_completion_runner(
+        metadata_result = metadata_completion_runner(
             connection,
             date=request.date,
             batch_size=request.batch_size,
             oai_max_pages=request.oai_max_pages,
             max_rounds=None,
         )
+        if metadata_result.get("status") == "complete":
+            ai_triage_completion_runner(
+                connection,
+                date=request.date,
+                template_id=request.template_id,
+                template_name=request.template_name,
+                model=request.model,
+                batch_size=request.ai_batch_size,
+                max_rounds=None,
+            )
     finally:
         connection.close()
 
@@ -189,8 +217,10 @@ def create_app(
     oai_sync_runner: OaiSyncRunner = run_oai_metadata_sync,
     summary_runner: SummaryRunner = generate_summaries_for_date,
     score_runner: ScoreRunner = score_papers_for_date,
+    ai_triage_runner: AiTriageRunner = generate_ai_triage_for_date,
     daily_pipeline_runner: DailyPipelineRunner = run_daily_pipeline,
     metadata_completion_runner: MetadataCompletionRunner = complete_metadata_for_date,
+    ai_triage_completion_runner: AiTriageCompletionRunner = complete_ai_triage_for_date,
     auto_enrich_after_crawl: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
@@ -310,6 +340,7 @@ def create_app(
             request=request,
             crawl_runner=crawl_runner,
             metadata_completion_runner=metadata_completion_runner,
+            ai_triage_completion_runner=ai_triage_completion_runner,
         )
         return {"date": request.date, "status": "queued"}
 
@@ -455,6 +486,24 @@ def create_app(
                 limit=request.limit,
                 force=request.force,
             )
+        finally:
+            connection.close()
+
+    @app.post("/api/ai-triage/run")
+    def run_ai_triage(request: AiTriageRunRequest):
+        connection = get_connection()
+        try:
+            return ai_triage_runner(
+                connection,
+                date=request.date,
+                template_id=request.template_id,
+                template_name=request.template_name,
+                model=request.model,
+                limit=request.limit,
+                force=request.force,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
             connection.close()
 

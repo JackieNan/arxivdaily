@@ -20,9 +20,12 @@ from arxiv_local_daily.repositories import (
 from arxiv_local_daily.summary import (
     LLMClient,
     OpenAICompatibleChatClient,
+    build_ai_triage_messages,
     build_score_messages,
     build_summary_messages,
     enabled_template_fields,
+    llm_api_configured,
+    parse_ai_triage_response,
     parse_score_response,
     parse_summary_response,
 )
@@ -745,6 +748,419 @@ def score_papers_for_date(
             )
 
     return {"requested": len(candidate_ids), "completed": completed, "failed": failed, "skipped": skipped}
+
+
+def _count_existing_complete_ai_triage_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int,
+    template_version: int,
+    model: str,
+    input_scope: str,
+    rubric_version: str,
+) -> int:
+    row = connection.execute(
+        """
+        SELECT COUNT(DISTINCT p.arxiv_id) AS count
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        WHERE e.date = ?
+          AND p.metadata_status = 'complete'
+          AND COALESCE(p.abstract, '') != ''
+          AND EXISTS (
+            SELECT 1
+            FROM summaries s
+            WHERE s.arxiv_id = p.arxiv_id
+              AND s.template_id = ?
+              AND s.template_version = ?
+              AND s.model = ?
+              AND s.input_scope = ?
+              AND s.status = 'complete'
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM paper_scores ps
+            WHERE ps.arxiv_id = p.arxiv_id
+              AND ps.model = ?
+              AND ps.rubric_version = ?
+              AND ps.status = 'complete'
+          )
+        """,
+        (date, template_id, template_version, model, input_scope, model, rubric_version),
+    ).fetchone()
+    return int(row["count"] or 0)
+
+
+def _list_ai_triage_candidate_ids_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int,
+    template_version: int,
+    model: str,
+    input_scope: str,
+    rubric_version: str,
+    limit: int | None,
+    force: bool,
+) -> list[str]:
+    limit_sql = "" if limit is None else "LIMIT ?"
+    params: tuple[Any, ...] = (
+        date,
+        1 if force else 0,
+        template_id,
+        template_version,
+        model,
+        input_scope,
+        model,
+        rubric_version,
+    )
+    if limit is not None:
+        params = (*params, limit)
+    rows = connection.execute(
+        f"""
+        SELECT DISTINCT p.arxiv_id
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        WHERE e.date = ?
+          AND p.metadata_status = 'complete'
+          AND COALESCE(p.abstract, '') != ''
+          AND (
+            ? = 1
+            OR NOT EXISTS (
+                SELECT 1
+                FROM summaries s
+                WHERE s.arxiv_id = p.arxiv_id
+                  AND s.template_id = ?
+                  AND s.template_version = ?
+                  AND s.model = ?
+                  AND s.input_scope = ?
+                  AND s.status = 'complete'
+            )
+            OR NOT EXISTS (
+                SELECT 1
+                FROM paper_scores ps
+                WHERE ps.arxiv_id = p.arxiv_id
+                  AND ps.model = ?
+                  AND ps.rubric_version = ?
+                  AND ps.status = 'complete'
+            )
+          )
+        ORDER BY p.arxiv_id
+        {limit_sql}
+        """,
+        params,
+    ).fetchall()
+    return [row["arxiv_id"] for row in rows]
+
+
+def _has_complete_summary(
+    connection: sqlite3.Connection,
+    *,
+    arxiv_id: str,
+    template_id: int,
+    template_version: int,
+    model: str,
+    input_scope: str,
+) -> bool:
+    row = connection.execute(
+        """
+        SELECT 1
+        FROM summaries
+        WHERE arxiv_id = ?
+          AND template_id = ?
+          AND template_version = ?
+          AND model = ?
+          AND input_scope = ?
+          AND status = 'complete'
+        LIMIT 1
+        """,
+        (arxiv_id, template_id, template_version, model, input_scope),
+    ).fetchone()
+    return row is not None
+
+
+def _has_complete_score(
+    connection: sqlite3.Connection,
+    *,
+    arxiv_id: str,
+    model: str,
+    rubric_version: str,
+) -> bool:
+    row = connection.execute(
+        """
+        SELECT 1
+        FROM paper_scores
+        WHERE arxiv_id = ?
+          AND model = ?
+          AND rubric_version = ?
+          AND status = 'complete'
+        LIMIT 1
+        """,
+        (arxiv_id, model, rubric_version),
+    ).fetchone()
+    return row is not None
+
+
+def generate_ai_triage_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int | None = None,
+    template_name: str | None = None,
+    model: str = "local",
+    limit: int | None = None,
+    force: bool = False,
+    rubric_version: str = "reading_priority_v1",
+    llm_client: LLMClient | None = None,
+) -> dict[str, Any]:
+    template_repo = TemplateRepository(connection)
+    template = template_repo.get_template(template_id=template_id, name=template_name)
+    if template is None:
+        raise ValueError("summary template not found")
+
+    summary_repo = SummaryRepository(connection)
+    score_repo = ScoreRepository(connection)
+    template_id_value = int(template["id"])
+    template_version = int(template["version"])
+    input_scope = template["input_scope"]
+    skipped = 0
+    if not force:
+        skipped = _count_existing_complete_ai_triage_for_date(
+            connection,
+            date=date,
+            template_id=template_id_value,
+            template_version=template_version,
+            model=model,
+            input_scope=input_scope,
+            rubric_version=rubric_version,
+        )
+    candidate_ids = _list_ai_triage_candidate_ids_for_date(
+        connection,
+        date=date,
+        template_id=template_id_value,
+        template_version=template_version,
+        model=model,
+        input_scope=input_scope,
+        rubric_version=rubric_version,
+        limit=limit,
+        force=force,
+    )
+    if llm_client is None and not llm_api_configured():
+        return {
+            "requested": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": skipped,
+            "template_id": template_id_value,
+            "template_version": template_version,
+            "rubric_version": rubric_version,
+            "status": "not_configured",
+        }
+    client = llm_client or OpenAICompatibleChatClient.from_env()
+    expected_keys = [field["key"] for field in enabled_template_fields(template)]
+    completed = 0
+    failed = 0
+
+    for arxiv_id in candidate_ids:
+        paper = summary_repo.get_paper_for_summary(arxiv_id)
+        if paper is None:
+            skipped += 1
+            continue
+        try:
+            response_text = client.complete(
+                model=model,
+                messages=build_ai_triage_messages(paper=paper, template=template),
+            )
+            content = parse_ai_triage_response(response_text, expected_summary_keys=expected_keys)
+            with transaction(connection):
+                summary_repo.upsert_summary(
+                    arxiv_id=arxiv_id,
+                    template_id=template_id_value,
+                    template_version=template_version,
+                    model=model,
+                    language=template["language"],
+                    input_scope=input_scope,
+                    content=content["summary"],
+                    status="complete",
+                )
+                score_repo.upsert_score(
+                    arxiv_id=arxiv_id,
+                    model=model,
+                    rubric_version=rubric_version,
+                    content=content["score"],
+                    status="complete",
+                )
+            completed += 1
+        except Exception as exc:
+            error = str(exc)
+            failed += 1
+            with transaction(connection):
+                if force or not _has_complete_summary(
+                    connection,
+                    arxiv_id=arxiv_id,
+                    template_id=template_id_value,
+                    template_version=template_version,
+                    model=model,
+                    input_scope=input_scope,
+                ):
+                    summary_repo.upsert_summary(
+                        arxiv_id=arxiv_id,
+                        template_id=template_id_value,
+                        template_version=template_version,
+                        model=model,
+                        language=template["language"],
+                        input_scope=input_scope,
+                        content={"error": error},
+                        status="failed",
+                    )
+                if force or not _has_complete_score(
+                    connection,
+                    arxiv_id=arxiv_id,
+                    model=model,
+                    rubric_version=rubric_version,
+                ):
+                    score_repo.upsert_score(
+                        arxiv_id=arxiv_id,
+                        model=model,
+                        rubric_version=rubric_version,
+                        content={
+                            "score_total": 0,
+                            "score_relevance": 0,
+                            "score_novelty": 0,
+                            "score_technical_depth": 0,
+                            "score_evidence": 0,
+                            "score_actionability": 0,
+                            "recommended_action": "skip",
+                            "rationale": error,
+                        },
+                        status="failed",
+                    )
+
+    return {
+        "requested": len(candidate_ids),
+        "completed": completed,
+        "failed": failed,
+        "skipped": skipped,
+        "template_id": template_id_value,
+        "template_version": template_version,
+        "rubric_version": rubric_version,
+    }
+
+
+def complete_ai_triage_for_date(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    template_id: int | None = None,
+    template_name: str | None = None,
+    model: str = "local",
+    batch_size: int = 20,
+    max_rounds: int | None = None,
+    rubric_version: str = "reading_priority_v1",
+    llm_client: LLMClient | None = None,
+) -> dict[str, Any]:
+    runs: list[dict[str, Any]] = []
+    round_count = 0
+    if llm_client is None and not llm_api_configured():
+        return {
+            "date": date,
+            "status": "not_configured",
+            "rounds": 0,
+            "summary": _summary_coverage(
+                connection,
+                date=date,
+                template_id=template_id,
+                template_name=template_name,
+                model=model,
+            ),
+            "score": _score_coverage(connection, date=date, model=model, rubric_version=rubric_version),
+            "runs": runs,
+        }
+    if TemplateRepository(connection).get_template(template_id=template_id, name=template_name) is None:
+        return {
+            "date": date,
+            "status": "template_missing",
+            "rounds": 0,
+            "summary": _summary_coverage(
+                connection,
+                date=date,
+                template_id=template_id,
+                template_name=template_name,
+                model=model,
+            ),
+            "score": _score_coverage(connection, date=date, model=model, rubric_version=rubric_version),
+            "runs": runs,
+        }
+
+    while max_rounds is None or round_count < max_rounds:
+        summary = _summary_coverage(
+            connection,
+            date=date,
+            template_id=template_id,
+            template_name=template_name,
+            model=model,
+        )
+        score = _score_coverage(connection, date=date, model=model, rubric_version=rubric_version)
+        if summary["eligible"] == summary["complete"] and score["eligible"] == score["complete"]:
+            return {
+                "date": date,
+                "status": "complete",
+                "rounds": round_count,
+                "summary": summary,
+                "score": score,
+                "runs": runs,
+            }
+
+        result = generate_ai_triage_for_date(
+            connection,
+            date=date,
+            template_id=template_id,
+            template_name=template_name,
+            model=model,
+            limit=batch_size,
+            force=False,
+            rubric_version=rubric_version,
+            llm_client=llm_client,
+        )
+        runs.append(result)
+        round_count += 1
+
+        if result["requested"] == 0:
+            break
+        if result["completed"] == 0 and result["failed"] > 0:
+            return {
+                "date": date,
+                "status": "failed",
+                "rounds": round_count,
+                "summary": _summary_coverage(
+                    connection,
+                    date=date,
+                    template_id=template_id,
+                    template_name=template_name,
+                    model=model,
+                ),
+                "score": _score_coverage(connection, date=date, model=model, rubric_version=rubric_version),
+                "runs": runs,
+            }
+
+    summary = _summary_coverage(
+        connection,
+        date=date,
+        template_id=template_id,
+        template_name=template_name,
+        model=model,
+    )
+    score = _score_coverage(connection, date=date, model=model, rubric_version=rubric_version)
+    status = "complete" if summary["eligible"] == summary["complete"] and score["eligible"] == score["complete"] else "max_rounds"
+    return {
+        "date": date,
+        "status": status,
+        "rounds": round_count,
+        "summary": summary,
+        "score": score,
+        "runs": runs,
+    }
 
 
 def _daily_metadata_counts(connection: sqlite3.Connection, *, date: str) -> dict[str, int]:
