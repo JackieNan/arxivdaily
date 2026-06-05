@@ -247,6 +247,70 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
     ]
 
 
+def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        calls.append({"step": "crawl", "date": date, "categories": categories})
+        return 43
+
+    def fake_historical_runner(
+        connection,
+        *,
+        date: str,
+        categories: list[str] | None,
+        max_pages: int,
+    ):
+        calls.append({"step": "historical", "date": date, "categories": categories, "max_pages": max_pages})
+        return {"status": "complete", "papers_upserted": 2}
+
+    def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata", "date": date})
+        return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
+
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        batch_size: int,
+        max_rounds: int | None,
+    ):
+        calls.append({"step": "ai", "date": date, "model": model})
+        return {"status": "complete", "summary": {"complete": 0}, "score": {"complete": 0}}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_crawl_runner,
+            historical_crawl_runner=fake_historical_runner,
+            metadata_completion_runner=fake_completion_runner,
+            ai_triage_completion_runner=fake_ai_runner,
+        )
+    )
+
+    response = client.post(
+        "/api/daily/automation/start",
+        json={
+            "date": "2026-06-03",
+            "categories": ["cs.AI"],
+            "crawl_mode": "historical",
+            "historical_max_pages": 9,
+            "model": "gpt-test",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"date": "2026-06-03", "status": "queued"}
+    assert calls == [
+        {"step": "historical", "date": "2026-06-03", "categories": ["cs.AI"], "max_pages": 9},
+        {"step": "ai", "date": "2026-06-03", "model": "gpt-test"},
+    ]
+
+
 def test_get_daily_status_reports_summary_coverage(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     connection = connect(db_path)

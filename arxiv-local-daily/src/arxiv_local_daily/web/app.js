@@ -318,6 +318,7 @@ const ArxivDailyWorkbench = (() => {
       if (categories.length) body.categories = categories;
       if (templateName) body.template_name = templateName;
       body.model = el("summary-model").value.trim() || "local";
+      body.crawl_mode = dateValue() < todayIso() ? "historical" : "daily";
       const result = await api("/api/daily/automation/start", {
         method: "POST",
         body: JSON.stringify(body),

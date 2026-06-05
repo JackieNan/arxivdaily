@@ -393,3 +393,26 @@ Date baseline: 2026-06-03
   - focused AI triage/API/web UI tests: 9 passed, 1 warning
   - `uv run pytest -v`: 118 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 20: Date-Aware and Historical Crawl
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-05-arxiv-local-daily-phase-20-date-aware-historical-crawl.md`
+- Scope completed:
+  - parse the real arXiv announcement date from `/list/{category}/new` headings
+  - record `date_mismatch` sources when the current `/new` page date does not match the selected date
+  - avoid writing wrong-date daily events on date mismatch
+  - add `run_historical_metadata_crawl` backed by OAI-PMH `ListRecords`
+  - store historical date records as metadata-complete papers with `event_type = historical`
+  - add `crawl_mode` and `historical_max_pages` to daily automation requests
+  - route historical automation through OAI metadata instead of `/new` plus metadata completion
+  - make the web UI send `crawl_mode = historical` for selected dates earlier than the browser's current date
+  - add `historical` to the search event filter and correct event filter values for `cross-list` and `replacement`
+- Important decisions:
+  - `/new` is only a current arXiv announcement page, not a historical date endpoint
+  - historical collection is metadata-based and should not be labeled as daily `new`, `cross-list`, or `replacement`
+  - if today's local date is ahead of arXiv's current page, the app waits instead of storing yesterday under today
+- Verification:
+  - focused date-aware crawl, historical crawl, API, and web UI tests: 26 passed, 1 warning
+  - `uv run pytest -v`: 122 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

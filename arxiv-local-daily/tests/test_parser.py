@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from arxiv_local_daily.crawler.parser import parse_daily_listing, parse_daily_listing_count
+from arxiv_local_daily.crawler.parser import parse_daily_listing, parse_daily_listing_count, parse_daily_listing_date
 
 
 def test_parse_daily_listing_extracts_all_event_types():
@@ -66,6 +66,12 @@ def test_parse_daily_listing_count_returns_none_when_total_is_absent():
     html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
 
     assert parse_daily_listing_count(html) is None
+
+
+def test_parse_daily_listing_date_extracts_page_announcement_date():
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+
+    assert parse_daily_listing_date(html) == "2026-06-03"
 
 
 def test_parse_daily_listing_handles_single_articles_dl_with_section_headings():

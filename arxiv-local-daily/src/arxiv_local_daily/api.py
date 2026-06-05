@@ -29,6 +29,7 @@ from arxiv_local_daily.services import (
     get_daily_pipeline_status,
     retry_incomplete_crawl_categories_for_date,
     run_daily_pipeline,
+    run_historical_metadata_crawl,
     run_oai_metadata_sync,
     score_papers_for_date,
 )
@@ -106,8 +107,10 @@ class DailyPipelineRunRequest(BaseModel):
 class DailyAutomationStartRequest(BaseModel):
     date: str
     categories: list[str] | None = None
+    crawl_mode: str = "daily"
     batch_size: int = Field(default=100, ge=1, le=500)
     oai_max_pages: int = Field(default=1, ge=0, le=100)
+    historical_max_pages: int = Field(default=100, ge=1, le=500)
     template_id: int | None = None
     template_name: str | None = None
     model: str = "local"
@@ -115,6 +118,7 @@ class DailyAutomationStartRequest(BaseModel):
 
 
 CrawlerRunner = Callable[..., int]
+HistoricalCrawlRunner = Callable[..., dict[str, Any]]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
 UnifiedMetadataRunner = Callable[..., dict[str, Any]]
@@ -177,24 +181,35 @@ def _run_daily_automation_background(
     db_path: Path,
     request: DailyAutomationStartRequest,
     crawl_runner: CrawlerRunner,
+    historical_crawl_runner: HistoricalCrawlRunner,
     metadata_completion_runner: MetadataCompletionRunner,
     ai_triage_completion_runner: AiTriageCompletionRunner,
 ) -> None:
     connection = connect(db_path)
     initialize_schema(connection)
     try:
-        crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
-        if crawl_report["status"] != "complete":
-            crawl_runner(connection, date=request.date, categories=request.categories)
-            connection.commit()
-        metadata_result = metadata_completion_runner(
-            connection,
-            date=request.date,
-            batch_size=request.batch_size,
-            oai_max_pages=request.oai_max_pages,
-            max_rounds=None,
-        )
-        if metadata_result.get("status") == "complete":
+        if request.crawl_mode == "historical":
+            crawl_result = historical_crawl_runner(
+                connection,
+                date=request.date,
+                categories=request.categories,
+                max_pages=request.historical_max_pages,
+            )
+            metadata_complete = crawl_result.get("status") == "complete"
+        else:
+            crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
+            if crawl_report["status"] != "complete":
+                crawl_runner(connection, date=request.date, categories=request.categories)
+                connection.commit()
+            metadata_result = metadata_completion_runner(
+                connection,
+                date=request.date,
+                batch_size=request.batch_size,
+                oai_max_pages=request.oai_max_pages,
+                max_rounds=None,
+            )
+            metadata_complete = metadata_result.get("status") == "complete"
+        if metadata_complete:
             ai_triage_completion_runner(
                 connection,
                 date=request.date,
@@ -211,6 +226,7 @@ def _run_daily_automation_background(
 def create_app(
     database_path: Path | str | None = None,
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
+    historical_crawl_runner: HistoricalCrawlRunner = run_historical_metadata_crawl,
     crawl_retry_runner: CrawlRetryRunner = retry_incomplete_crawl_categories_for_date,
     metadata_runner: MetadataRunner = enrich_metadata_for_date,
     unified_metadata_runner: UnifiedMetadataRunner = enrich_metadata_for_date_unified,
@@ -339,6 +355,7 @@ def create_app(
             db_path=db_path,
             request=request,
             crawl_runner=crawl_runner,
+            historical_crawl_runner=historical_crawl_runner,
             metadata_completion_runner=metadata_completion_runner,
             ai_triage_completion_runner=ai_triage_completion_runner,
         )

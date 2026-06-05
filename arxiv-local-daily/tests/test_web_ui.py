@@ -31,6 +31,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="automation-summary"' in response.text
     assert 'id="automation-note"' in response.text
     assert "then runs AI summary and score" in response.text
+    assert '<option value="historical">historical</option>' in response.text
     assert 'id="crawl-run"' not in response.text
     assert 'id="crawl-audit"' not in response.text
     assert 'id="crawl-retry"' not in response.text
@@ -79,6 +80,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert "/api/scores/run" not in js_response.text
     assert "body.template_name = templateName" in js_response.text
     assert 'body.model = el("summary-model").value.trim() || "local";' in js_response.text
+    assert 'body.crawl_mode = dateValue() < todayIso() ? "historical" : "daily";' in js_response.text
     assert 'el("automation-refresh")' in js_response.text
     assert 'el("crawl-run")' not in js_response.text
     assert 'el("daily-status-run")' not in js_response.text

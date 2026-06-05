@@ -143,7 +143,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-Daily Automation is the main ingestion path. It crawls the selected date when needed, keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
+Daily Automation is the main ingestion path. For the current arXiv daily page it crawls `/list/{category}/new`, verifies the page's real arXiv announcement date before writing events, keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. For earlier selected dates, the web UI sends `crawl_mode=historical`; the app uses OAI-PMH metadata for that date and stores events as `historical` rather than pretending they are daily `new`, `cross-list`, or `replacement` listings. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
 
 The phase-one endpoints are:
 
@@ -181,6 +181,18 @@ uv run --with-editable . arxiv-local-daily crawl --date 2026-06-03
 ```
 
 The all-category command discovers categories from arXiv's taxonomy page, then fetches `/list/{category}/new` for every discovered category. A crawl run is `complete` when all requested category pages fetch successfully; it is `partial` when one or more requested sources fail.
+
+The live `/new` crawler validates the announcement date shown in the arXiv page headings. If arXiv has not yet advanced to the selected date, the source is recorded as `date_mismatch` and no papers are stored under the wrong date.
+
+Historical dates are collected through Daily Automation in `historical` mode:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-03","crawl_mode":"historical","categories":["cs.AI"],"historical_max_pages":100}'
+```
+
+Historical records come from OAI-PMH metadata for the selected date. They are metadata-complete when stored and use `event_type="historical"`.
 
 The crawl trigger API accepts the same date/category shape:
 

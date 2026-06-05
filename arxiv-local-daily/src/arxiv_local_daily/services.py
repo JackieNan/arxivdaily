@@ -8,6 +8,7 @@ from arxiv_local_daily.crawler.oai import OaiPmhMetadataClient
 from arxiv_local_daily.crawler.parser import parse_daily_listing, parse_daily_listing_count
 from arxiv_local_daily.db import transaction
 from arxiv_local_daily.models import CrawlSourceInput, PaperMetadata
+from arxiv_local_daily.models import ParsedDailyEvent
 from arxiv_local_daily.repositories import (
     CrawlRepository,
     MetadataEnrichmentRepository,
@@ -308,6 +309,126 @@ def run_oai_metadata_sync(
             resumption_token=resumption_token,
         )
     return result
+
+
+def _matches_categories(metadata: PaperMetadata, categories: list[str] | None) -> bool:
+    if not categories:
+        return True
+    paper_categories = set(metadata.categories)
+    if metadata.primary_category:
+        paper_categories.add(metadata.primary_category)
+    return bool(paper_categories.intersection(categories))
+
+
+def _historical_listing_category(metadata: PaperMetadata, categories: list[str] | None) -> str:
+    if categories:
+        for category in categories:
+            if category == metadata.primary_category or category in metadata.categories:
+                return category
+    return metadata.primary_category or (metadata.categories[0] if metadata.categories else "historical")
+
+
+def run_historical_metadata_crawl(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    categories: list[str] | None = None,
+    max_pages: int = 100,
+    oai_client: OaiPmhMetadataClient | None = None,
+) -> dict[str, Any]:
+    client = oai_client or OaiPmhMetadataClient()
+    crawl_repo = CrawlRepository(connection)
+    paper_repo = PaperRepository(connection)
+    with transaction(connection):
+        run_id = crawl_repo.create_run(date=date, mode="historical-oai", status="running")
+
+    records_seen = 0
+    papers_upserted = 0
+    pages_fetched = 0
+    complete_list_size: int | None = None
+    resumption_token: str | None = None
+    source_url = f"oai-pmh:{date}"
+
+    try:
+        while pages_fetched < max_pages:
+            page = client.fetch_list_records(
+                from_date=date,
+                until_date=date,
+                resumption_token=resumption_token,
+            )
+            pages_fetched += 1
+            records_seen += len(page.papers)
+            if page.complete_list_size is not None:
+                complete_list_size = page.complete_list_size
+            with transaction(connection):
+                for paper in page.papers:
+                    if not _matches_categories(paper, categories):
+                        continue
+                    paper_repo.upsert_metadata(paper)
+                    paper_repo.upsert_daily_event(
+                        date=date,
+                        event=ParsedDailyEvent(
+                            arxiv_id=paper.arxiv_id,
+                            event_type="historical",
+                            listing_category=_historical_listing_category(paper, categories),
+                            primary_category=paper.primary_category,
+                            title=paper.title,
+                            source_url=source_url,
+                        ),
+                    )
+                    papers_upserted += 1
+            resumption_token = page.resumption_token
+            if not resumption_token:
+                break
+    except Exception as exc:
+        error = str(exc)
+        with transaction(connection):
+            crawl_repo.record_source(
+                run_id=run_id,
+                category="historical",
+                event_section="historical",
+                url=source_url,
+                status="failed",
+                http_status=None,
+                parsed_count=papers_upserted,
+                expected_count=complete_list_size,
+                error=error,
+            )
+            crawl_repo.finish_run(run_id, status="partial", summary_counts={"historical": papers_upserted})
+        return {
+            "run_id": run_id,
+            "status": "partial",
+            "records_seen": records_seen,
+            "papers_upserted": papers_upserted,
+            "pages_fetched": pages_fetched,
+            "resumption_token": resumption_token,
+            "error": error,
+        }
+
+    status = "partial" if resumption_token else "complete"
+    error = f"historical OAI crawl reached max_pages={max_pages}" if resumption_token else None
+    with transaction(connection):
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="historical",
+            event_section="historical",
+            url=source_url,
+            status=status,
+            http_status=200,
+            parsed_count=papers_upserted,
+            expected_count=complete_list_size,
+            error=error,
+        )
+        crawl_repo.finish_run(run_id, status=status, summary_counts={"historical": papers_upserted})
+    return {
+        "run_id": run_id,
+        "status": status,
+        "records_seen": records_seen,
+        "papers_upserted": papers_upserted,
+        "pages_fetched": pages_fetched,
+        "resumption_token": resumption_token,
+        "error": error,
+    }
 
 
 def _metadata_completeness_score(metadata: PaperMetadata) -> int:

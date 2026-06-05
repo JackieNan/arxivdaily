@@ -5,6 +5,33 @@ from arxiv_local_daily.models import ParsedDailyEvent
 
 CATEGORY_RE = re.compile(r"\(([a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9-]+)?)\)")
 COUNT_RE = re.compile(r"\bof\s+([0-9,]+)\s+entr(?:y|ies)\b", re.IGNORECASE)
+LISTING_DATE_RE = re.compile(r"\bfor\s+(?:[A-Za-z]+,\s+)?([0-9]{1,2})\s+([A-Za-z]+)\s+([0-9]{4})\b")
+MONTHS = {
+    "jan": "01",
+    "january": "01",
+    "feb": "02",
+    "february": "02",
+    "mar": "03",
+    "march": "03",
+    "apr": "04",
+    "april": "04",
+    "may": "05",
+    "jun": "06",
+    "june": "06",
+    "jul": "07",
+    "july": "07",
+    "aug": "08",
+    "august": "08",
+    "sep": "09",
+    "sept": "09",
+    "september": "09",
+    "oct": "10",
+    "october": "10",
+    "nov": "11",
+    "november": "11",
+    "dec": "12",
+    "december": "12",
+}
 
 
 def _heading_to_event_type(text: str) -> str | None:
@@ -96,3 +123,20 @@ def parse_daily_listing_count(html: str) -> int | None:
         if match:
             totals.append(int(match.group(1).replace(",", "")))
     return sum(totals) if totals else None
+
+
+def parse_daily_listing_date(html: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+    dates: list[str] = []
+    for heading in soup.select("h2, h3, h4"):
+        text = heading.get_text(" ", strip=True)
+        match = LISTING_DATE_RE.search(text)
+        if not match:
+            continue
+        day, month_text, year = match.groups()
+        month = MONTHS.get(month_text.lower())
+        if month is None:
+            continue
+        dates.append(f"{year}-{month}-{int(day):02d}")
+    unique_dates = sorted(dict.fromkeys(dates))
+    return unique_dates[0] if len(unique_dates) == 1 else None

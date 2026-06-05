@@ -1,6 +1,7 @@
 import sqlite3
 
 from arxiv_local_daily.crawler.http import ArxivHttpClient
+from arxiv_local_daily.crawler.parser import parse_daily_listing_date
 from arxiv_local_daily.crawler.taxonomy import parse_category_taxonomy
 from arxiv_local_daily.models import CrawlSourceInput
 from arxiv_local_daily.services import ingest_daily_crawl_sources
@@ -52,6 +53,23 @@ def run_live_daily_crawl(
             )
             continue
         if response.status_code == 200:
+            listing_date = parse_daily_listing_date(response.text)
+            if listing_date != date:
+                error = (
+                    f"arXiv listing date {listing_date or 'unknown'} does not match requested date {date}; "
+                    "not storing this /new page under the wrong date"
+                )
+                sources.append(
+                    CrawlSourceInput(
+                        category=category,
+                        url=url,
+                        status="date_mismatch",
+                        http_status=response.status_code,
+                        html=None,
+                        error=error,
+                    )
+                )
+                continue
             sources.append(
                 CrawlSourceInput(
                     category=category,

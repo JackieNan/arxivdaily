@@ -61,7 +61,7 @@
             <div><span>Summary</span><strong>-</strong></div>
             <div><span>Score</span><strong>-</strong></div>
           </div>
-          <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score for eligible papers.</p>
+          <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Past dates use historical OAI metadata.</p>
         </section>
 
         <section id="settings-panel" class="panel control-panel">
@@ -191,8 +191,9 @@
               <select id="search-event">
                 <option value="">Any</option>
                 <option value="new">new</option>
-                <option value="cross">cross</option>
-                <option value="replace">replace</option>
+                <option value="cross-list">cross-list</option>
+                <option value="replacement">replacement</option>
+                <option value="historical">historical</option>
               </select>
             </label>
             <label>

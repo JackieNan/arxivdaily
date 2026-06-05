@@ -113,6 +113,36 @@ def test_run_live_daily_crawl_fetches_each_requested_category(db):
     ]
 
 
+def test_run_live_daily_crawl_rejects_listing_date_mismatch(db):
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=html)
+
+    client = ArxivHttpClient(
+        transport=httpx.MockTransport(handler),
+        retry_sleep_seconds=0,
+    )
+
+    run_id = run_live_daily_crawl(
+        db,
+        date="2026-06-04",
+        categories=["cs.AI"],
+        http_client=client,
+    )
+
+    run = db.execute("SELECT * FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
+    source = db.execute("SELECT * FROM crawl_run_sources WHERE run_id = ?", (run_id,)).fetchone()
+    event_count = db.execute("SELECT COUNT(*) AS count FROM daily_events").fetchone()["count"]
+
+    assert run["status"] == "partial"
+    assert source["status"] == "date_mismatch"
+    assert source["parsed_count"] == 0
+    assert "2026-06-03" in source["error"]
+    assert "2026-06-04" in source["error"]
+    assert event_count == 0
+
+
 def test_run_live_daily_crawl_records_failed_http_source(db):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503, text="temporary")
