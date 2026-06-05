@@ -401,30 +401,49 @@ label span {
 
 .automation-progress {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  gap: 5px;
 }
 
-.progress-segment {
-  height: 5px;
+.progress-track {
+  overflow: hidden;
+  height: 7px;
+  border: 1px solid #d3d9e1;
   border-radius: 999px;
-  background: #d8dee6;
+  background: #eef2f6;
 }
 
-.progress-segment.is-running {
+.progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #3d7ea6;
+  transition: width 180ms ease, background 180ms ease;
+}
+
+.progress-fill.is-idle {
+  background: transparent;
+}
+
+.progress-fill.is-running {
   background: #3d7ea6;
 }
 
-.progress-segment.is-waiting {
+.progress-fill.is-waiting {
   background: #d69e2e;
 }
 
-.progress-segment.is-complete {
+.progress-fill.is-complete {
   background: var(--good);
 }
 
-.progress-segment.is-failed {
+.progress-fill.is-failed {
   background: var(--bad);
+}
+
+.progress-label {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .metric-grid div {

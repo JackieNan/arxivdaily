@@ -75,6 +75,24 @@ def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dic
     }
 
 
+def _paper_count_totals(category_reports: list[dict[str, Any]]) -> dict[str, int]:
+    parsed = 0
+    expected = 0
+    missing = 0
+    for category in category_reports:
+        parsed_count = int(category["parsed_count"] or 0)
+        expected_count = category["expected_count"]
+        expected_count = int(expected_count) if expected_count is not None else parsed_count
+        parsed += parsed_count
+        expected += expected_count
+        missing += max(expected_count - parsed_count, 0)
+    return {
+        "parsed_paper_count": parsed,
+        "expected_paper_count": expected,
+        "missing_paper_count": missing,
+    }
+
+
 def build_crawl_completeness_report(
     connection: sqlite3.Connection,
     *,
@@ -115,6 +133,7 @@ def build_crawl_completeness_report(
     ]
     retry_categories = _unique_sorted(failed_categories + incomplete_categories + missing_categories)
     run_ids = sorted({int(row["run_id"]) for row in source_rows})
+    paper_counts = _paper_count_totals(category_reports)
 
     if waiting_categories:
         status = "waiting"
@@ -134,6 +153,7 @@ def build_crawl_completeness_report(
         "expected_category_count": len(expected) if expected else len(attempted_categories),
         "attempted_category_count": len(attempted_categories),
         "complete_category_count": len(complete_categories),
+        **paper_counts,
         "failed_category_count": len(failed_categories),
         "incomplete_category_count": len(incomplete_categories),
         "waiting_category_count": len(waiting_categories),

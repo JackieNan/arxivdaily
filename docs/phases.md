@@ -478,3 +478,18 @@ Date baseline: 2026-06-03
   - focused Phase 23 tests: 57 passed, 1 warning
   - `uv run pytest -v`: 136 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 24: Date Navigation and Paper Crawl Progress Fix
+
+- Branch: `codex/phase-7-web-ui`
+- Scope completed:
+  - fix previous/next date navigation by shifting ISO dates with `Date.UTC`, avoiding local timezone conversion from `YYYY-MM-DDT00:00:00`
+  - add crawl audit paper totals: `parsed_paper_count`, `expected_paper_count`, and `missing_paper_count`
+  - replace the three-segment automation progress indicator with one paper crawl progress bar
+  - render filled progress in color and leave the remaining track empty
+- Important decisions:
+  - the progress bar should describe only paper listing crawl progress, not metadata/summary/score state
+  - category progress and metadata/AI status remain available in the summary metrics and detail text
+- Verification:
+  - focused crawl audit and web UI tests: 11 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

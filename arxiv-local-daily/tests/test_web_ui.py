@@ -15,6 +15,8 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="date-prev"' in response.text
     assert 'id="date-next"' in response.text
     assert 'id="automation-progress"' in response.text
+    assert 'id="paper-crawl-progress-fill"' in response.text
+    assert 'id="paper-crawl-progress-label"' in response.text
     assert 'id="top-actions"' in response.text
     assert 'id="settings-panel"' in response.text
     assert 'id="crawl-panel"' not in response.text
@@ -91,13 +93,22 @@ def test_static_web_assets_are_served(tmp_path):
     assert "body.template_name = templateName" in js_response.text
     assert 'body.model = el("summary-model").value.trim() || "local";' in js_response.text
     assert 'body.crawl_mode = "auto";' in js_response.text
+    assert "shiftIsoDate" in js_response.text
+    assert 'new Date(Date.UTC(year, month - 1, day + delta))' in js_response.text
+    assert 'new Date(`${dateValue()}T00:00:00`)' not in js_response.text
     assert "changeDateByDays" in js_response.text
     assert 'el("date-prev")' in js_response.text
     assert 'el("date-next")' in js_response.text
     assert 'params.set("page", String(state.searchPage));' in js_response.text
     assert 'params.set("page_size", String(state.pageSize));' in js_response.text
     assert "renderPagination" in js_response.text
-    assert "renderAutomationProgress" in js_response.text
+    assert "renderPaperCrawlProgress" in js_response.text
+    assert "renderAutomationProgress" not in js_response.text
+    assert "metadataProgressState" not in js_response.text
+    assert "aiProgressState" not in js_response.text
+    assert "status.crawl.expected_paper_count" in js_response.text
+    assert 'el("paper-crawl-progress-fill")' in js_response.text
+    assert "fill.style.width" in js_response.text
     assert "paperLink" in js_response.text
     assert 'el("automation-refresh")' in js_response.text
     assert 'el("crawl-run")' not in js_response.text
@@ -141,7 +152,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".automation-grid" in css_response.text
     assert ".automation-summary" in css_response.text
     assert ".automation-progress" in css_response.text
-    assert ".progress-segment" in css_response.text
+    assert ".progress-track" in css_response.text
+    assert ".progress-fill" in css_response.text
+    assert ".progress-label" in css_response.text
+    assert ".progress-segment" not in css_response.text
     assert ".pagination-controls" in css_response.text
     assert ".source-link" in css_response.text
     assert ".template-editor" in css_response.text

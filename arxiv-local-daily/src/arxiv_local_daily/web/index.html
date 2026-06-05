@@ -65,10 +65,11 @@
             <div><span>Summary</span><strong>-</strong></div>
             <div><span>Score</span><strong>-</strong></div>
           </div>
-          <div id="automation-progress" class="automation-progress" aria-label="Daily automation progress">
-            <span class="progress-segment" data-step="crawl"></span>
-            <span class="progress-segment" data-step="metadata"></span>
-            <span class="progress-segment" data-step="ai"></span>
+          <div id="automation-progress" class="automation-progress" aria-label="Paper crawl progress">
+            <div class="progress-track">
+              <span id="paper-crawl-progress-fill" class="progress-fill"></span>
+            </div>
+            <span id="paper-crawl-progress-label" class="progress-label">Papers -</span>
           </div>
           <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Dates are resolved against arXiv's current listing date.</p>
         </section>

@@ -313,10 +313,14 @@ const ArxivDailyWorkbench = (() => {
     return el("date-input").value || todayIso();
   }
 
+  function shiftIsoDate(value, delta) {
+    const [year, month, day] = value.split("-").map(Number);
+    const shifted = new Date(Date.UTC(year, month - 1, day + delta));
+    return shifted.toISOString().slice(0, 10);
+  }
+
   function changeDateByDays(delta) {
-    const current = new Date(`${dateValue()}T00:00:00`);
-    current.setDate(current.getDate() + delta);
-    el("date-input").value = current.toISOString().slice(0, 10);
+    el("date-input").value = shiftIsoDate(dateValue(), delta);
     state.searchPage = 1;
     startDailyAutomation();
   }
@@ -431,42 +435,29 @@ const ArxivDailyWorkbench = (() => {
     setDetail("automation-note", dailyStatusText(status));
     el("automation-state").textContent = status.status;
     el("automation-state").className = `badge status-${status.status}`;
-    renderAutomationProgress(status);
+    renderPaperCrawlProgress(status);
   }
 
-  function renderAutomationProgress(status) {
-    const segments = el("automation-progress").querySelectorAll(".progress-segment");
-    const states = [
-      crawlProgressState(status),
-      metadataProgressState(status),
-      aiProgressState(status),
-    ];
-    segments.forEach((segment, index) => {
-      segment.className = `progress-segment is-${states[index]}`;
-    });
+  function renderPaperCrawlProgress(status) {
+    const parsed = Number(status.crawl.parsed_paper_count || 0);
+    const expected = Number(status.crawl.expected_paper_count || 0);
+    const denominator = expected > 0 ? expected : parsed;
+    const percent = denominator > 0 ? Math.min(Math.round((parsed / denominator) * 100), 100) : 0;
+    const fill = el("paper-crawl-progress-fill");
+    fill.style.width = `${percent}%`;
+    fill.className = `progress-fill is-${paperCrawlProgressState(status, parsed, expected)}`;
+    el("paper-crawl-progress-label").textContent = expected > 0
+      ? `Papers ${parsed}/${expected}`
+      : `Papers ${parsed}`;
   }
 
-  function crawlProgressState(status) {
+  function paperCrawlProgressState(status, parsed, expected) {
+    if (!parsed && !expected) {
+      return status.crawl.status === "waiting" ? "waiting" : "idle";
+    }
     if (status.crawl.status === "complete") return "complete";
     if (status.crawl.status === "waiting") return "waiting";
     if (status.crawl.status === "partial") return "failed";
-    if (status.crawl.attempted_category_count > 0) return "running";
-    return "idle";
-  }
-
-  function metadataProgressState(status) {
-    if (!status.metadata.total) return "idle";
-    if (status.metadata.complete === status.metadata.total) return "complete";
-    if (status.metadata.retryable) return "waiting";
-    if (status.metadata.failed) return "failed";
-    return "running";
-  }
-
-  function aiProgressState(status) {
-    const eligible = Math.max(status.summary.eligible || 0, status.score.eligible || 0);
-    if (!eligible) return "idle";
-    if (status.summary.complete === status.summary.eligible && status.score.complete === status.score.eligible) return "complete";
-    if (status.summary.failed || status.score.failed) return "failed";
     return "running";
   }
 
