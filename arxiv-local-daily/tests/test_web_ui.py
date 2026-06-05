@@ -15,8 +15,12 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="date-prev"' in response.text
     assert 'id="date-next"' in response.text
     assert 'id="automation-progress"' in response.text
-    assert 'id="paper-crawl-progress-fill"' in response.text
-    assert 'id="paper-crawl-progress-label"' in response.text
+    assert 'id="paper-progress-fill"' in response.text
+    assert 'id="paper-progress-label"' in response.text
+    assert 'id="metadata-progress-fill"' in response.text
+    assert 'id="metadata-progress-label"' in response.text
+    assert 'id="ai-progress-fill"' in response.text
+    assert 'id="ai-progress-label"' in response.text
     assert 'id="top-actions"' in response.text
     assert 'id="settings-panel"' in response.text
     assert 'id="crawl-panel"' not in response.text
@@ -33,6 +37,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="summary-template-help"' in response.text
     assert 'id="summary-score-run"' in response.text
     assert 'id="automation-refresh"' in response.text
+    assert "Refresh Status" in response.text
     assert 'id="automation-summary"' in response.text
     assert 'id="automation-note"' in response.text
     assert "then runs AI summary and score" in response.text
@@ -102,12 +107,18 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'params.set("page", String(state.searchPage));' in js_response.text
     assert 'params.set("page_size", String(state.pageSize));' in js_response.text
     assert "renderPagination" in js_response.text
-    assert "renderPaperCrawlProgress" in js_response.text
+    assert "renderPipelineProgress" in js_response.text
+    assert "renderProgressBar" in js_response.text
+    assert "metadataProgressCounts" in js_response.text
+    assert "aiProgressCounts" in js_response.text
+    assert "renderPaperCrawlProgress" not in js_response.text
     assert "renderAutomationProgress" not in js_response.text
     assert "metadataProgressState" not in js_response.text
     assert "aiProgressState" not in js_response.text
     assert "status.crawl.expected_paper_count" in js_response.text
-    assert 'el("paper-crawl-progress-fill")' in js_response.text
+    assert '"paper-progress-fill"' in js_response.text
+    assert '"metadata-progress-fill"' in js_response.text
+    assert '"ai-progress-fill"' in js_response.text
     assert "fill.style.width" in js_response.text
     assert "paperLink" in js_response.text
     assert 'el("automation-refresh")' in js_response.text
@@ -153,6 +164,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".automation-summary" in css_response.text
     assert ".automation-progress" in css_response.text
     assert ".progress-track" in css_response.text
+    assert ".progress-row" in css_response.text
+    assert ".progress-name" in css_response.text
     assert ".progress-fill" in css_response.text
     assert ".progress-label" in css_response.text
     assert ".progress-segment" not in css_response.text

@@ -75,22 +75,26 @@ def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dic
     }
 
 
-def _paper_count_totals(category_reports: list[dict[str, Any]]) -> dict[str, int]:
-    parsed = 0
+def _distinct_daily_paper_count(connection: sqlite3.Connection, *, date: str) -> int:
+    row = connection.execute(
+        """
+        SELECT COUNT(DISTINCT arxiv_id) AS count
+        FROM daily_events
+        WHERE date = ?
+        """,
+        (date,),
+    ).fetchone()
+    return int(row["count"] or 0)
+
+
+def _listing_expected_count(category_reports: list[dict[str, Any]]) -> int:
     expected = 0
-    missing = 0
     for category in category_reports:
         parsed_count = int(category["parsed_count"] or 0)
         expected_count = category["expected_count"]
         expected_count = int(expected_count) if expected_count is not None else parsed_count
-        parsed += parsed_count
         expected += expected_count
-        missing += max(expected_count - parsed_count, 0)
-    return {
-        "parsed_paper_count": parsed,
-        "expected_paper_count": expected,
-        "missing_paper_count": missing,
-    }
+    return expected
 
 
 def build_crawl_completeness_report(
@@ -133,7 +137,7 @@ def build_crawl_completeness_report(
     ]
     retry_categories = _unique_sorted(failed_categories + incomplete_categories + missing_categories)
     run_ids = sorted({int(row["run_id"]) for row in source_rows})
-    paper_counts = _paper_count_totals(category_reports)
+    parsed_paper_count = _distinct_daily_paper_count(connection, date=date) if source_rows else 0
 
     if waiting_categories:
         status = "waiting"
@@ -143,6 +147,12 @@ def build_crawl_completeness_report(
         status = "partial"
     else:
         status = "complete"
+    listing_expected_count = _listing_expected_count(category_reports)
+    expected_paper_count = (
+        parsed_paper_count
+        if status == "complete"
+        else max(parsed_paper_count, listing_expected_count)
+    )
 
     return {
         "date": date,
@@ -153,7 +163,9 @@ def build_crawl_completeness_report(
         "expected_category_count": len(expected) if expected else len(attempted_categories),
         "attempted_category_count": len(attempted_categories),
         "complete_category_count": len(complete_categories),
-        **paper_counts,
+        "parsed_paper_count": parsed_paper_count,
+        "expected_paper_count": expected_paper_count,
+        "missing_paper_count": max(expected_paper_count - parsed_paper_count, 0),
         "failed_category_count": len(failed_categories),
         "incomplete_category_count": len(incomplete_categories),
         "waiting_category_count": len(waiting_categories),

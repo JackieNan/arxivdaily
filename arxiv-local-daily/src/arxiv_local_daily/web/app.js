@@ -435,23 +435,51 @@ const ArxivDailyWorkbench = (() => {
     setDetail("automation-note", dailyStatusText(status));
     el("automation-state").textContent = status.status;
     el("automation-state").className = `badge status-${status.status}`;
-    renderPaperCrawlProgress(status);
+    renderPipelineProgress(status);
   }
 
-  function renderPaperCrawlProgress(status) {
+  function renderPipelineProgress(status) {
     const parsed = Number(status.crawl.parsed_paper_count || 0);
     const expected = Number(status.crawl.expected_paper_count || 0);
-    const denominator = expected > 0 ? expected : parsed;
-    const percent = denominator > 0 ? Math.min(Math.round((parsed / denominator) * 100), 100) : 0;
-    const fill = el("paper-crawl-progress-fill");
-    fill.style.width = `${percent}%`;
-    fill.className = `progress-fill is-${paperCrawlProgressState(status, parsed, expected)}`;
-    el("paper-crawl-progress-label").textContent = expected > 0
-      ? `Papers ${parsed}/${expected}`
-      : `Papers ${parsed}`;
+    renderProgressBar({
+      fillId: "paper-progress-fill",
+      labelId: "paper-progress-label",
+      label: "Papers",
+      complete: parsed,
+      total: expected > 0 ? expected : parsed,
+      state: paperProgressState(status, parsed, expected),
+    });
+
+    const metadata = metadataProgressCounts(status);
+    renderProgressBar({
+      fillId: "metadata-progress-fill",
+      labelId: "metadata-progress-label",
+      label: "Metadata",
+      complete: metadata.complete,
+      total: metadata.total,
+      state: metadata.state,
+    });
+
+    const ai = aiProgressCounts(status);
+    renderProgressBar({
+      fillId: "ai-progress-fill",
+      labelId: "ai-progress-label",
+      label: "AI",
+      complete: ai.complete,
+      total: ai.total,
+      state: ai.state,
+    });
   }
 
-  function paperCrawlProgressState(status, parsed, expected) {
+  function renderProgressBar({ fillId, labelId, label, complete, total, state }) {
+    const percent = total > 0 ? Math.min(Math.round((complete / total) * 100), 100) : 0;
+    const fill = el(fillId);
+    fill.style.width = `${percent}%`;
+    fill.className = `progress-fill is-${state}`;
+    el(labelId).textContent = total > 0 ? `${label} ${complete}/${total}` : `${label} -`;
+  }
+
+  function paperProgressState(status, parsed, expected) {
     if (!parsed && !expected) {
       return status.crawl.status === "waiting" ? "waiting" : "idle";
     }
@@ -459,6 +487,28 @@ const ArxivDailyWorkbench = (() => {
     if (status.crawl.status === "waiting") return "waiting";
     if (status.crawl.status === "partial") return "failed";
     return "running";
+  }
+
+  function metadataProgressCounts(status) {
+    const total = Number(status.metadata.total || 0);
+    const complete = Number(status.metadata.complete || 0);
+    if (!total) return { complete, total, state: "idle" };
+    if (complete === total) return { complete, total, state: "complete" };
+    if (Number(status.metadata.failed || 0)) return { complete, total, state: "failed" };
+    if (Number(status.metadata.retryable || 0)) return { complete, total, state: "waiting" };
+    return { complete, total, state: "running" };
+  }
+
+  function aiProgressCounts(status) {
+    const total = Math.max(Number(status.summary.eligible || 0), Number(status.score.eligible || 0));
+    const complete = Math.min(Number(status.summary.complete || 0), Number(status.score.complete || 0));
+    if (!total) return { complete: 0, total: 0, state: status.summary.template_missing ? "waiting" : "idle" };
+    if (complete === total) return { complete, total, state: "complete" };
+    if (Number(status.summary.failed || 0) || Number(status.score.failed || 0)) {
+      return { complete, total, state: "failed" };
+    }
+    if (status.summary.template_missing) return { complete, total, state: "waiting" };
+    return { complete, total, state: "running" };
   }
 
   function metadataCoverageText(status, options = {}) {

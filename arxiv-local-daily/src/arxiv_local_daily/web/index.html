@@ -55,7 +55,7 @@
               <span>Categories</span>
               <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
             </label>
-            <button id="automation-refresh" class="secondary-button" type="button">Refresh</button>
+            <button id="automation-refresh" class="secondary-button" type="button">Refresh Status</button>
           </div>
           <div id="automation-summary" class="metric-grid automation-summary">
             <div><span>Status</span><strong>-</strong></div>
@@ -65,11 +65,28 @@
             <div><span>Summary</span><strong>-</strong></div>
             <div><span>Score</span><strong>-</strong></div>
           </div>
-          <div id="automation-progress" class="automation-progress" aria-label="Paper crawl progress">
-            <div class="progress-track">
-              <span id="paper-crawl-progress-fill" class="progress-fill"></span>
+          <div id="automation-progress" class="automation-progress" aria-label="Daily pipeline progress">
+            <div class="progress-row" data-progress="papers">
+              <span class="progress-name">Papers</span>
+              <div class="progress-track">
+                <span id="paper-progress-fill" class="progress-fill"></span>
+              </div>
+              <span id="paper-progress-label" class="progress-label">0/0</span>
             </div>
-            <span id="paper-crawl-progress-label" class="progress-label">Papers -</span>
+            <div class="progress-row" data-progress="metadata">
+              <span class="progress-name">Metadata</span>
+              <div class="progress-track">
+                <span id="metadata-progress-fill" class="progress-fill"></span>
+              </div>
+              <span id="metadata-progress-label" class="progress-label">0/0</span>
+            </div>
+            <div class="progress-row" data-progress="ai">
+              <span class="progress-name">AI</span>
+              <div class="progress-track">
+                <span id="ai-progress-fill" class="progress-fill"></span>
+              </div>
+              <span id="ai-progress-label" class="progress-label">0/0</span>
+            </div>
           </div>
           <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Dates are resolved against arXiv's current listing date.</p>
         </section>

@@ -89,8 +89,8 @@ def test_crawl_completeness_report_marks_all_complete_sources_complete(db):
     assert report["status"] == "complete"
     assert report["expected_category_count"] == 2
     assert report["complete_category_count"] == 2
-    assert report["parsed_paper_count"] == 6
-    assert report["expected_paper_count"] == 6
+    assert report["parsed_paper_count"] == 3
+    assert report["expected_paper_count"] == 3
     assert report["missing_paper_count"] == 0
     assert report["failed_category_count"] == 0
     assert report["missing_category_count"] == 0

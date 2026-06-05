@@ -493,3 +493,22 @@ Date baseline: 2026-06-03
 - Verification:
   - focused crawl audit and web UI tests: 11 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 25: Three-Stage Pipeline Progress
+
+- Branch: `codex/phase-7-web-ui`
+- Scope completed:
+  - clarify the automation button by renaming it to `Refresh Status`
+  - keep `Refresh Status` scoped to status/list refresh only; it does not start a new crawl
+  - replace the single paper progress row with three progress rows: Papers, Metadata, and AI
+  - render Papers from distinct arXiv IDs, avoiding double-counted category listing entries
+  - render Metadata from `metadata.complete / metadata.total`
+  - render AI from per-paper summary/score triage coverage using `min(summary.complete, score.complete) / max(summary.eligible, score.eligible)`
+- Important decisions:
+  - listing crawl currently parses each category page as a batch; exact per-paper crawl streaming is a later crawler refactor
+  - arXiv category counts are listing entries, so completed paper counts should normalize to distinct arXiv IDs
+  - metadata and AI progress already advance through batch loops and can be monitored through status polling
+  - empty tracks show no known total, colored fill shows current phase progress/state
+- Verification:
+  - focused web UI tests: 2 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.
