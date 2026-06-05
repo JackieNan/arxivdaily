@@ -4,6 +4,9 @@ const ArxivDailyWorkbench = (() => {
     selectedCard: null,
     templates: [],
     automationTimer: null,
+    searchPage: 1,
+    pageSize: 50,
+    pageMeta: null,
   };
 
   const AUTO_AUTOMATION_INTERVAL_MS = 10 * 60 * 1000;
@@ -310,6 +313,14 @@ const ArxivDailyWorkbench = (() => {
     return el("date-input").value || todayIso();
   }
 
+  function changeDateByDays(delta) {
+    const current = new Date(`${dateValue()}T00:00:00`);
+    current.setDate(current.getDate() + delta);
+    el("date-input").value = current.toISOString().slice(0, 10);
+    state.searchPage = 1;
+    startDailyAutomation();
+  }
+
   async function startDailyAutomation(options = {}) {
     const silent = options.silent === true;
     const button = silent ? null : el("automation-refresh");
@@ -321,7 +332,7 @@ const ArxivDailyWorkbench = (() => {
       if (categories.length) body.categories = categories;
       if (templateName) body.template_name = templateName;
       body.model = el("summary-model").value.trim() || "local";
-      body.crawl_mode = dateValue() < todayIso() ? "historical" : "daily";
+      body.crawl_mode = "auto";
       const result = await api("/api/daily/automation/start", {
         method: "POST",
         body: JSON.stringify(body),
@@ -420,6 +431,43 @@ const ArxivDailyWorkbench = (() => {
     setDetail("automation-note", dailyStatusText(status));
     el("automation-state").textContent = status.status;
     el("automation-state").className = `badge status-${status.status}`;
+    renderAutomationProgress(status);
+  }
+
+  function renderAutomationProgress(status) {
+    const segments = el("automation-progress").querySelectorAll(".progress-segment");
+    const states = [
+      crawlProgressState(status),
+      metadataProgressState(status),
+      aiProgressState(status),
+    ];
+    segments.forEach((segment, index) => {
+      segment.className = `progress-segment is-${states[index]}`;
+    });
+  }
+
+  function crawlProgressState(status) {
+    if (status.crawl.status === "complete") return "complete";
+    if (status.crawl.status === "waiting") return "waiting";
+    if (status.crawl.status === "partial") return "failed";
+    if (status.crawl.attempted_category_count > 0) return "running";
+    return "idle";
+  }
+
+  function metadataProgressState(status) {
+    if (!status.metadata.total) return "idle";
+    if (status.metadata.complete === status.metadata.total) return "complete";
+    if (status.metadata.retryable) return "waiting";
+    if (status.metadata.failed) return "failed";
+    return "running";
+  }
+
+  function aiProgressState(status) {
+    const eligible = Math.max(status.summary.eligible || 0, status.score.eligible || 0);
+    if (!eligible) return "idle";
+    if (status.summary.complete === status.summary.eligible && status.score.complete === status.score.eligible) return "complete";
+    if (status.summary.failed || status.score.failed) return "failed";
+    return "running";
   }
 
   function metadataCoverageText(status, options = {}) {
@@ -448,6 +496,8 @@ const ArxivDailyWorkbench = (() => {
     if (el("search-scope").value === "daily") {
       params.set("date", dateValue());
     }
+    params.set("page", String(state.searchPage));
+    params.set("page_size", String(state.pageSize));
     for (const [key, value] of pairs) {
       if (value) params.set(key, value);
     }
@@ -465,13 +515,16 @@ const ArxivDailyWorkbench = (() => {
     try {
       const data = await api(`/api/search/papers?${searchParams().toString()}`);
       renderResults(data.papers);
-      el("result-count").textContent = String(data.count);
+      state.pageMeta = data;
+      renderPagination(data);
+      el("result-count").textContent = `${data.count}/${data.total ?? data.count}`;
       const scope = searchScopeLabel();
-      const detail = data.count
-        ? `${scope}: showing ${data.count} papers.`
+      const total = data.total ?? data.count;
+      const detail = total
+        ? `${scope}: page ${data.page || 1}/${data.total_pages || 1}, showing ${data.count} of ${total} papers.`
         : `${scope}: no matching papers with current filters.`;
       setDetail("search-detail", detail);
-      if (!silent) recordOperation(`Search returned ${data.count} papers (${scope})`, detail);
+      if (!silent) recordOperation(`Search returned ${total} papers (${scope})`, detail);
     } catch (error) {
       setDetail("search-detail", `Search failed:\n${error.message}`);
       el("paper-results").innerHTML = `<p class="empty-state">Search failed: ${escapeHtml(error.message)}</p>`;
@@ -479,6 +532,22 @@ const ArxivDailyWorkbench = (() => {
     } finally {
       setBusy(button, false);
     }
+  }
+
+  function renderPagination(data) {
+    const page = data.page || 1;
+    const totalPages = data.total_pages || 1;
+    const total = data.total ?? data.count ?? 0;
+    el("pagination-label").textContent = `Page ${page} / ${totalPages} · ${total} papers`;
+    el("pagination-prev").disabled = !data.has_prev;
+    el("pagination-next").disabled = !data.has_next;
+  }
+
+  function changeSearchPage(delta) {
+    const meta = state.pageMeta || { page: state.searchPage, total_pages: 1 };
+    const totalPages = meta.total_pages || 1;
+    state.searchPage = Math.min(Math.max((meta.page || state.searchPage) + delta, 1), totalPages);
+    runSearch();
   }
 
   function renderResults(papers) {
@@ -489,8 +558,9 @@ const ArxivDailyWorkbench = (() => {
       return;
     }
     for (const paper of papers) {
-      const card = document.createElement("button");
-      card.type = "button";
+      const card = document.createElement("article");
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
       card.className = "paper-card";
       const score = paper.score && paper.score.status === "complete" ? paper.score : null;
       const keywords = Array.isArray(paper.summary_keywords) ? paper.summary_keywords : [];
@@ -506,6 +576,7 @@ const ArxivDailyWorkbench = (() => {
           <span class="tag">${escapeHtml(paper.arxiv_id)}</span>
           <span class="tag">${escapeHtml(paper.metadata_status)}</span>
           <span class="tag">${escapeHtml(paper.latest_date || "-")}</span>
+          <a class="source-link" href="${escapeHtml(paperLink(paper))}" target="_blank" rel="noopener" data-source-link>arXiv</a>
         </div>
         <div class="tag-row">
           ${(paper.listing_categories || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
@@ -515,6 +586,11 @@ const ArxivDailyWorkbench = (() => {
           : `<p class="paper-card-hint">${escapeHtml(keywordHint)}</p>`}
       `;
       card.addEventListener("click", () => selectPaper(paper.arxiv_id, card));
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") selectPaper(paper.arxiv_id, card);
+      });
+      const link = card.querySelector("[data-source-link]");
+      if (link) link.addEventListener("click", (event) => event.stopPropagation());
       container.appendChild(card);
     }
     typesetMath(container);
@@ -555,6 +631,7 @@ const ArxivDailyWorkbench = (() => {
       <div class="tag-row compact-tags">
         <span class="tag">${escapeHtml(paper.arxiv_id)}</span>
         <span class="tag">${escapeHtml(paper.metadata_status)}</span>
+        <a class="source-link" href="${escapeHtml(paperLink(paper))}" target="_blank" rel="noopener">arXiv original</a>
         ${(paper.categories || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
       </div>
       ${metadataNotice(paper)}
@@ -577,6 +654,10 @@ const ArxivDailyWorkbench = (() => {
       </div>
     `;
     typesetMath(el("paper-content"));
+  }
+
+  function paperLink(paper) {
+    return paper.abs_url || `https://arxiv.org/abs/${paper.arxiv_id}`;
   }
 
   function metadataNotice(paper) {
@@ -663,22 +744,38 @@ const ArxivDailyWorkbench = (() => {
 
   function bind() {
     el("date-input").value = todayIso();
+    el("date-prev").addEventListener("click", () => changeDateByDays(-1));
+    el("date-next").addEventListener("click", () => changeDateByDays(1));
     el("automation-refresh").addEventListener("click", () => {
       loadDailyStatus();
       runSearch({ silent: true });
     });
-    el("date-input").addEventListener("change", () => startDailyAutomation());
+    el("date-input").addEventListener("change", () => {
+      state.searchPage = 1;
+      startDailyAutomation();
+    });
     el("crawl-categories").addEventListener("keydown", (event) => {
       if (event.key === "Enter") startDailyAutomation();
     });
     el("template-editor-toggle").addEventListener("click", toggleTemplateEditor);
     el("summary-template-save").addEventListener("click", saveSummaryTemplate);
     el("summary-score-run").addEventListener("click", runSummaryAndScore);
-    el("search-run").addEventListener("click", runSearch);
-    el("search-scope").addEventListener("change", runSearch);
+    el("search-run").addEventListener("click", () => {
+      state.searchPage = 1;
+      runSearch();
+    });
+    el("search-scope").addEventListener("change", () => {
+      state.searchPage = 1;
+      runSearch();
+    });
+    el("pagination-prev").addEventListener("click", () => changeSearchPage(-1));
+    el("pagination-next").addEventListener("click", () => changeSearchPage(1));
     el("discussion-add").addEventListener("click", addDiscussion);
     el("search-query").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") runSearch();
+      if (event.key === "Enter") {
+        state.searchPage = 1;
+        runSearch();
+      }
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();

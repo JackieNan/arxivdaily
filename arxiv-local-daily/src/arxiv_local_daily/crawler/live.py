@@ -26,6 +26,28 @@ def build_category_taxonomy_url(base_url: str) -> str:
     return f"{base_url.rstrip('/')}/category_taxonomy"
 
 
+def fetch_current_arxiv_listing_date(
+    *,
+    http_client: ArxivHttpClient | None = None,
+    categories: list[str] | None = None,
+    base_url: str = "https://arxiv.org",
+) -> str | None:
+    client = http_client or ArxivHttpClient()
+    probe_categories = categories if categories else ["cs.AI"]
+    for category in probe_categories:
+        url = build_daily_listing_url(base_url, category)
+        try:
+            response = client.fetch_text(url)
+        except Exception:
+            continue
+        if response.status_code != 200:
+            continue
+        listing_date = parse_daily_listing_date(response.text)
+        if listing_date is not None:
+            return listing_date
+    return None
+
+
 def discover_categories(http_client: ArxivHttpClient, *, base_url: str = "https://arxiv.org") -> list[str]:
     response = http_client.fetch_text(build_category_taxonomy_url(base_url))
     if response.status_code != 200:

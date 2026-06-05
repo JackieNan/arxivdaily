@@ -117,6 +117,40 @@ def test_search_papers_filters_by_daily_event_and_status_fields(db):
     assert wrong_category == []
 
 
+def test_search_papers_supports_offset_pagination_and_total_count(db):
+    paper_repo = PaperRepository(db)
+    for index in range(1, 5):
+        arxiv_id = f"2606.0000{index}"
+        paper_repo.upsert_daily_event(
+            date="2026-06-03",
+            event=ParsedDailyEvent(
+                arxiv_id=arxiv_id,
+                event_type="new",
+                listing_category="cs.AI",
+                primary_category="cs.AI",
+                source_url="https://arxiv.org/list/cs.AI/new",
+            ),
+        )
+        paper_repo.upsert_metadata(
+            PaperMetadata(
+                arxiv_id=arxiv_id,
+                title=f"Pagination Paper {index}",
+                abstract="pagination test",
+                authors=["Ada Lovelace"],
+                primary_category="cs.AI",
+                categories=["cs.AI"],
+            )
+        )
+    db.commit()
+    repo = SearchRepository(db)
+
+    page = repo.search_papers(date="2026-06-03", sort="recent", limit=2, offset=2)
+    total = repo.count_search_papers(date="2026-06-03")
+
+    assert [row["arxiv_id"] for row in page] == ["2606.00003", "2606.00004"]
+    assert total == 4
+
+
 def test_get_paper_detail_returns_events_summaries_and_discussions(db):
     _seed_search_data(db)
     DiscussionRepository(db).add_message(

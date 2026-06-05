@@ -104,6 +104,23 @@ def test_get_crawl_completeness_returns_combined_report(tmp_path):
     assert data["retry_categories"] == ["cs.LG"]
 
 
+def test_search_papers_api_returns_pagination_metadata(tmp_path):
+    client = _client_with_seed_data(tmp_path)
+
+    response = client.get("/api/search/papers?date=2026-06-03&page=2&page_size=2")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["total"] == 3
+    assert data["page"] == 2
+    assert data["page_size"] == 2
+    assert data["total_pages"] == 2
+    assert data["has_prev"] is True
+    assert data["has_next"] is False
+    assert [paper["arxiv_id"] for paper in data["papers"]] == ["2606.00003"]
+
+
 def test_post_crawl_retry_failed_uses_injected_runner(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     calls: list[dict] = []
@@ -223,6 +240,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
         "/api/daily/automation/start",
         json={
             "date": "2026-06-04",
+            "crawl_mode": "daily",
             "categories": ["cs.AI"],
             "template_name": "daily_research",
             "model": "gpt-test",
@@ -310,6 +328,109 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
         {"step": "metadata", "date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1},
         {"step": "ai", "date": "2026-06-03", "model": "gpt-test"},
     ]
+
+
+def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_arxiv_date_resolver(*, categories: list[str] | None):
+        calls.append({"step": "date", "categories": categories})
+        return "2026-06-05"
+
+    def fake_daily_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        calls.append({"step": "daily", "date": date, "categories": categories})
+        return 11
+
+    def fake_historical_runner(connection, *, date: str, categories: list[str] | None, max_pages: int) -> int:
+        calls.append({"step": "historical", "date": date, "categories": categories, "max_pages": max_pages})
+        return 12
+
+    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata", "date": date})
+        return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
+
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        batch_size: int,
+        max_rounds: int | None,
+    ):
+        calls.append({"step": "ai", "date": date, "model": model})
+        return {"status": "complete", "summary": {"complete": 0}, "score": {"complete": 0}}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_daily_runner,
+            historical_crawl_runner=fake_historical_runner,
+            metadata_completion_runner=fake_metadata_runner,
+            ai_triage_completion_runner=fake_ai_runner,
+            arxiv_date_resolver=fake_arxiv_date_resolver,
+        )
+    )
+
+    response = client.post(
+        "/api/daily/automation/start",
+        json={"date": "2026-06-04", "crawl_mode": "auto", "categories": ["cs.AI"], "historical_max_pages": 7},
+    )
+
+    assert response.status_code == 200
+    assert calls == [
+        {"step": "date", "categories": ["cs.AI"]},
+        {"step": "historical", "date": "2026-06-04", "categories": ["cs.AI"], "max_pages": 7},
+        {"step": "metadata", "date": "2026-06-04"},
+        {"step": "ai", "date": "2026-06-04", "model": "local"},
+    ]
+
+
+def test_post_daily_automation_auto_waits_when_selected_date_is_after_arxiv_current_date(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_arxiv_date_resolver(*, categories: list[str] | None):
+        calls.append({"step": "date", "categories": categories})
+        return "2026-06-05"
+
+    def fake_daily_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        calls.append({"step": "daily"})
+        return 1
+
+    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata"})
+        return {"status": "complete"}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_daily_runner,
+            metadata_completion_runner=fake_metadata_runner,
+            arxiv_date_resolver=fake_arxiv_date_resolver,
+        )
+    )
+
+    response = client.post("/api/daily/automation/start", json={"date": "2026-06-06", "crawl_mode": "auto"})
+
+    assert response.status_code == 200
+    connection = connect(db_path)
+    try:
+        initialize_schema(connection)
+        run = connection.execute("SELECT mode, status FROM crawl_runs WHERE date = ?", ("2026-06-06",)).fetchone()
+        source = connection.execute(
+            "SELECT category, status, error FROM crawl_run_sources WHERE run_id = (SELECT id FROM crawl_runs WHERE date = ?)",
+            ("2026-06-06",),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert calls == [{"step": "date", "categories": None}]
+    assert dict(run) == {"mode": "arxiv-date-check", "status": "waiting"}
+    assert source["category"] == "arxiv-current-date"
+    assert source["status"] == "waiting"
+    assert "2026-06-05" in source["error"]
 
 
 def test_post_repair_daily_listings_uses_injected_runner(tmp_path):

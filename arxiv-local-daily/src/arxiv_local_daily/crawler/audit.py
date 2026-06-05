@@ -38,6 +38,19 @@ def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dic
             "http_status": row["http_status"],
             "error": row["error"] or "parsed count below expected count",
         }
+    waiting_rows = [row for row in rows if row["status"] == "waiting"]
+    if waiting_rows:
+        row = waiting_rows[-1]
+        return {
+            "category": category,
+            "status": "waiting",
+            "run_id": row["run_id"],
+            "parsed_count": row["parsed_count"],
+            "expected_count": row["expected_count"],
+            "missing_count": row["missing_count"],
+            "http_status": row["http_status"],
+            "error": row["error"],
+        }
     if rows:
         row = rows[-1]
         return {
@@ -94,13 +107,18 @@ def build_crawl_completeness_report(
     incomplete_categories = [
         category["category"] for category in category_reports if category["status"] == "incomplete"
     ]
+    waiting_categories = [
+        category["category"] for category in category_reports if category["status"] == "waiting"
+    ]
     missing_categories = [
         category["category"] for category in category_reports if category["status"] == "missing"
     ]
     retry_categories = _unique_sorted(failed_categories + incomplete_categories + missing_categories)
     run_ids = sorted({int(row["run_id"]) for row in source_rows})
 
-    if not source_rows and not expected:
+    if waiting_categories:
+        status = "waiting"
+    elif not source_rows and not expected:
         status = "no_run"
     elif retry_categories:
         status = "partial"
@@ -118,10 +136,12 @@ def build_crawl_completeness_report(
         "complete_category_count": len(complete_categories),
         "failed_category_count": len(failed_categories),
         "incomplete_category_count": len(incomplete_categories),
+        "waiting_category_count": len(waiting_categories),
         "missing_category_count": len(missing_categories),
         "complete_categories": complete_categories,
         "failed_categories": failed_categories,
         "incomplete_categories": incomplete_categories,
+        "waiting_categories": waiting_categories,
         "missing_categories": missing_categories,
         "retry_categories": retry_categories,
         "categories": category_reports,

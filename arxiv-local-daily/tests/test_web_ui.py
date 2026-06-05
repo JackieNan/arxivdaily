@@ -12,6 +12,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert "text/html" in response.headers["content-type"]
     assert "arXiv Daily Workbench" in response.text
     assert 'id="automation-panel"' in response.text
+    assert 'id="date-prev"' in response.text
+    assert 'id="date-next"' in response.text
+    assert 'id="automation-progress"' in response.text
     assert 'id="top-actions"' in response.text
     assert 'id="settings-panel"' in response.text
     assert 'id="crawl-panel"' not in response.text
@@ -42,6 +45,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="daily-detail"' not in response.text
     assert 'id="settings-detail"' not in response.text
     assert 'id="search-sort"' in response.text
+    assert 'id="pagination-prev"' in response.text
+    assert 'id="pagination-next"' in response.text
+    assert 'id="pagination-label"' in response.text
     assert 'id="search-scope"' in response.text
     assert '<option value="daily" selected>当日</option>' in response.text
     assert '<option value="overview">总览</option>' in response.text
@@ -84,7 +90,15 @@ def test_static_web_assets_are_served(tmp_path):
     assert "/api/scores/run" not in js_response.text
     assert "body.template_name = templateName" in js_response.text
     assert 'body.model = el("summary-model").value.trim() || "local";' in js_response.text
-    assert 'body.crawl_mode = dateValue() < todayIso() ? "historical" : "daily";' in js_response.text
+    assert 'body.crawl_mode = "auto";' in js_response.text
+    assert "changeDateByDays" in js_response.text
+    assert 'el("date-prev")' in js_response.text
+    assert 'el("date-next")' in js_response.text
+    assert 'params.set("page", String(state.searchPage));' in js_response.text
+    assert 'params.set("page_size", String(state.pageSize));' in js_response.text
+    assert "renderPagination" in js_response.text
+    assert "renderAutomationProgress" in js_response.text
+    assert "paperLink" in js_response.text
     assert 'el("automation-refresh")' in js_response.text
     assert 'el("crawl-run")' not in js_response.text
     assert 'el("daily-status-run")' not in js_response.text
@@ -126,6 +140,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".top-actions button" in css_response.text
     assert ".automation-grid" in css_response.text
     assert ".automation-summary" in css_response.text
+    assert ".automation-progress" in css_response.text
+    assert ".progress-segment" in css_response.text
+    assert ".pagination-controls" in css_response.text
+    assert ".source-link" in css_response.text
     assert ".template-editor" in css_response.text
     assert ".template-field-row" in css_response.text
     assert ".summary-score-grid" in css_response.text

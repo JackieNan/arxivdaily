@@ -7,8 +7,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from arxiv_local_daily.config import default_settings
-from arxiv_local_daily.crawler.live import run_historical_listing_crawl, run_live_daily_crawl
-from arxiv_local_daily.db import connect, initialize_schema
+from arxiv_local_daily.crawler.live import (
+    fetch_current_arxiv_listing_date,
+    run_historical_listing_crawl,
+    run_live_daily_crawl,
+)
+from arxiv_local_daily.db import connect, initialize_schema, transaction
 from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
 from arxiv_local_daily.repositories import (
     CrawlRepository,
@@ -107,7 +111,7 @@ class DailyPipelineRunRequest(BaseModel):
 class DailyAutomationStartRequest(BaseModel):
     date: str
     categories: list[str] | None = None
-    crawl_mode: str = "daily"
+    crawl_mode: str = "auto"
     batch_size: int = Field(default=100, ge=1, le=500)
     oai_max_pages: int = Field(default=1, ge=0, le=100)
     historical_max_pages: int = Field(default=100, ge=1, le=500)
@@ -123,6 +127,7 @@ class DailyListingRepairRequest(BaseModel):
 
 CrawlerRunner = Callable[..., int]
 HistoricalCrawlRunner = Callable[..., int]
+ArxivDateResolver = Callable[..., str | None]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
 UnifiedMetadataRunner = Callable[..., dict[str, Any]]
@@ -187,15 +192,28 @@ def _run_daily_automation_background(
     request: DailyAutomationStartRequest,
     crawl_runner: CrawlerRunner,
     historical_crawl_runner: HistoricalCrawlRunner,
+    arxiv_date_resolver: ArxivDateResolver,
     metadata_completion_runner: MetadataCompletionRunner,
     ai_triage_completion_runner: AiTriageCompletionRunner,
 ) -> None:
     connection = connect(db_path)
     initialize_schema(connection)
     try:
+        effective_crawl_mode = request.crawl_mode
+        if request.crawl_mode == "auto":
+            arxiv_current_date = arxiv_date_resolver(categories=request.categories)
+            if arxiv_current_date is None or request.date > arxiv_current_date:
+                _record_waiting_for_arxiv_update(
+                    connection,
+                    date=request.date,
+                    arxiv_current_date=arxiv_current_date,
+                )
+                return
+            effective_crawl_mode = "daily" if request.date == arxiv_current_date else "historical"
+
         crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
         if crawl_report["status"] != "complete":
-            if request.crawl_mode == "historical":
+            if effective_crawl_mode == "historical":
                 historical_crawl_runner(
                     connection,
                     date=request.date,
@@ -227,10 +245,36 @@ def _run_daily_automation_background(
         connection.close()
 
 
+def _record_waiting_for_arxiv_update(
+    connection,
+    *,
+    date: str,
+    arxiv_current_date: str | None,
+) -> None:
+    current = arxiv_current_date or "unknown"
+    with transaction(connection):
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="arxiv-date-check", status="waiting")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="arxiv-current-date",
+            event_section="new",
+            url="https://arxiv.org/list/cs.AI/new",
+            status="waiting",
+            http_status=200 if arxiv_current_date is not None else None,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+            error=f"selected date {date} is after arXiv current listing date {current}; waiting for arXiv update",
+        )
+        crawl_repo.finish_run(run_id, status="waiting", summary_counts={})
+
+
 def create_app(
     database_path: Path | str | None = None,
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
     historical_crawl_runner: HistoricalCrawlRunner = run_historical_listing_crawl,
+    arxiv_date_resolver: ArxivDateResolver = fetch_current_arxiv_listing_date,
     crawl_retry_runner: CrawlRetryRunner = retry_incomplete_crawl_categories_for_date,
     metadata_runner: MetadataRunner = enrich_metadata_for_date,
     unified_metadata_runner: UnifiedMetadataRunner = enrich_metadata_for_date_unified,
@@ -292,11 +336,17 @@ def create_app(
         metadata_status: str | None = None,
         summary_status: str | None = None,
         limit: int | None = None,
+        page: int = 1,
+        page_size: int = 50,
         sort: str = "recent",
     ):
         connection = get_connection()
         try:
             repo = SearchRepository(connection)
+            normalized_page = max(page, 1)
+            normalized_page_size = max(min(page_size, 200), 1)
+            effective_limit = limit if limit is not None else normalized_page_size
+            offset = 0 if limit is not None else (normalized_page - 1) * normalized_page_size
             papers = repo.search_papers(
                 query=q,
                 date=date,
@@ -304,10 +354,29 @@ def create_app(
                 event_type=event_type,
                 metadata_status=metadata_status,
                 summary_status=summary_status,
-                limit=limit,
+                limit=effective_limit,
+                offset=offset,
                 sort=sort,
             )
-            return {"count": len(papers), "papers": papers}
+            total = repo.count_search_papers(
+                query=q,
+                date=date,
+                category=category,
+                event_type=event_type,
+                metadata_status=metadata_status,
+                summary_status=summary_status,
+            )
+            total_pages = max((total + normalized_page_size - 1) // normalized_page_size, 1)
+            return {
+                "count": len(papers),
+                "total": total,
+                "page": normalized_page,
+                "page_size": normalized_page_size,
+                "total_pages": total_pages,
+                "has_prev": normalized_page > 1,
+                "has_next": normalized_page < total_pages,
+                "papers": papers,
+            }
         finally:
             connection.close()
 
@@ -361,6 +430,7 @@ def create_app(
             request=request,
             crawl_runner=crawl_runner,
             historical_crawl_runner=historical_crawl_runner,
+            arxiv_date_resolver=arxiv_date_resolver,
             metadata_completion_runner=metadata_completion_runner,
             ai_triage_completion_runner=ai_triage_completion_runner,
         )

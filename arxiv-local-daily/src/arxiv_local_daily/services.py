@@ -1542,7 +1542,9 @@ def _daily_pipeline_blockers(
     score: dict[str, int | str],
 ) -> list[str]:
     blockers: list[str] = []
-    if crawl["status"] == "no_run":
+    if crawl["status"] == "waiting":
+        blockers.append("crawl_waiting_for_arxiv_update")
+    elif crawl["status"] == "no_run":
         blockers.append("crawl_no_run")
     elif crawl["status"] != "complete":
         blockers.append("crawl_incomplete")

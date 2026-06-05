@@ -34,10 +34,14 @@
           <p id="run-status" class="status-line">Ready</p>
           <pre id="operation-log" class="operation-log" aria-live="polite">No operations yet.</pre>
         </div>
-        <label class="date-control">
-          <span>Date</span>
-          <input id="date-input" type="date">
-        </label>
+        <div class="date-control" aria-label="Date navigation">
+          <button id="date-prev" class="secondary-button date-step" type="button" title="Previous day">&lt;</button>
+          <label>
+            <span>Date</span>
+            <input id="date-input" type="date">
+          </label>
+          <button id="date-next" class="secondary-button date-step" type="button" title="Next day">&gt;</button>
+        </div>
       </header>
 
       <section id="top-actions" class="top-actions">
@@ -61,7 +65,12 @@
             <div><span>Summary</span><strong>-</strong></div>
             <div><span>Score</span><strong>-</strong></div>
           </div>
-          <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Past dates use historical OAI metadata.</p>
+          <div id="automation-progress" class="automation-progress" aria-label="Daily automation progress">
+            <span class="progress-segment" data-step="crawl"></span>
+            <span class="progress-segment" data-step="metadata"></span>
+            <span class="progress-segment" data-step="ai"></span>
+          </div>
+          <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Dates are resolved against arXiv's current listing date.</p>
         </section>
 
         <section id="settings-panel" class="panel control-panel">
@@ -223,6 +232,11 @@
             <button id="search-run" type="button">Search</button>
           </div>
           <pre id="search-detail" class="operation-detail" aria-live="polite">No search yet.</pre>
+          <div class="pagination-controls" aria-label="Paper result pages">
+            <button id="pagination-prev" class="secondary-button" type="button">Previous</button>
+            <span id="pagination-label" class="inline-status">Page 1 / 1</span>
+            <button id="pagination-next" class="secondary-button" type="button">Next</button>
+          </div>
           <div id="paper-results" class="result-list" aria-live="polite"></div>
         </section>
 

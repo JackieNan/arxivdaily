@@ -138,6 +138,17 @@ Phase 22 adds exact historical listing crawl:
 
 OAI-PMH and the arXiv ID API are still used by metadata completion after the exact paper IDs are known.
 
+## Phase 23
+
+Phase 23 improves automation timing and list ergonomics:
+
+- Daily Automation now defaults to `crawl_mode=auto`.
+- In auto mode, the backend probes arXiv's current `/new` listing date and chooses daily crawl, historical listing crawl, or `waiting` if the selected date is ahead of arXiv.
+- Search results are paginated with `page` and `page_size`; the web UI defaults to 50 papers per page.
+- The date picker has previous/next day buttons.
+- Paper cards and detail panels include arXiv original links.
+- Daily Automation shows a compact three-segment progress line for crawl, metadata, and AI triage.
+
 ## Deferred
 
 These are planned for later versions:
@@ -166,7 +177,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-Daily Automation is the main ingestion path. For the current arXiv daily page it crawls `/list/{category}/new`, verifies the page's real arXiv announcement date before writing events, keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. For earlier selected dates, the web UI sends `crawl_mode=historical`; the app crawls arXiv monthly listing/archive pages, stores exact daily `new`, `cross-list`, and `replacement` events for the selected date, then uses OAI/API metadata completion. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
+Daily Automation is the main ingestion path. In `auto` mode it first checks arXiv's current `/new` listing date. If the selected date equals arXiv's current date, it crawls `/list/{category}/new` and verifies the page date before writing events. If the selected date is earlier than arXiv's current date, it crawls arXiv monthly listing/archive pages and stores exact daily `new`, `cross-list`, and `replacement` events. If the selected date is ahead of arXiv's current listing date, it records a `waiting` crawl run and writes no papers. After listing crawl, it keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
 
 The phase-one endpoints are:
 

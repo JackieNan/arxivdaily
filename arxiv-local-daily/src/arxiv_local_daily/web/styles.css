@@ -153,7 +153,17 @@ label span {
 }
 
 .date-control {
-  width: 190px;
+  display: grid;
+  grid-template-columns: 34px minmax(150px, 1fr) 34px;
+  align-items: end;
+  gap: 6px;
+  width: 238px;
+}
+
+.date-step {
+  width: 34px;
+  min-width: 34px;
+  padding: 4px 0;
 }
 
 .top-actions {
@@ -389,6 +399,34 @@ label span {
   gap: 6px;
 }
 
+.automation-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.progress-segment {
+  height: 5px;
+  border-radius: 999px;
+  background: #d8dee6;
+}
+
+.progress-segment.is-running {
+  background: #3d7ea6;
+}
+
+.progress-segment.is-waiting {
+  background: #d69e2e;
+}
+
+.progress-segment.is-complete {
+  background: var(--good);
+}
+
+.progress-segment.is-failed {
+  background: var(--bad);
+}
+
 .metric-grid div {
   min-width: 0;
   border: 1px solid var(--line);
@@ -446,6 +484,20 @@ label span {
   overflow-x: hidden;
 }
 
+.pagination-controls {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr) minmax(72px, auto);
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.pagination-controls .inline-status {
+  margin: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .paper-card {
   width: 100%;
   border: 1px solid var(--line);
@@ -457,6 +509,11 @@ label span {
   text-align: left;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.paper-card:focus {
+  outline: 2px solid rgba(23, 107, 135, 0.3);
+  outline-offset: 2px;
 }
 
 .paper-card:hover,
@@ -533,6 +590,25 @@ label span {
   font-size: 11px;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid #b8d8e0;
+  border-radius: 999px;
+  background: #eef8fb;
+  color: var(--accent-strong);
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.source-link:hover {
+  background: #dff0f5;
 }
 
 .compact-tags .tag {

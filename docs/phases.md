@@ -457,3 +457,24 @@ Date baseline: 2026-06-03
   - focused parser/live crawl/API/audit tests: 8 passed, 1 warning
   - `uv run pytest -v`: 131 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 23: arXiv Time, Pagination, and Progress
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-05-arxiv-local-daily-phase-23-arxiv-time-pagination-progress.md`
+- Scope completed:
+  - add `fetch_current_arxiv_listing_date` to probe arXiv's current `/new` page date
+  - make Daily Automation default to `crawl_mode = auto`
+  - route auto mode to daily crawl, historical listing crawl, or `waiting` based on arXiv's current listing date
+  - record `arxiv-date-check` runs with source status `waiting` when the selected date is ahead of arXiv
+  - add `waiting` support to crawl completeness and daily blockers
+  - add paginated search API metadata: `page`, `page_size`, `total`, `total_pages`, `has_prev`, and `has_next`
+  - add web UI previous/next date buttons, paper result pagination, original arXiv links, and a three-segment progress line
+- Important decisions:
+  - arXiv page date is the source of truth for daily/previous/future routing
+  - future local dates should wait instead of writing an empty or wrong daily list
+  - pagination is API-backed rather than hiding loaded results in the browser
+- Verification:
+  - focused Phase 23 tests: 57 passed, 1 warning
+  - `uv run pytest -v`: 136 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

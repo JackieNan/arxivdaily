@@ -900,8 +900,108 @@ class SearchRepository:
         metadata_status: str | None = None,
         summary_status: str | None = None,
         limit: int | None = None,
+        offset: int = 0,
         sort: str = "recent",
     ) -> list[dict[str, Any]]:
+        where, params = self._search_where(
+            query=query,
+            date=date,
+            category=category,
+            event_type=event_type,
+            metadata_status=metadata_status,
+            summary_status=summary_status,
+        )
+        order_by = "latest_score DESC, latest_date DESC, p.arxiv_id ASC" if sort == "score" else "latest_date DESC, p.arxiv_id ASC"
+        limit_sql = ""
+        query_params: tuple[Any, ...] = tuple(params)
+        if limit is not None:
+            limit_sql = "LIMIT ?"
+            query_params = (*query_params, limit)
+            if offset > 0:
+                limit_sql += " OFFSET ?"
+                query_params = (*query_params, offset)
+        elif offset > 0:
+            limit_sql = "LIMIT -1 OFFSET ?"
+            query_params = (*query_params, offset)
+        rows = self.connection.execute(
+            f"""
+            SELECT DISTINCT
+                p.arxiv_id,
+                p.title,
+                p.abstract,
+                p.authors_json,
+                p.primary_category,
+                p.categories_json,
+                p.abs_url,
+                p.pdf_url,
+                p.published_at,
+                p.updated_at,
+                p.metadata_status,
+                p.metadata_error,
+                p.metadata_attempts,
+                p.metadata_next_run_at,
+                (
+                    SELECT MAX(de.date)
+                    FROM daily_events de
+                    WHERE de.arxiv_id = p.arxiv_id
+                ) AS latest_date,
+                (
+                    SELECT ps.score_total
+                    FROM paper_scores ps
+                    WHERE ps.arxiv_id = p.arxiv_id
+                      AND ps.status = 'complete'
+                    ORDER BY ps.updated_at DESC, ps.id DESC
+                    LIMIT 1
+                ) AS latest_score
+            FROM papers p
+            LEFT JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            WHERE {" AND ".join(where)}
+            ORDER BY {order_by}
+            {limit_sql}
+            """,
+            query_params,
+        ).fetchall()
+        return [self._paper_search_result(row) for row in rows]
+
+    def count_search_papers(
+        self,
+        *,
+        query: str | None = None,
+        date: str | None = None,
+        category: str | None = None,
+        event_type: str | None = None,
+        metadata_status: str | None = None,
+        summary_status: str | None = None,
+    ) -> int:
+        where, params = self._search_where(
+            query=query,
+            date=date,
+            category=category,
+            event_type=event_type,
+            metadata_status=metadata_status,
+            summary_status=summary_status,
+        )
+        row = self.connection.execute(
+            f"""
+            SELECT COUNT(DISTINCT p.arxiv_id) AS count
+            FROM papers p
+            LEFT JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+            WHERE {" AND ".join(where)}
+            """,
+            tuple(params),
+        ).fetchone()
+        return int(row["count"] or 0)
+
+    def _search_where(
+        self,
+        *,
+        query: str | None,
+        date: str | None,
+        category: str | None,
+        event_type: str | None,
+        metadata_status: str | None,
+        summary_status: str | None,
+    ) -> tuple[list[str], list[Any]]:
         where = ["1 = 1"]
         params: list[Any] = []
         if query:
@@ -955,49 +1055,7 @@ class SearchRepository:
                 """
             )
             params.append(summary_status)
-
-        order_by = "latest_score DESC, latest_date DESC, p.arxiv_id ASC" if sort == "score" else "latest_date DESC, p.arxiv_id ASC"
-        limit_sql = "" if limit is None else "LIMIT ?"
-        query_params: tuple[Any, ...] = tuple(params) if limit is None else (*params, limit)
-        rows = self.connection.execute(
-            f"""
-            SELECT DISTINCT
-                p.arxiv_id,
-                p.title,
-                p.abstract,
-                p.authors_json,
-                p.primary_category,
-                p.categories_json,
-                p.abs_url,
-                p.pdf_url,
-                p.published_at,
-                p.updated_at,
-                p.metadata_status,
-                p.metadata_error,
-                p.metadata_attempts,
-                p.metadata_next_run_at,
-                (
-                    SELECT MAX(de.date)
-                    FROM daily_events de
-                    WHERE de.arxiv_id = p.arxiv_id
-                ) AS latest_date,
-                (
-                    SELECT ps.score_total
-                    FROM paper_scores ps
-                    WHERE ps.arxiv_id = p.arxiv_id
-                      AND ps.status = 'complete'
-                    ORDER BY ps.updated_at DESC, ps.id DESC
-                    LIMIT 1
-                ) AS latest_score
-            FROM papers p
-            LEFT JOIN daily_events e ON e.arxiv_id = p.arxiv_id
-            WHERE {" AND ".join(where)}
-            ORDER BY {order_by}
-            {limit_sql}
-            """,
-            query_params,
-        ).fetchall()
-        return [self._paper_search_result(row) for row in rows]
+        return where, params
 
     def get_paper_detail(self, arxiv_id: str) -> dict[str, Any] | None:
         paper_row = self.connection.execute(

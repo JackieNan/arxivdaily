@@ -7,6 +7,7 @@ from arxiv_local_daily.crawler.live import (
     build_category_taxonomy_url,
     build_daily_listing_url,
     build_historical_listing_url,
+    fetch_current_arxiv_listing_date,
     run_historical_listing_crawl,
     run_live_daily_crawl,
 )
@@ -85,6 +86,22 @@ def test_build_historical_listing_url_uses_month_archive_and_pagination():
     assert build_historical_listing_url("https://arxiv.org", "cs.AI", "2026-06-05", skip=2000, show=2000) == (
         "https://arxiv.org/list/cs.AI/2606?skip=2000&show=2000"
     )
+
+
+def test_fetch_current_arxiv_listing_date_reads_arxiv_new_page_date():
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+    requested_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        return httpx.Response(200, text=html)
+
+    client = ArxivHttpClient(transport=httpx.MockTransport(handler), retry_sleep_seconds=0)
+
+    current_date = fetch_current_arxiv_listing_date(http_client=client, categories=["cs.AI"])
+
+    assert current_date == "2026-06-03"
+    assert requested_urls == ["https://arxiv.org/list/cs.AI/new"]
 
 
 def test_run_live_daily_crawl_fetches_each_requested_category(db):
