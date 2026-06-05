@@ -126,6 +126,18 @@ Phase 21 repairs local wrong-date daily listing rows created before the date-awa
 
 OAI-PMH is used for metadata and historical records, not as proof of an exact historical arXiv daily listing. Exact earlier-day listing reconstruction should parse arXiv historical listing/archive pages per category and date, then enrich those IDs with OAI/API metadata.
 
+## Phase 22
+
+Phase 22 adds exact historical listing crawl:
+
+- earlier selected dates use arXiv monthly listing pages such as `/list/cs.AI/2606?skip=0&show=2000`
+- the parser extracts only the requested date's `new`, `cross-list`, and `replacement` sections
+- historical listing crawl runs are stored with mode `historical-listing`
+- old `historical-oai` metadata runs no longer satisfy crawl completeness
+- when exact listing rows are successfully crawled for a category/date, metadata-only `historical` event rows for that category/date are removed while paper metadata remains
+
+OAI-PMH and the arXiv ID API are still used by metadata completion after the exact paper IDs are known.
+
 ## Deferred
 
 These are planned for later versions:
@@ -154,7 +166,7 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-Daily Automation is the main ingestion path. For the current arXiv daily page it crawls `/list/{category}/new`, verifies the page's real arXiv announcement date before writing events, keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. For earlier selected dates, the web UI sends `crawl_mode=historical`; the app uses OAI-PMH metadata for that date and stores events as `historical` rather than pretending they are daily `new`, `cross-list`, or `replacement` listings. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
+Daily Automation is the main ingestion path. For the current arXiv daily page it crawls `/list/{category}/new`, verifies the page's real arXiv announcement date before writing events, keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. For earlier selected dates, the web UI sends `crawl_mode=historical`; the app crawls arXiv monthly listing/archive pages, stores exact daily `new`, `cross-list`, and `replacement` events for the selected date, then uses OAI/API metadata completion. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
 
 The phase-one endpoints are:
 
@@ -196,7 +208,7 @@ The all-category command discovers categories from arXiv's taxonomy page, then f
 
 The live `/new` crawler validates the announcement date shown in the arXiv page headings. If arXiv has not yet advanced to the selected date, the source is recorded as `date_mismatch` and no papers are stored under the wrong date.
 
-Historical dates are collected through Daily Automation in `historical` mode:
+Historical dates are collected through Daily Automation in `historical` mode. The crawler fetches monthly arXiv listing pages and extracts only the selected date:
 
 ```bash
 curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
@@ -204,7 +216,7 @@ curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
   -d '{"date":"2026-06-03","crawl_mode":"historical","categories":["cs.AI"],"historical_max_pages":100}'
 ```
 
-Historical records come from OAI-PMH metadata for the selected date. They are metadata-complete when stored and use `event_type="historical"`.
+Exact historical listing rows use the normal daily event types: `new`, `cross-list`, and `replacement`. OAI-PMH remains a metadata source, not the list source.
 
 Repair contaminated local daily listing rows for selected dates:
 

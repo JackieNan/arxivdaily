@@ -69,6 +69,7 @@ def build_crawl_completeness_report(
     expected_categories: list[str] | None = None,
 ) -> dict[str, Any]:
     source_rows = CrawlRepository(connection).list_source_rows_for_date(date)
+    source_rows = [row for row in source_rows if row["run_mode"] != "historical-oai"]
     rows_by_category: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in source_rows:
         rows_by_category[row["category"]].append(row)

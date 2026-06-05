@@ -2,6 +2,7 @@ from pathlib import Path
 
 from arxiv_local_daily.crawler.audit import build_crawl_completeness_report
 from arxiv_local_daily.models import CrawlSourceInput
+from arxiv_local_daily.repositories import CrawlRepository
 from arxiv_local_daily.services import ingest_daily_crawl_sources, retry_incomplete_crawl_categories_for_date
 
 
@@ -47,6 +48,28 @@ def test_crawl_completeness_report_returns_no_run_for_empty_date(db):
     assert report["expected_category_count"] == 0
     assert report["attempted_category_count"] == 0
     assert report["retry_categories"] == []
+
+
+def test_crawl_completeness_report_ignores_historical_oai_metadata_runs(db):
+    crawl_repo = CrawlRepository(db)
+    run_id = crawl_repo.create_run(date="2026-06-03", mode="historical-oai", status="running")
+    crawl_repo.record_source(
+        run_id=run_id,
+        category="historical",
+        event_section="historical",
+        url="oai-pmh:2026-06-03",
+        status="complete",
+        http_status=200,
+        parsed_count=100,
+    )
+    crawl_repo.finish_run(run_id, status="complete", summary_counts={"historical": 100})
+    db.commit()
+
+    report = build_crawl_completeness_report(db, date="2026-06-03")
+
+    assert report["status"] == "no_run"
+    assert report["source_count"] == 0
+    assert report["complete_category_count"] == 0
 
 
 def test_crawl_completeness_report_marks_all_complete_sources_complete(db):

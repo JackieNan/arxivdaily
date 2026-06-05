@@ -6,6 +6,7 @@ from arxiv_local_daily.models import ParsedDailyEvent
 CATEGORY_RE = re.compile(r"\(([a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9-]+)?)\)")
 COUNT_RE = re.compile(r"\bof\s+([0-9,]+)\s+entr(?:y|ies)\b", re.IGNORECASE)
 LISTING_DATE_RE = re.compile(r"\bfor\s+(?:[A-Za-z]+,\s+)?([0-9]{1,2})\s+([A-Za-z]+)\s+([0-9]{4})\b")
+BARE_LISTING_DATE_RE = re.compile(r"^(?:[A-Za-z]+,\s+)?([0-9]{1,2})\s+([A-Za-z]+)\s+([0-9]{4})\b")
 MONTHS = {
     "jan": "01",
     "january": "01",
@@ -42,6 +43,19 @@ def _heading_to_event_type(text: str) -> str | None:
         return "cross-list"
     if "replacement" in normalized:
         return "replacement"
+    return None
+
+
+def _heading_to_date(text: str) -> str | None:
+    for pattern in [LISTING_DATE_RE, BARE_LISTING_DATE_RE]:
+        match = pattern.search(text)
+        if not match:
+            continue
+        day, month_text, year = match.groups()
+        month = MONTHS.get(month_text.lower())
+        if month is None:
+            continue
+        return f"{year}-{month}-{int(day):02d}"
     return None
 
 
@@ -126,17 +140,63 @@ def parse_daily_listing_count(html: str) -> int | None:
 
 
 def parse_daily_listing_date(html: str) -> str | None:
+    dates = parse_listing_dates(html)
+    unique_dates = sorted(dict.fromkeys(dates))
+    return unique_dates[0] if len(unique_dates) == 1 else None
+
+
+def parse_listing_dates(html: str) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     dates: list[str] = []
     for heading in soup.select("h2, h3, h4"):
         text = heading.get_text(" ", strip=True)
-        match = LISTING_DATE_RE.search(text)
-        if not match:
+        date = _heading_to_date(text)
+        if date is not None:
+            dates.append(date)
+    return list(dict.fromkeys(dates))
+
+
+def parse_historical_listing_for_date(
+    html: str,
+    *,
+    date: str,
+    listing_category: str,
+    source_url: str,
+) -> list[ParsedDailyEvent]:
+    soup = BeautifulSoup(html, "html.parser")
+    dlpage = soup.select_one("#dlpage") or soup
+    events: list[ParsedDailyEvent] = []
+    current_date_matches = False
+    current_event_type: str | None = None
+
+    for node in dlpage.descendants:
+        if not isinstance(node, Tag):
             continue
-        day, month_text, year = match.groups()
-        month = MONTHS.get(month_text.lower())
-        if month is None:
+        if node.name in {"h2", "h3", "h4"}:
+            text = node.get_text(" ", strip=True)
+            heading_date = _heading_to_date(text)
+            detected_event_type = _heading_to_event_type(text)
+            if heading_date is not None:
+                current_date_matches = heading_date == date
+                current_event_type = detected_event_type if current_date_matches else None
+                continue
+            if detected_event_type is not None:
+                current_event_type = detected_event_type if current_date_matches else None
+                continue
+        if node.name != "dt" or not current_date_matches or current_event_type is None:
             continue
-        dates.append(f"{year}-{month}-{int(day):02d}")
-    unique_dates = sorted(dict.fromkeys(dates))
-    return unique_dates[0] if len(unique_dates) == 1 else None
+        arxiv_id = _extract_arxiv_id(node)
+        if arxiv_id is None:
+            continue
+        dd = node.find_next_sibling("dd")
+        events.append(
+            ParsedDailyEvent(
+                arxiv_id=arxiv_id,
+                event_type=current_event_type,
+                listing_category=listing_category,
+                primary_category=_extract_primary_category(dd),
+                title=_extract_listing_title(dd),
+                source_url=source_url,
+            )
+        )
+    return events

@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from arxiv_local_daily.crawler.parser import parse_daily_listing, parse_daily_listing_count, parse_daily_listing_date
+from arxiv_local_daily.crawler.parser import (
+    parse_daily_listing,
+    parse_daily_listing_count,
+    parse_daily_listing_date,
+    parse_historical_listing_for_date,
+    parse_listing_dates,
+)
 
 
 def test_parse_daily_listing_extracts_all_event_types():
@@ -176,3 +182,100 @@ def test_parse_daily_listing_extracts_non_cs_category_formats(category):
     )
 
     assert events[0].primary_category == category
+
+
+def test_parse_listing_dates_returns_unique_dates_in_document_order():
+    html = """
+    <div id="dlpage">
+      <h3>Sat, 6 Jun 2026</h3>
+      <h4>New submissions</h4>
+      <h3>Fri, 5 Jun 2026</h3>
+      <h4>New submissions for Fri, 5 Jun 2026</h4>
+      <h3>Thu, 4 Jun 2026</h3>
+    </div>
+    """
+
+    assert parse_listing_dates(html) == ["2026-06-06", "2026-06-05", "2026-06-04"]
+
+
+def test_parse_historical_listing_for_date_extracts_only_requested_date_sections():
+    html = """
+    <div id="dlpage">
+      <h3>Sat, 6 Jun 2026</h3>
+      <h4>New submissions</h4>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.09999">arXiv:2606.09999</a></dt>
+        <dd><div class="list-title">Title: Newer Paper</div></dd>
+      </dl>
+      <h3>Fri, 5 Jun 2026</h3>
+      <h4>New submissions</h4>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00010">arXiv:2606.00010</a></dt>
+        <dd>
+          <div class="list-title">Title: Historical New Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Artificial Intelligence (cs.AI)</span></div>
+        </dd>
+      </dl>
+      <h4>Cross submissions</h4>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00011">arXiv:2606.00011</a></dt>
+        <dd>
+          <div class="list-title">Title: Historical Cross Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Machine Learning (cs.LG)</span></div>
+        </dd>
+      </dl>
+      <h4>Replacement submissions</h4>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00012">arXiv:2606.00012</a></dt>
+        <dd>
+          <div class="list-title">Title: Historical Replacement Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Artificial Intelligence (cs.AI)</span></div>
+        </dd>
+      </dl>
+      <h3>Thu, 4 Jun 2026</h3>
+      <h4>New submissions</h4>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00001">arXiv:2606.00001</a></dt>
+        <dd><div class="list-title">Title: Older Paper</div></dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_historical_listing_for_date(
+        html,
+        date="2026-06-05",
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/2606?skip=0&show=2000",
+    )
+
+    assert [(event.arxiv_id, event.event_type, event.primary_category, event.title) for event in events] == [
+        ("2606.00010", "new", "cs.AI", "Historical New Paper"),
+        ("2606.00011", "cross-list", "cs.LG", "Historical Cross Paper"),
+        ("2606.00012", "replacement", "cs.AI", "Historical Replacement Paper"),
+    ]
+
+
+def test_parse_historical_listing_for_date_supports_event_headings_with_embedded_dates():
+    html = """
+    <div id="dlpage">
+      <h3>New submissions for Fri, 5 Jun 2026</h3>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00010">arXiv:2606.00010</a></dt>
+        <dd><div class="list-title">Title: Historical New Paper</div></dd>
+      </dl>
+      <h3>Cross submissions for Thu, 4 Jun 2026</h3>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00011">arXiv:2606.00011</a></dt>
+        <dd><div class="list-title">Title: Wrong Date Paper</div></dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_historical_listing_for_date(
+        html,
+        date="2026-06-05",
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/2606?skip=0&show=2000",
+    )
+
+    assert [(event.arxiv_id, event.event_type) for event in events] == [("2606.00010", "new")]

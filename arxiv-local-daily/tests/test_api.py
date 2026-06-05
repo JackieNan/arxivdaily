@@ -261,12 +261,12 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
         date: str,
         categories: list[str] | None,
         max_pages: int,
-    ):
+    ) -> int:
         calls.append({"step": "historical", "date": date, "categories": categories, "max_pages": max_pages})
-        return {"status": "complete", "papers_upserted": 2}
+        return 44
 
     def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
-        calls.append({"step": "metadata", "date": date})
+        calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
     def fake_ai_runner(
@@ -307,6 +307,7 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
     assert response.json() == {"date": "2026-06-03", "status": "queued"}
     assert calls == [
         {"step": "historical", "date": "2026-06-03", "categories": ["cs.AI"], "max_pages": 9},
+        {"step": "metadata", "date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1},
         {"step": "ai", "date": "2026-06-03", "model": "gpt-test"},
     ]
 

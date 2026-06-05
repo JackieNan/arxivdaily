@@ -435,3 +435,25 @@ Date baseline: 2026-06-03
 - Verification:
   - focused data repair/API/web UI tests: 3 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 22: Exact Historical Listing Crawl
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-05-arxiv-local-daily-phase-22-exact-historical-listing.md`
+- Scope completed:
+  - add historical listing parsing for a single requested date inside monthly arXiv listing/archive pages
+  - add `parse_listing_dates` so pagination can stop after passing the target date
+  - add historical listing URL construction with `/list/{category}/{yymm}?skip={skip}&show={show}`
+  - add `run_historical_listing_crawl` with mode `historical-listing`
+  - make historical listing crawl store exact `new`, `cross-list`, and `replacement` events instead of `historical`
+  - remove metadata-only `historical` event rows for category/date pairs once exact listing rows have been successfully crawled
+  - make `historical-oai` metadata runs invisible to daily crawl completeness
+  - route daily automation `crawl_mode = historical` through exact historical listing crawl, then metadata completion, then AI triage
+- Important decisions:
+  - OAI-PMH is still a metadata source, not a source of exact daily listing membership
+  - exact listing events should use the same event types as live `/new` crawl
+  - metadata rows from old OAI collection are preserved even when metadata-only daily events are removed
+- Verification:
+  - focused parser/live crawl/API/audit tests: 8 passed, 1 warning
+  - `uv run pytest -v`: 131 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.
