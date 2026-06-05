@@ -32,7 +32,7 @@ def fetch_current_arxiv_listing_date(
     categories: list[str] | None = None,
     base_url: str = "https://arxiv.org",
 ) -> str | None:
-    client = http_client or ArxivHttpClient()
+    client = http_client or ArxivHttpClient(timeout_seconds=5.0, max_attempts=1)
     probe_categories = categories if categories else ["cs.AI"]
     for category in probe_categories:
         url = build_daily_listing_url(base_url, category)

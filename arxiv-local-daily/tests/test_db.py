@@ -8,6 +8,8 @@ def test_schema_creates_core_tables(db):
         "ai_jobs",
         "crawl_run_sources",
         "crawl_runs",
+        "crawl_preflight_runs",
+        "crawl_preflight_sources",
         "daily_events",
         "metadata_sync_runs",
         "metadata_enrichment_runs",

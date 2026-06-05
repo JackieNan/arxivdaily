@@ -5,6 +5,7 @@ from arxiv_local_daily.models import ParsedDailyEvent
 
 CATEGORY_RE = re.compile(r"\(([a-z]+(?:-[a-z]+)*(?:\.[A-Za-z0-9-]+)?)\)")
 COUNT_RE = re.compile(r"\bof\s+([0-9,]+)\s+entr(?:y|ies)\b", re.IGNORECASE)
+NO_UPDATES_RE = re.compile(r"\bno\s+updates\s+today\b", re.IGNORECASE)
 LISTING_DATE_RE = re.compile(r"\bfor\s+(?:[A-Za-z]+,\s+)?([0-9]{1,2})\s+([A-Za-z]+)\s+([0-9]{4})\b")
 BARE_LISTING_DATE_RE = re.compile(r"^(?:[A-Za-z]+,\s+)?([0-9]{1,2})\s+([A-Za-z]+)\s+([0-9]{4})\b")
 MONTHS = {
@@ -137,6 +138,12 @@ def parse_daily_listing_count(html: str) -> int | None:
         if match:
             totals.append(int(match.group(1).replace(",", "")))
     return sum(totals) if totals else None
+
+
+def parse_daily_listing_has_no_updates(html: str) -> bool:
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(" ", strip=True)
+    return bool(NO_UPDATES_RE.search(text))
 
 
 def parse_daily_listing_date(html: str) -> str | None:

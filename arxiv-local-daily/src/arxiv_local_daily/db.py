@@ -83,6 +83,38 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             UNIQUE (run_id, category, event_section, url)
         );
 
+        CREATE TABLE IF NOT EXISTS crawl_preflight_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            status TEXT NOT NULL,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            category_count INTEGER NOT NULL DEFAULT 0,
+            source_count INTEGER NOT NULL DEFAULT 0,
+            listing_entry_count INTEGER NOT NULL DEFAULT 0,
+            distinct_paper_count INTEGER NOT NULL DEFAULT 0,
+            missing_count INTEGER NOT NULL DEFAULT 0,
+            error_counts_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS crawl_preflight_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL REFERENCES crawl_preflight_runs(id) ON DELETE CASCADE,
+            category TEXT NOT NULL,
+            url TEXT NOT NULL,
+            status TEXT NOT NULL,
+            http_status INTEGER,
+            listing_date TEXT,
+            parsed_count INTEGER NOT NULL DEFAULT 0,
+            expected_count INTEGER,
+            distinct_count INTEGER NOT NULL DEFAULT 0,
+            missing_count INTEGER NOT NULL DEFAULT 0,
+            error TEXT,
+            arxiv_ids_json TEXT NOT NULL DEFAULT '[]',
+            UNIQUE (run_id, category, url)
+        );
+
         CREATE TABLE IF NOT EXISTS metadata_sync_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source TEXT NOT NULL,

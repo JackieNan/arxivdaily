@@ -177,13 +177,14 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
-Daily Automation is the main ingestion path. In `auto` mode it first checks arXiv's current `/new` listing date. If the selected date equals arXiv's current date, it crawls `/list/{category}/new` and verifies the page date before writing events. If the selected date is earlier than arXiv's current date, it crawls arXiv monthly listing/archive pages and stores exact daily `new`, `cross-list`, and `replacement` events. If the selected date is ahead of arXiv's current listing date, it records a `waiting` crawl run and writes no papers. After listing crawl, it keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
+Daily Automation is the main ingestion path. In `auto` mode it first checks arXiv's current `/new` listing date with a short, single-attempt probe. If the probe fails, the app records a visible `waiting` crawl run instead of silently continuing or writing papers under an uncertain date. If the selected date equals arXiv's current date, it runs a daily listing preflight before the main crawl: every requested category page is fetched, the arXiv page date is verified, the declared entry count is compared with parsed entries, explicit `No updates today.` category pages are certified as zero papers, and distinct arXiv IDs are counted. It then crawls `/list/{category}/new` and verifies the page date before writing events. If the selected date is earlier than arXiv's current date, it crawls arXiv monthly listing/archive pages and stores exact daily `new`, `cross-list`, and `replacement` events. If the selected date is ahead of arXiv's current listing date, it records a `waiting` crawl run and writes no papers. After listing crawl, it keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
 
 The phase-one endpoints are:
 
 - `GET /api/days/{date}/papers`
 - `GET /api/crawl/runs/{date}`
 - `GET /api/crawl/completeness/{date}`
+- `GET /api/preflight/{date}`
 - `POST /api/crawl/retry-failed`
 - `POST /api/metadata/enrich`
 - `POST /api/metadata/oai-sync/start`
@@ -218,6 +219,43 @@ uv run --with-editable . arxiv-local-daily crawl --date 2026-06-03
 The all-category command discovers categories from arXiv's taxonomy page, then fetches `/list/{category}/new` for every discovered category. A crawl run is `complete` when all requested category pages fetch successfully; it is `partial` when one or more requested sources fail.
 
 The live `/new` crawler validates the announcement date shown in the arXiv page headings. If arXiv has not yet advanced to the selected date, the source is recorded as `date_mismatch` and no papers are stored under the wrong date.
+
+## Verify Daily Completeness
+
+Use the daily status endpoint first:
+
+```bash
+curl http://127.0.0.1:8765/api/daily/status/2026-06-05
+```
+
+For a fully verified current daily crawl, check these fields:
+
+- `preflight.status == "complete"`
+- `preflight.source_count == preflight.category_count`
+- every `preflight.sources[].status == "complete"`
+- every preflight source has `parsed_count == expected_count`
+- `crawl.status == "complete"`
+- `crawl.parsed_paper_count == preflight.distinct_paper_count`
+- `metadata.total == crawl.parsed_paper_count`
+
+For current daily `/new` pages, arXiv declares counts per category when there are entries. Empty category pages may instead say `No updates today.`; those are treated as verified complete with `expected_count = 0`.
+
+Inspect the raw preflight evidence with:
+
+```bash
+curl http://127.0.0.1:8765/api/preflight/2026-06-05
+```
+
+SQLite verification:
+
+```bash
+sqlite3 data/arxiv-local-daily.sqlite3 \
+  "SELECT COUNT(DISTINCT arxiv_id) FROM daily_events WHERE date='2026-06-05';"
+sqlite3 data/arxiv-local-daily.sqlite3 \
+  "SELECT status, category_count, source_count, distinct_paper_count FROM crawl_preflight_runs WHERE date='2026-06-05' ORDER BY id DESC LIMIT 1;"
+sqlite3 data/arxiv-local-daily.sqlite3 \
+  "SELECT category, status, parsed_count, expected_count, missing_count FROM crawl_preflight_sources WHERE run_id=(SELECT id FROM crawl_preflight_runs WHERE date='2026-06-05' ORDER BY id DESC LIMIT 1) ORDER BY category;"
+```
 
 Historical dates are collected through Daily Automation in `historical` mode. The crawler fetches monthly arXiv listing pages and extracts only the selected date:
 

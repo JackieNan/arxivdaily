@@ -12,12 +12,14 @@ from arxiv_local_daily.crawler.live import (
     run_historical_listing_crawl,
     run_live_daily_crawl,
 )
+from arxiv_local_daily.crawler.preflight import run_daily_listing_preflight
 from arxiv_local_daily.db import connect, initialize_schema, transaction
 from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
 from arxiv_local_daily.repositories import (
     CrawlRepository,
     DiscussionRepository,
     MetadataSyncRepository,
+    PreflightRepository,
     SearchRepository,
     SummaryRepository,
     TemplateRepository,
@@ -128,6 +130,7 @@ class DailyListingRepairRequest(BaseModel):
 CrawlerRunner = Callable[..., int]
 HistoricalCrawlRunner = Callable[..., int]
 ArxivDateResolver = Callable[..., str | None]
+PreflightRunner = Callable[..., dict[str, Any]]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
 MetadataRunner = Callable[..., dict[str, Any]]
 UnifiedMetadataRunner = Callable[..., dict[str, Any]]
@@ -193,6 +196,7 @@ def _run_daily_automation_background(
     crawl_runner: CrawlerRunner,
     historical_crawl_runner: HistoricalCrawlRunner,
     arxiv_date_resolver: ArxivDateResolver,
+    preflight_runner: PreflightRunner,
     metadata_completion_runner: MetadataCompletionRunner,
     ai_triage_completion_runner: AiTriageCompletionRunner,
 ) -> None:
@@ -201,7 +205,16 @@ def _run_daily_automation_background(
     try:
         effective_crawl_mode = request.crawl_mode
         if request.crawl_mode == "auto":
-            arxiv_current_date = arxiv_date_resolver(categories=request.categories)
+            try:
+                arxiv_current_date = arxiv_date_resolver(categories=request.categories)
+            except Exception as exc:
+                _record_waiting_for_arxiv_update(
+                    connection,
+                    date=request.date,
+                    arxiv_current_date=None,
+                    error=f"arXiv current date probe failed: {exc}",
+                )
+                return
             if arxiv_current_date is None or request.date > arxiv_current_date:
                 _record_waiting_for_arxiv_update(
                     connection,
@@ -210,6 +223,11 @@ def _run_daily_automation_background(
                 )
                 return
             effective_crawl_mode = "daily" if request.date == arxiv_current_date else "historical"
+
+        if effective_crawl_mode == "daily":
+            latest_preflight = PreflightRepository(connection).latest_for_date(request.date)
+            if latest_preflight is None or latest_preflight["status"] != "complete":
+                preflight_runner(connection, date=request.date, categories=request.categories)
 
         crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
         if crawl_report["status"] != "complete":
@@ -250,8 +268,12 @@ def _record_waiting_for_arxiv_update(
     *,
     date: str,
     arxiv_current_date: str | None,
+    error: str | None = None,
 ) -> None:
     current = arxiv_current_date or "unknown"
+    source_error = error or (
+        f"selected date {date} is after arXiv current listing date {current}; waiting for arXiv update"
+    )
     with transaction(connection):
         crawl_repo = CrawlRepository(connection)
         run_id = crawl_repo.create_run(date=date, mode="arxiv-date-check", status="waiting")
@@ -265,7 +287,7 @@ def _record_waiting_for_arxiv_update(
             parsed_count=0,
             expected_count=0,
             missing_count=0,
-            error=f"selected date {date} is after arXiv current listing date {current}; waiting for arXiv update",
+            error=source_error,
         )
         crawl_repo.finish_run(run_id, status="waiting", summary_counts={})
 
@@ -275,6 +297,7 @@ def create_app(
     crawl_runner: CrawlerRunner = run_live_daily_crawl,
     historical_crawl_runner: HistoricalCrawlRunner = run_historical_listing_crawl,
     arxiv_date_resolver: ArxivDateResolver = fetch_current_arxiv_listing_date,
+    preflight_runner: PreflightRunner = run_daily_listing_preflight,
     crawl_retry_runner: CrawlRetryRunner = retry_incomplete_crawl_categories_for_date,
     metadata_runner: MetadataRunner = enrich_metadata_for_date,
     unified_metadata_runner: UnifiedMetadataRunner = enrich_metadata_for_date_unified,
@@ -397,6 +420,27 @@ def create_app(
         finally:
             connection.close()
 
+    @app.get("/api/preflight/{date}")
+    def get_preflight(date: str):
+        connection = get_connection()
+        try:
+            report = PreflightRepository(connection).latest_for_date(date)
+            if report is None:
+                return {
+                    "date": date,
+                    "status": "not_started",
+                    "category_count": 0,
+                    "source_count": 0,
+                    "listing_entry_count": 0,
+                    "distinct_paper_count": 0,
+                    "missing_count": 0,
+                    "error_counts": {},
+                    "sources": [],
+                }
+            return report
+        finally:
+            connection.close()
+
     @app.post("/api/crawl/run")
     def run_crawl(request: CrawlRunRequest, background_tasks: BackgroundTasks):
         connection = get_connection()
@@ -431,6 +475,7 @@ def create_app(
             crawl_runner=crawl_runner,
             historical_crawl_runner=historical_crawl_runner,
             arxiv_date_resolver=arxiv_date_resolver,
+            preflight_runner=preflight_runner,
             metadata_completion_runner=metadata_completion_runner,
             ai_triage_completion_runner=ai_triage_completion_runner,
         )

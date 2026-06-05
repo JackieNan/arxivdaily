@@ -92,6 +92,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert "startDailyAutomation({ silent: true })" in js_response.text
     assert "/api/daily/automation/start" in js_response.text
     assert "/api/daily/status/" in js_response.text
+    assert "/api/preflight/" in js_response.text
     assert "/api/ai-triage/run" in js_response.text
     assert "/api/summaries/run" not in js_response.text
     assert "/api/scores/run" not in js_response.text
@@ -109,6 +110,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert "renderPagination" in js_response.text
     assert "renderPipelineProgress" in js_response.text
     assert "renderProgressBar" in js_response.text
+    assert "preflightPaperTotal" in js_response.text
+    assert "preflightStatusText" in js_response.text
     assert "metadataProgressCounts" in js_response.text
     assert "aiProgressCounts" in js_response.text
     assert "renderPaperCrawlProgress" not in js_response.text
@@ -116,6 +119,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert "metadataProgressState" not in js_response.text
     assert "aiProgressState" not in js_response.text
     assert "status.crawl.expected_paper_count" in js_response.text
+    assert "status.preflight.distinct_paper_count" in js_response.text
     assert '"paper-progress-fill"' in js_response.text
     assert '"metadata-progress-fill"' in js_response.text
     assert '"ai-progress-fill"' in js_response.text

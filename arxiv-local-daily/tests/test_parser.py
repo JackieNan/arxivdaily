@@ -6,6 +6,7 @@ from arxiv_local_daily.crawler.parser import (
     parse_daily_listing,
     parse_daily_listing_count,
     parse_daily_listing_date,
+    parse_daily_listing_has_no_updates,
     parse_historical_listing_for_date,
     parse_listing_dates,
 )
@@ -72,6 +73,17 @@ def test_parse_daily_listing_count_returns_none_when_total_is_absent():
     html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
 
     assert parse_daily_listing_count(html) is None
+
+
+def test_parse_daily_listing_has_no_updates_detects_empty_category_page():
+    html = """
+    <div id="dlpage">
+      <h3>Showing new listings for Thursday, 4 June 2026</h3>
+      <p>No updates today.</p>
+    </div>
+    """
+
+    assert parse_daily_listing_has_no_updates(html) is True
 
 
 def test_parse_daily_listing_date_extracts_page_announcement_date():

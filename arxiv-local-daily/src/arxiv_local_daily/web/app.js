@@ -441,12 +441,13 @@ const ArxivDailyWorkbench = (() => {
   function renderPipelineProgress(status) {
     const parsed = Number(status.crawl.parsed_paper_count || 0);
     const expected = Number(status.crawl.expected_paper_count || 0);
+    const preflightTotal = preflightPaperTotal(status);
     renderProgressBar({
       fillId: "paper-progress-fill",
       labelId: "paper-progress-label",
       label: "Papers",
       complete: parsed,
-      total: expected > 0 ? expected : parsed,
+      total: preflightTotal || expected || parsed,
       state: paperProgressState(status, parsed, expected),
     });
 
@@ -517,11 +518,32 @@ const ArxivDailyWorkbench = (() => {
     return `${status.metadata.complete}/${status.metadata.total} complete${failed}`;
   }
 
+  function preflightPaperTotal(status) {
+    return Number(status.preflight?.distinct_paper_count || 0);
+  }
+
+  function preflightEvidenceUrl(date = dateValue()) {
+    return `/api/preflight/${encodeURIComponent(date)}`;
+  }
+
+  function preflightStatusText(status) {
+    const preflight = status.preflight || {};
+    if (!preflight.status || preflight.status === "not_started") {
+      return `Preflight not started (${preflightEvidenceUrl()}).`;
+    }
+    const sourcePart = `${preflight.source_count || 0}/${preflight.category_count || 0} categories`;
+    const paperPart = `${status.preflight.distinct_paper_count || 0} distinct papers`;
+    const errorPart = preflight.status === "complete"
+      ? "all declared counts matched"
+      : `errors ${JSON.stringify(preflight.error_counts || {})}`;
+    return `Preflight ${preflight.status}: ${paperPart}, ${sourcePart}, ${errorPart}. Evidence: ${preflightEvidenceUrl()}.`;
+  }
+
   function dailyStatusText(status) {
     const blockers = status.blockers && status.blockers.length
       ? `Blockers: ${status.blockers.join(", ")}.`
       : "No blockers.";
-    return `Papers ${status.metadata.total}; categories ${status.crawl.complete_category_count}/${status.crawl.expected_category_count}; metadata ${metadataCoverageText(status)}; summary ${status.summary.complete}/${status.summary.eligible}; score ${status.score.complete}/${status.score.eligible}. ${blockers}`;
+    return `Papers ${status.metadata.total}; categories ${status.crawl.complete_category_count}/${status.crawl.expected_category_count}; metadata ${metadataCoverageText(status)}; summary ${status.summary.complete}/${status.summary.eligible}; score ${status.score.complete}/${status.score.eligible}. ${preflightStatusText(status)} ${blockers}`;
   }
 
   function searchParams() {

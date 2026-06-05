@@ -137,6 +137,125 @@ class CrawlRepository:
         return [dict(row) for row in rows]
 
 
+class PreflightRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def create_run(self, *, date: str, mode: str, status: str, category_count: int) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO crawl_preflight_runs (date, mode, status, category_count)
+            VALUES (?, ?, ?, ?)
+            """,
+            (date, mode, status, category_count),
+        )
+        return int(cursor.lastrowid)
+
+    def record_source(
+        self,
+        *,
+        run_id: int,
+        category: str,
+        url: str,
+        status: str,
+        http_status: int | None,
+        listing_date: str | None,
+        parsed_count: int,
+        expected_count: int | None,
+        distinct_count: int,
+        missing_count: int,
+        arxiv_ids: list[str],
+        error: str | None = None,
+    ) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO crawl_preflight_sources
+                (run_id, category, url, status, http_status, listing_date,
+                 parsed_count, expected_count, distinct_count, missing_count, error, arxiv_ids_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                category,
+                url,
+                status,
+                http_status,
+                listing_date,
+                parsed_count,
+                expected_count,
+                distinct_count,
+                missing_count,
+                error,
+                json.dumps(arxiv_ids, sort_keys=True),
+            ),
+        )
+
+    def finish_run(
+        self,
+        run_id: int,
+        *,
+        status: str,
+        source_count: int,
+        listing_entry_count: int,
+        distinct_paper_count: int,
+        missing_count: int,
+        error_counts: dict[str, int],
+    ) -> None:
+        self.connection.execute(
+            """
+            UPDATE crawl_preflight_runs
+            SET status = ?,
+                finished_at = CURRENT_TIMESTAMP,
+                source_count = ?,
+                listing_entry_count = ?,
+                distinct_paper_count = ?,
+                missing_count = ?,
+                error_counts_json = ?
+            WHERE id = ?
+            """,
+            (
+                status,
+                source_count,
+                listing_entry_count,
+                distinct_paper_count,
+                missing_count,
+                json.dumps(error_counts, sort_keys=True),
+                run_id,
+            ),
+        )
+
+    def latest_for_date(self, date: str) -> dict[str, Any] | None:
+        run = self.connection.execute(
+            """
+            SELECT *
+            FROM crawl_preflight_runs
+            WHERE date = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (date,),
+        ).fetchone()
+        if run is None:
+            return None
+        sources = self.connection.execute(
+            """
+            SELECT *
+            FROM crawl_preflight_sources
+            WHERE run_id = ?
+            ORDER BY category ASC, url ASC
+            """,
+            (run["id"],),
+        ).fetchall()
+        item = dict(run)
+        item["error_counts"] = json.loads(item.pop("error_counts_json") or "{}")
+        item["sources"] = []
+        for source in sources:
+            source_item = dict(source)
+            source_item["arxiv_ids"] = json.loads(source_item.pop("arxiv_ids_json") or "[]")
+            item["sources"].append(source_item)
+        return item
+
+
 class PaperRepository:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection

@@ -14,6 +14,7 @@ from arxiv_local_daily.repositories import (
     MetadataEnrichmentRepository,
     MetadataSyncRepository,
     PaperRepository,
+    PreflightRepository,
     ScoreRepository,
     SummaryRepository,
     TemplateRepository,
@@ -1596,6 +1597,17 @@ def get_daily_pipeline_status(
         model=model,
         rubric_version=rubric_version,
     )
+    preflight = PreflightRepository(connection).latest_for_date(date) or {
+        "date": date,
+        "status": "not_started",
+        "category_count": 0,
+        "source_count": 0,
+        "listing_entry_count": 0,
+        "distinct_paper_count": 0,
+        "missing_count": 0,
+        "error_counts": {},
+        "sources": [],
+    }
     blockers = _daily_pipeline_blockers(crawl=crawl, metadata=metadata, summary=summary, score=score)
     if metadata["total"] == 0 and crawl["status"] == "no_run":
         status = "not_started"
@@ -1606,6 +1618,7 @@ def get_daily_pipeline_status(
         "status": status,
         "blockers": blockers,
         "crawl": crawl,
+        "preflight": preflight,
         "metadata": metadata,
         "summary": summary,
         "score": score,

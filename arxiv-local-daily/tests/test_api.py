@@ -11,7 +11,7 @@ from arxiv_local_daily.models import (
     SummaryTemplateField,
     SummaryTemplateInput,
 )
-from arxiv_local_daily.repositories import PaperRepository, SummaryRepository, TemplateRepository
+from arxiv_local_daily.repositories import PaperRepository, PreflightRepository, SummaryRepository, TemplateRepository
 from arxiv_local_daily.repositories import MetadataSyncRepository
 from arxiv_local_daily.services import ingest_daily_crawl_sources, ingest_daily_listing_html
 
@@ -65,6 +65,49 @@ def test_get_crawl_runs_includes_source_details(tmp_path):
     assert data["runs"][0]["source_count"] == 1
     assert data["runs"][0]["sources"][0]["category"] == "cs.AI"
     assert data["runs"][0]["sources"][0]["parsed_count"] == 3
+
+
+def test_get_preflight_returns_latest_evidence(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    connection = connect(db_path)
+    initialize_schema(connection)
+    repo = PreflightRepository(connection)
+    run_id = repo.create_run(date="2026-06-03", mode="daily", status="running", category_count=1)
+    repo.record_source(
+        run_id=run_id,
+        category="cs.AI",
+        url="https://arxiv.org/list/cs.AI/new",
+        status="complete",
+        http_status=200,
+        listing_date="2026-06-03",
+        parsed_count=3,
+        expected_count=3,
+        distinct_count=3,
+        missing_count=0,
+        arxiv_ids=["2606.00001", "2606.00002", "2606.00003"],
+    )
+    repo.finish_run(
+        run_id,
+        status="complete",
+        source_count=1,
+        listing_entry_count=3,
+        distinct_paper_count=3,
+        missing_count=0,
+        error_counts={},
+    )
+    connection.commit()
+    connection.close()
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get("/api/preflight/2026-06-03")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "complete"
+    assert data["distinct_paper_count"] == 3
+    assert data["sources"][0]["category"] == "cs.AI"
+    assert data["sources"][0]["expected_count"] == 3
+    assert data["sources"][0]["arxiv_ids"] == ["2606.00001", "2606.00002", "2606.00003"]
 
 
 def test_get_crawl_completeness_returns_combined_report(tmp_path):
@@ -200,6 +243,10 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
         calls.append({"step": "crawl", "date": date, "categories": categories})
         return 43
 
+    def fake_preflight_runner(connection, *, date: str, categories: list[str] | None):
+        calls.append({"step": "preflight", "date": date, "categories": categories})
+        return {"status": "complete", "distinct_paper_count": 3}
+
     def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
         calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
@@ -231,6 +278,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
         create_app(
             database_path=db_path,
             crawl_runner=fake_crawl_runner,
+            preflight_runner=fake_preflight_runner,
             metadata_completion_runner=fake_completion_runner,
             ai_triage_completion_runner=fake_ai_runner,
         )
@@ -251,6 +299,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
     assert response.status_code == 200
     assert response.json() == {"date": "2026-06-04", "status": "queued"}
     assert calls == [
+        {"step": "preflight", "date": "2026-06-04", "categories": ["cs.AI"]},
         {"step": "crawl", "date": "2026-06-04", "categories": ["cs.AI"]},
         {"step": "metadata", "date": "2026-06-04", "batch_size": 100, "oai_max_pages": 1},
         {
@@ -327,6 +376,75 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
         {"step": "historical", "date": "2026-06-03", "categories": ["cs.AI"], "max_pages": 9},
         {"step": "metadata", "date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1},
         {"step": "ai", "date": "2026-06-03", "model": "gpt-test"},
+    ]
+
+
+def test_post_daily_automation_backfills_preflight_when_crawl_is_already_complete(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    connection = connect(db_path)
+    initialize_schema(connection)
+    ingest_daily_crawl_sources(
+        connection,
+        date="2026-06-04",
+        mode="all-categories",
+        sources=[
+            CrawlSourceInput(
+                category="cs.AI",
+                url="https://arxiv.org/list/cs.AI/new",
+                status="complete",
+                http_status=200,
+                html=Path("tests/fixtures/list_cs_ai_new.html").read_text(),
+            )
+        ],
+    )
+    connection.close()
+    calls: list[dict] = []
+
+    def fake_preflight_runner(connection, *, date: str, categories: list[str] | None):
+        calls.append({"step": "preflight", "date": date, "categories": categories})
+        return {"status": "complete", "distinct_paper_count": 3}
+
+    def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        calls.append({"step": "crawl"})
+        return 1
+
+    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata", "date": date})
+        return {"status": "complete", "metadata": {"total": 3, "complete": 3}}
+
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        batch_size: int,
+        max_rounds: int | None,
+    ):
+        calls.append({"step": "ai", "date": date})
+        return {"status": "complete"}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_crawl_runner,
+            preflight_runner=fake_preflight_runner,
+            metadata_completion_runner=fake_metadata_runner,
+            ai_triage_completion_runner=fake_ai_runner,
+        )
+    )
+
+    response = client.post(
+        "/api/daily/automation/start",
+        json={"date": "2026-06-04", "crawl_mode": "daily", "categories": ["cs.AI"]},
+    )
+
+    assert response.status_code == 200
+    assert calls == [
+        {"step": "preflight", "date": "2026-06-04", "categories": ["cs.AI"]},
+        {"step": "metadata", "date": "2026-06-04"},
+        {"step": "ai", "date": "2026-06-04"},
     ]
 
 
@@ -431,6 +549,46 @@ def test_post_daily_automation_auto_waits_when_selected_date_is_after_arxiv_curr
     assert source["category"] == "arxiv-current-date"
     assert source["status"] == "waiting"
     assert "2026-06-05" in source["error"]
+
+
+def test_post_daily_automation_auto_records_waiting_when_arxiv_date_probe_fails(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_arxiv_date_resolver(*, categories: list[str] | None):
+        calls.append({"step": "date", "categories": categories})
+        raise RuntimeError("probe timeout")
+
+    def fake_daily_runner(connection, *, date: str, categories: list[str] | None) -> int:
+        calls.append({"step": "daily"})
+        return 1
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            crawl_runner=fake_daily_runner,
+            arxiv_date_resolver=fake_arxiv_date_resolver,
+        )
+    )
+
+    response = client.post("/api/daily/automation/start", json={"date": "2026-06-06", "crawl_mode": "auto"})
+
+    assert response.status_code == 200
+    connection = connect(db_path)
+    try:
+        initialize_schema(connection)
+        run = connection.execute("SELECT mode, status FROM crawl_runs WHERE date = ?", ("2026-06-06",)).fetchone()
+        source = connection.execute(
+            "SELECT category, status, error FROM crawl_run_sources WHERE run_id = (SELECT id FROM crawl_runs WHERE date = ?)",
+            ("2026-06-06",),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert calls == [{"step": "date", "categories": None}]
+    assert dict(run) == {"mode": "arxiv-date-check", "status": "waiting"}
+    assert source["category"] == "arxiv-current-date"
+    assert source["status"] == "waiting"
+    assert "probe timeout" in source["error"]
 
 
 def test_post_repair_daily_listings_uses_injected_runner(tmp_path):

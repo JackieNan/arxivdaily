@@ -512,3 +512,31 @@ Date baseline: 2026-06-03
 - Verification:
   - focused web UI tests: 2 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 26: Preflight Completeness Evidence
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-05-arxiv-local-daily-phase-26-preflight-completeness.md`
+- Scope completed:
+  - add independent `crawl_preflight_runs` and `crawl_preflight_sources` tables
+  - add `run_daily_listing_preflight` to fetch requested `/new` category pages before main daily crawl
+  - verify listing date, declared entry count, parsed entry count, distinct arXiv IDs, missing count, and per-source errors
+  - treat explicit arXiv `No updates today.` category pages as complete zero-count sources
+  - run daily preflight before daily crawl in Daily Automation
+  - use a short current-date probe and record `arxiv-date-check/waiting` if the probe fails or arXiv has not advanced to the selected date
+  - backfill preflight evidence for already-complete daily crawls when no complete preflight exists
+  - add `GET /api/preflight/{date}` for raw evidence inspection
+  - include latest preflight report in `GET /api/daily/status/{date}`
+  - make Papers progress prefer preflight distinct-paper totals when available
+  - document API and SQLite checks for verifying complete daily collection
+- Important decisions:
+  - preflight evidence is stored separately from crawl runs so it cannot pollute crawl completeness
+  - preflight only certifies current `/new` daily listings; exact historical completeness still comes from historical listing crawl audit
+  - a non-empty category without a declared arXiv count is `count_missing`, so preflight is `partial` rather than falsely complete
+- Browser/local verification on 2026-06-05:
+  - UI displayed `Preflight complete: 2071 distinct papers, 155/155 categories`
+  - latest `crawl_preflight_runs` row was `complete`, `listing_entry_count=3757`, `distinct_paper_count=2071`, `missing_count=0`, `error_counts={}`
+- Verification:
+  - focused API/live/parser/preflight tests: 63 passed, 1 warning
+  - full test suite: 143 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.
