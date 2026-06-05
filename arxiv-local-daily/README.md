@@ -115,6 +115,17 @@ Phase 11 improves reading quality in the paper list and detail panel:
 
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
 
+## Phase 21
+
+Phase 21 repairs local wrong-date daily listing rows created before the date-aware crawler existed:
+
+- contaminated `new`, `cross-list`, and `replacement` events can be removed for selected dates
+- `historical` OAI records, paper metadata, summaries, scores, discussions, and paper rows are preserved
+- old daily crawl runs for repaired dates are removed so crawl audit does not treat polluted runs as valid
+- the open web workbench silently restarts daily automation every 10 minutes
+
+OAI-PMH is used for metadata and historical records, not as proof of an exact historical arXiv daily listing. Exact earlier-day listing reconstruction should parse arXiv historical listing/archive pages per category and date, then enrich those IDs with OAI/API metadata.
+
 ## Deferred
 
 These are planned for later versions:
@@ -161,6 +172,7 @@ The phase-one endpoints are:
 - `POST /api/summary-templates`
 - `POST /api/daily/automation/start`
 - `GET /api/daily/status/{date}`
+- `POST /api/repair/daily-listings`
 - `POST /api/ai-triage/run`
 - `POST /api/summaries/run`
 - `POST /api/scores/run`
@@ -193,6 +205,14 @@ curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
 ```
 
 Historical records come from OAI-PMH metadata for the selected date. They are metadata-complete when stored and use `event_type="historical"`.
+
+Repair contaminated local daily listing rows for selected dates:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/repair/daily-listings \
+  -H "Content-Type: application/json" \
+  -d '{"dates":["2026-06-03","2026-06-04","2026-06-05"]}'
+```
 
 The crawl trigger API accepts the same date/category shape:
 

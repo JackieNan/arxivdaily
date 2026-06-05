@@ -32,6 +32,8 @@ from arxiv_local_daily.summary import (
 )
 
 METADATA_RATE_LIMIT_BACKOFF_SECONDS = 10 * 60
+DAILY_LISTING_EVENT_TYPES = ("new", "cross-list", "replacement")
+DAILY_LISTING_CRAWL_MODES = ("single-source", "all-categories", "retry-incomplete")
 
 
 def _metadata_result(
@@ -173,6 +175,122 @@ def ingest_daily_crawl_sources(
         final_status = "complete" if failed_count == 0 else "partial"
         crawl_repo.finish_run(run_id, status=final_status, summary_counts=summary_counts)
         return run_id
+
+
+def _ordered_unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def repair_contaminated_daily_listing_dates(
+    connection: sqlite3.Connection,
+    *,
+    dates: list[str],
+) -> dict[str, Any]:
+    cleaned_dates = _ordered_unique([date for date in dates if date])
+    event_placeholders = ", ".join("?" for _ in DAILY_LISTING_EVENT_TYPES)
+    mode_placeholders = ", ".join("?" for _ in DAILY_LISTING_CRAWL_MODES)
+    total_daily_events_deleted = 0
+    total_daily_listing_papers_removed = 0
+    total_crawl_runs_deleted = 0
+    total_historical_events_preserved = 0
+    per_date: dict[str, dict[str, int]] = {}
+
+    with transaction(connection):
+        for date in cleaned_dates:
+            daily_event_params = (date, *DAILY_LISTING_EVENT_TYPES)
+            daily_event_count = int(
+                connection.execute(
+                    f"""
+                    SELECT COUNT(*) AS count
+                    FROM daily_events
+                    WHERE date = ?
+                      AND event_type IN ({event_placeholders})
+                    """,
+                    daily_event_params,
+                ).fetchone()["count"]
+            )
+            daily_listing_papers = int(
+                connection.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT arxiv_id) AS count
+                    FROM daily_events
+                    WHERE date = ?
+                      AND event_type IN ({event_placeholders})
+                    """,
+                    daily_event_params,
+                ).fetchone()["count"]
+            )
+            historical_events = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM daily_events
+                    WHERE date = ?
+                      AND event_type = 'historical'
+                    """,
+                    (date,),
+                ).fetchone()["count"]
+            )
+            crawl_run_params = (date, *DAILY_LISTING_CRAWL_MODES)
+            crawl_run_count = int(
+                connection.execute(
+                    f"""
+                    SELECT COUNT(*) AS count
+                    FROM crawl_runs
+                    WHERE date = ?
+                      AND mode IN ({mode_placeholders})
+                    """,
+                    crawl_run_params,
+                ).fetchone()["count"]
+            )
+
+            deleted_events = connection.execute(
+                f"""
+                DELETE FROM daily_events
+                WHERE date = ?
+                  AND event_type IN ({event_placeholders})
+                """,
+                daily_event_params,
+            ).rowcount
+            deleted_runs = connection.execute(
+                f"""
+                DELETE FROM crawl_runs
+                WHERE date = ?
+                  AND mode IN ({mode_placeholders})
+                """,
+                crawl_run_params,
+            ).rowcount
+
+            deleted_events = max(deleted_events, 0)
+            deleted_runs = max(deleted_runs, 0)
+            total_daily_events_deleted += deleted_events
+            total_daily_listing_papers_removed += daily_listing_papers
+            total_crawl_runs_deleted += deleted_runs
+            total_historical_events_preserved += historical_events
+            per_date[date] = {
+                "daily_events_before": daily_event_count,
+                "daily_events_deleted": deleted_events,
+                "daily_listing_papers_removed": daily_listing_papers,
+                "crawl_runs_before": crawl_run_count,
+                "crawl_runs_deleted": deleted_runs,
+                "historical_events_preserved": historical_events,
+            }
+
+    return {
+        "dates": cleaned_dates,
+        "daily_events_deleted": total_daily_events_deleted,
+        "daily_listing_papers_removed": total_daily_listing_papers_removed,
+        "crawl_runs_deleted": total_crawl_runs_deleted,
+        "historical_events_preserved": total_historical_events_preserved,
+        "per_date": per_date,
+    }
 
 
 def enrich_metadata_for_date(

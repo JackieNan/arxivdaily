@@ -73,6 +73,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert "next_run_at" in js_response.text
     assert "loadDailyStatus" in js_response.text
     assert "startDailyAutomation" in js_response.text
+    assert "AUTO_AUTOMATION_INTERVAL_MS" in js_response.text
+    assert "window.setInterval" in js_response.text
+    assert "state.automationTimer" in js_response.text
+    assert "startDailyAutomation({ silent: true })" in js_response.text
     assert "/api/daily/automation/start" in js_response.text
     assert "/api/daily/status/" in js_response.text
     assert "/api/ai-triage/run" in js_response.text

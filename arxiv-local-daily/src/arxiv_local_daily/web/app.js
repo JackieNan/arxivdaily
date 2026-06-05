@@ -3,7 +3,10 @@ const ArxivDailyWorkbench = (() => {
     selectedPaperId: null,
     selectedCard: null,
     templates: [],
+    automationTimer: null,
   };
+
+  const AUTO_AUTOMATION_INTERVAL_MS = 10 * 60 * 1000;
 
   const DEFAULT_SUMMARY_TEMPLATE = {
     name: "daily_research",
@@ -680,6 +683,11 @@ const ArxivDailyWorkbench = (() => {
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();
     startDailyAutomation({ silent: true });
+    if (!state.automationTimer) {
+      state.automationTimer = window.setInterval(() => {
+        startDailyAutomation({ silent: true });
+      }, AUTO_AUTOMATION_INTERVAL_MS);
+    }
   }
 
   return { bind, runSearch, startDailyAutomation, runSummaryAndScore, loadDailyStatus };

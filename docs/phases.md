@@ -416,3 +416,22 @@ Date baseline: 2026-06-03
   - focused date-aware crawl, historical crawl, API, and web UI tests: 26 passed, 1 warning
   - `uv run pytest -v`: 122 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 21: Data Repair and Auto Polling
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-05-arxiv-local-daily-phase-21-data-repair-auto-poll.md`
+- Scope completed:
+  - add `repair_contaminated_daily_listing_dates` for local cleanup of wrong-date daily listing rows
+  - delete only `new`, `cross-list`, and `replacement` daily events for selected contaminated dates
+  - preserve `historical` events, metadata, summaries, scores, discussions, and paper rows
+  - delete old daily crawl runs in `single-source`, `all-categories`, and `retry-incomplete` modes so audit will not treat contaminated runs as valid
+  - expose `POST /api/repair/daily-listings` for explicit repair runs
+  - make the open workbench silently restart daily automation every 10 minutes
+- Important decisions:
+  - Phase 20 prevents future wrong-date writes; Phase 21 repairs already polluted local data
+  - OAI-PMH remains a metadata/historical record source, not a guarantee of exact historical daily listing sections
+  - exact earlier-day listing reconstruction should parse arXiv historical listing/archive pages per category and use OAI/API only for enrichment and cross-checking
+- Verification:
+  - focused data repair/API/web UI tests: 3 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

@@ -27,6 +27,7 @@ from arxiv_local_daily.services import (
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
     get_daily_pipeline_status,
+    repair_contaminated_daily_listing_dates,
     retry_incomplete_crawl_categories_for_date,
     run_daily_pipeline,
     run_historical_metadata_crawl,
@@ -117,6 +118,10 @@ class DailyAutomationStartRequest(BaseModel):
     ai_batch_size: int = Field(default=20, ge=1, le=100)
 
 
+class DailyListingRepairRequest(BaseModel):
+    dates: list[str] = Field(min_length=1)
+
+
 CrawlerRunner = Callable[..., int]
 HistoricalCrawlRunner = Callable[..., dict[str, Any]]
 CrawlRetryRunner = Callable[..., dict[str, Any]]
@@ -129,6 +134,7 @@ AiTriageRunner = Callable[..., dict[str, Any]]
 DailyPipelineRunner = Callable[..., dict[str, Any]]
 MetadataCompletionRunner = Callable[..., dict[str, Any]]
 AiTriageCompletionRunner = Callable[..., dict[str, Any]]
+DailyListingRepairRunner = Callable[..., dict[str, Any]]
 
 
 def _run_oai_sync_background(
@@ -237,6 +243,7 @@ def create_app(
     daily_pipeline_runner: DailyPipelineRunner = run_daily_pipeline,
     metadata_completion_runner: MetadataCompletionRunner = complete_metadata_for_date,
     ai_triage_completion_runner: AiTriageCompletionRunner = complete_ai_triage_for_date,
+    daily_listing_repair_runner: DailyListingRepairRunner = repair_contaminated_daily_listing_dates,
     auto_enrich_after_crawl: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="arxiv-local-daily")
@@ -360,6 +367,14 @@ def create_app(
             ai_triage_completion_runner=ai_triage_completion_runner,
         )
         return {"date": request.date, "status": "queued"}
+
+    @app.post("/api/repair/daily-listings")
+    def repair_daily_listings(request: DailyListingRepairRequest):
+        connection = get_connection()
+        try:
+            return daily_listing_repair_runner(connection, dates=request.dates)
+        finally:
+            connection.close()
 
     @app.post("/api/crawl/retry-failed")
     def retry_failed_crawl(request: CrawlRetryFailedRequest):

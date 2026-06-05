@@ -311,6 +311,36 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
     ]
 
 
+def test_post_repair_daily_listings_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_repair_runner(connection, *, dates: list[str]):
+        calls.append({"dates": dates})
+        return {
+            "dates": dates,
+            "daily_events_deleted": 9,
+            "crawl_runs_deleted": 3,
+            "historical_events_preserved": 4,
+        }
+
+    client = TestClient(create_app(database_path=db_path, daily_listing_repair_runner=fake_repair_runner))
+
+    response = client.post(
+        "/api/repair/daily-listings",
+        json={"dates": ["2026-06-03", "2026-06-04"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "dates": ["2026-06-03", "2026-06-04"],
+        "daily_events_deleted": 9,
+        "crawl_runs_deleted": 3,
+        "historical_events_preserved": 4,
+    }
+    assert calls == [{"dates": ["2026-06-03", "2026-06-04"]}]
+
+
 def test_get_daily_status_reports_summary_coverage(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     connection = connect(db_path)
