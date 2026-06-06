@@ -17,6 +17,7 @@ from arxiv_local_daily.db import connect, initialize_schema, transaction
 from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
 from arxiv_local_daily.repositories import (
     CrawlRepository,
+    DailyAutomationRepository,
     DiscussionRepository,
     MetadataSyncRepository,
     PreflightRepository,
@@ -193,6 +194,7 @@ def _run_daily_automation_background(
     *,
     db_path: Path,
     request: DailyAutomationStartRequest,
+    automation_run_id: int | None,
     crawl_runner: CrawlerRunner,
     historical_crawl_runner: HistoricalCrawlRunner,
     arxiv_date_resolver: ArxivDateResolver,
@@ -203,6 +205,12 @@ def _run_daily_automation_background(
     connection = connect(db_path)
     initialize_schema(connection)
     try:
+        _update_daily_automation_run(
+            connection,
+            automation_run_id,
+            status="running",
+            current_step="arxiv_date_check",
+        )
         effective_crawl_mode = request.crawl_mode
         if request.crawl_mode == "auto":
             try:
@@ -214,6 +222,14 @@ def _run_daily_automation_background(
                     arxiv_current_date=None,
                     error=f"arXiv current date probe failed: {exc}",
                 )
+                _update_daily_automation_run(
+                    connection,
+                    automation_run_id,
+                    status="waiting",
+                    current_step="waiting_for_arxiv_update",
+                    error=f"arXiv current date probe failed: {exc}",
+                    finished=True,
+                )
                 return
             if arxiv_current_date is None or request.date > arxiv_current_date:
                 _record_waiting_for_arxiv_update(
@@ -221,16 +237,39 @@ def _run_daily_automation_background(
                     date=request.date,
                     arxiv_current_date=arxiv_current_date,
                 )
+                _update_daily_automation_run(
+                    connection,
+                    automation_run_id,
+                    status="waiting",
+                    current_step="waiting_for_arxiv_update",
+                    error=(
+                        f"selected date {request.date} is after arXiv current listing date "
+                        f"{arxiv_current_date or 'unknown'}"
+                    ),
+                    finished=True,
+                )
                 return
             effective_crawl_mode = "daily" if request.date == arxiv_current_date else "historical"
 
         if effective_crawl_mode == "daily":
             latest_preflight = PreflightRepository(connection).latest_for_date(request.date)
             if latest_preflight is None or latest_preflight["status"] != "complete":
+                _update_daily_automation_run(
+                    connection,
+                    automation_run_id,
+                    status="running",
+                    current_step="preflight",
+                )
                 preflight_runner(connection, date=request.date, categories=request.categories)
 
         crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
         if crawl_report["status"] != "complete":
+            _update_daily_automation_run(
+                connection,
+                automation_run_id,
+                status="running",
+                current_step="crawl",
+            )
             if effective_crawl_mode == "historical":
                 historical_crawl_runner(
                     connection,
@@ -241,6 +280,19 @@ def _run_daily_automation_background(
             else:
                 crawl_runner(connection, date=request.date, categories=request.categories)
             connection.commit()
+        else:
+            _update_daily_automation_run(
+                connection,
+                automation_run_id,
+                status="running",
+                current_step="crawl_already_complete",
+            )
+        _update_daily_automation_run(
+            connection,
+            automation_run_id,
+            status="running",
+            current_step="metadata",
+        )
         metadata_result = metadata_completion_runner(
             connection,
             date=request.date,
@@ -250,6 +302,12 @@ def _run_daily_automation_background(
         )
         metadata_complete = metadata_result.get("status") == "complete"
         if metadata_complete:
+            _update_daily_automation_run(
+                connection,
+                automation_run_id,
+                status="running",
+                current_step="ai",
+            )
             ai_triage_completion_runner(
                 connection,
                 date=request.date,
@@ -259,8 +317,64 @@ def _run_daily_automation_background(
                 batch_size=request.ai_batch_size,
                 max_rounds=None,
             )
+            _update_daily_automation_run(
+                connection,
+                automation_run_id,
+                status="complete",
+                current_step="complete",
+                finished=True,
+            )
+        elif metadata_result.get("status") == "no_papers":
+            _update_daily_automation_run(
+                connection,
+                automation_run_id,
+                status="complete",
+                current_step="no_papers",
+                error="metadata skipped because selected date has no papers",
+                finished=True,
+            )
+        else:
+            _update_daily_automation_run(
+                connection,
+                automation_run_id,
+                status="waiting",
+                current_step="metadata_waiting",
+                error=str(metadata_result.get("status") or "metadata incomplete"),
+                finished=True,
+            )
+    except Exception as exc:
+        _update_daily_automation_run(
+            connection,
+            automation_run_id,
+            status="failed",
+            current_step="failed",
+            error=str(exc),
+            finished=True,
+        )
+        raise
     finally:
         connection.close()
+
+
+def _update_daily_automation_run(
+    connection,
+    run_id: int | None,
+    *,
+    status: str,
+    current_step: str,
+    error: str | None = None,
+    finished: bool = False,
+) -> None:
+    if run_id is None:
+        return
+    DailyAutomationRepository(connection).update_run(
+        run_id,
+        status=status,
+        current_step=current_step,
+        error=error,
+        finished=finished,
+    )
+    connection.commit()
 
 
 def _record_waiting_for_arxiv_update(
@@ -468,10 +582,22 @@ def create_app(
 
     @app.post("/api/daily/automation/start")
     def start_daily_automation(request: DailyAutomationStartRequest, background_tasks: BackgroundTasks):
+        connection = get_connection()
+        try:
+            automation_run_id = DailyAutomationRepository(connection).create_run(
+                date=request.date,
+                crawl_mode=request.crawl_mode,
+                template_name=request.template_name,
+                model=request.model,
+            )
+            connection.commit()
+        finally:
+            connection.close()
         background_tasks.add_task(
             _run_daily_automation_background,
             db_path=db_path,
             request=request,
+            automation_run_id=automation_run_id,
             crawl_runner=crawl_runner,
             historical_crawl_runner=historical_crawl_runner,
             arxiv_date_resolver=arxiv_date_resolver,
@@ -479,7 +605,7 @@ def create_app(
             metadata_completion_runner=metadata_completion_runner,
             ai_triage_completion_runner=ai_triage_completion_runner,
         )
-        return {"date": request.date, "status": "queued"}
+        return {"date": request.date, "status": "queued", "automation_run_id": automation_run_id}
 
     @app.post("/api/repair/daily-listings")
     def repair_daily_listings(request: DailyListingRepairRequest):

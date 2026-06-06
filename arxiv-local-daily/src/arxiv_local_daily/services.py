@@ -11,6 +11,7 @@ from arxiv_local_daily.models import CrawlSourceInput, PaperMetadata
 from arxiv_local_daily.models import ParsedDailyEvent
 from arxiv_local_daily.repositories import (
     CrawlRepository,
+    DailyAutomationRepository,
     MetadataEnrichmentRepository,
     MetadataSyncRepository,
     PaperRepository,
@@ -1608,6 +1609,16 @@ def get_daily_pipeline_status(
         "error_counts": {},
         "sources": [],
     }
+    automation = DailyAutomationRepository(connection).latest_for_date(date) or {
+        "date": date,
+        "status": "not_started",
+        "current_step": "idle",
+        "crawl_mode": "auto",
+        "started_at": None,
+        "updated_at": None,
+        "finished_at": None,
+        "error": None,
+    }
     blockers = _daily_pipeline_blockers(crawl=crawl, metadata=metadata, summary=summary, score=score)
     if metadata["total"] == 0 and crawl["status"] == "no_run":
         status = "not_started"
@@ -1618,6 +1629,7 @@ def get_daily_pipeline_status(
         "status": status,
         "blockers": blockers,
         "crawl": crawl,
+        "automation": automation,
         "preflight": preflight,
         "metadata": metadata,
         "summary": summary,

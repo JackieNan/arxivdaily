@@ -115,6 +115,20 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             UNIQUE (run_id, category, url)
         );
 
+        CREATE TABLE IF NOT EXISTS daily_automation_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            crawl_mode TEXT NOT NULL,
+            status TEXT NOT NULL,
+            current_step TEXT NOT NULL,
+            template_name TEXT,
+            model TEXT NOT NULL DEFAULT 'local',
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            error TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS metadata_sync_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source TEXT NOT NULL,

@@ -11,6 +11,7 @@ def test_schema_creates_core_tables(db):
         "crawl_preflight_runs",
         "crawl_preflight_sources",
         "daily_events",
+        "daily_automation_runs",
         "metadata_sync_runs",
         "metadata_enrichment_runs",
         "metadata_merge_reports",

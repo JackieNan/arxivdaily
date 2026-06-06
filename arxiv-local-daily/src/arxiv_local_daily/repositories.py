@@ -256,6 +256,65 @@ class PreflightRepository:
         return item
 
 
+class DailyAutomationRepository:
+    def __init__(self, connection: sqlite3.Connection):
+        self.connection = connection
+
+    def create_run(
+        self,
+        *,
+        date: str,
+        crawl_mode: str,
+        template_name: str | None,
+        model: str,
+    ) -> int:
+        cursor = self.connection.execute(
+            """
+            INSERT INTO daily_automation_runs
+                (date, crawl_mode, status, current_step, template_name, model)
+            VALUES (?, ?, 'queued', 'queued', ?, ?)
+            """,
+            (date, crawl_mode, template_name, model),
+        )
+        return int(cursor.lastrowid)
+
+    def update_run(
+        self,
+        run_id: int,
+        *,
+        status: str,
+        current_step: str,
+        error: str | None = None,
+        finished: bool = False,
+    ) -> None:
+        finished_sql = ", finished_at = CURRENT_TIMESTAMP" if finished else ""
+        self.connection.execute(
+            f"""
+            UPDATE daily_automation_runs
+            SET status = ?,
+                current_step = ?,
+                error = ?,
+                updated_at = CURRENT_TIMESTAMP
+                {finished_sql}
+            WHERE id = ?
+            """,
+            (status, current_step, error, run_id),
+        )
+
+    def latest_for_date(self, date: str) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT *
+            FROM daily_automation_runs
+            WHERE date = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (date,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+
 class PaperRepository:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection

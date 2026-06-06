@@ -579,3 +579,28 @@ Date baseline: 2026-06-03
   - full test suite: 143 passed, 1 warning
   - browser verified `pipeline-status` appears, old progress bars are absent, Papers shows `waiting`, Metadata/AI show `idle`, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 29: Automation Run Status Visibility
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-06-arxiv-local-daily-automation-run-status.md`
+- Scope completed:
+  - add persistent `daily_automation_runs` records for selected-date crawl launches
+  - create a queued automation run before scheduling background work
+  - update the run at arXiv date check, preflight, crawl, metadata, AI, waiting, no-paper, complete, and failed states
+  - include the latest automation run in `GET /api/daily/status/{date}`
+  - return `automation_run_id` from `POST /api/daily/automation/start`
+  - add a Backend card to the UI status component with run id, current step, updated time, and error/blocker details
+  - immediately render queued/running state after `开始抓取`
+  - poll daily status every 2.5 seconds while the latest backend run is queued or running, then stop when it reaches a terminal state
+- Important decisions:
+  - the UI should expose backend job state directly instead of inferring it from crawl/metadata counts
+  - `no_papers` is a visible terminal state for an empty selected date, not a silent metadata failure
+  - old historical runs that record zero papers after archive-page failures are now visible as suspicious evidence and should be fixed in a later crawler-correctness phase
+- Verification:
+  - focused API/db/web UI tests: 36 passed, 1 warning
+  - full test suite: 144 passed, 1 warning
+  - browser verified 2026-06-04 launch shows `Crawl 2026-06-04 queued; backend run #2`, Backend `running`, and `Step: checking arXiv date` immediately after clicking `开始抓取`
+  - browser verified active polling updated the same card to `complete`, `Step: no papers`, with the error detail `metadata skipped because selected date has no papers`
+  - browser width check showed no horizontal overflow
+- Status: implemented on branch, not yet merged to `main`.

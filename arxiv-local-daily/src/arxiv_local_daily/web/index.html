@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase28">
+    <link rel="stylesheet" href="/static/styles.css?v=phase31">
     <script>
       window.MathJax = {
         tex: {
@@ -69,6 +69,14 @@
             <div><span>Score</span><strong>-</strong></div>
           </div>
           <div id="pipeline-status" class="pipeline-status" aria-label="Daily pipeline status">
+            <section class="stage-status" data-stage="backend">
+              <div class="stage-status-head">
+                <span>Backend</span>
+                <strong id="automation-status-state" class="stage-badge">idle</strong>
+              </div>
+              <p id="automation-status-count" class="stage-count">-</p>
+              <p id="automation-status-detail" class="stage-detail">No backend run yet.</p>
+            </section>
             <section class="stage-status" data-stage="papers">
               <div class="stage-status-head">
                 <span>Papers</span>
@@ -321,6 +329,6 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase28"></script>
+    <script src="/static/app.js?v=phase31"></script>
   </body>
 </html>

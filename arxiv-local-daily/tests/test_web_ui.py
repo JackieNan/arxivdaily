@@ -15,6 +15,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="date-prev"' in response.text
     assert 'id="date-next"' in response.text
     assert 'id="pipeline-status"' in response.text
+    assert 'id="automation-status-state"' in response.text
+    assert 'id="automation-status-count"' in response.text
+    assert 'id="automation-status-detail"' in response.text
     assert 'id="paper-status-state"' in response.text
     assert 'id="paper-status-count"' in response.text
     assert 'id="paper-status-detail"' in response.text
@@ -100,8 +103,13 @@ def test_static_web_assets_are_served(tmp_path):
     assert "loadDailyStatus" in js_response.text
     assert "startDailyAutomation" in js_response.text
     assert "AUTO_AUTOMATION_INTERVAL_MS" in js_response.text
+    assert "ACTIVE_AUTOMATION_POLL_MS" in js_response.text
     assert "window.setInterval" in js_response.text
     assert "state.automationTimer" in js_response.text
+    assert "state.activeStatusTimer" in js_response.text
+    assert "startActiveStatusPolling" in js_response.text
+    assert "stopActiveStatusPolling" in js_response.text
+    assert "syncActiveStatusPolling" in js_response.text
     assert "refreshSelectedDateView" in js_response.text
     assert "startDailyAutomation({ silent: true })" not in js_response.text
     assert "openDateCrawlDialog" in js_response.text
@@ -129,6 +137,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert "renderPagination" in js_response.text
     assert "renderPipelineStatus" in js_response.text
     assert "renderStageStatus" in js_response.text
+    assert "renderAutomationStatus" in js_response.text
+    assert "AUTOMATION_STEP_LABELS" in js_response.text
+    assert "result.automation_run_id" in js_response.text
+    assert "status.automation" in js_response.text
     assert "preflightPaperTotal" in js_response.text
     assert "preflightStatusText" in js_response.text
     assert "paperStageStatus" in js_response.text
@@ -145,6 +157,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert "status.crawl.expected_paper_count" in js_response.text
     assert "status.preflight.distinct_paper_count" in js_response.text
     assert '"paper-status-state"' in js_response.text
+    assert '"automation-status-state"' in js_response.text
     assert '"metadata-status-state"' in js_response.text
     assert '"ai-status-state"' in js_response.text
     assert "fill.style.width" not in js_response.text

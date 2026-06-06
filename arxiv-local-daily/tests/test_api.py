@@ -11,7 +11,13 @@ from arxiv_local_daily.models import (
     SummaryTemplateField,
     SummaryTemplateInput,
 )
-from arxiv_local_daily.repositories import PaperRepository, PreflightRepository, SummaryRepository, TemplateRepository
+from arxiv_local_daily.repositories import (
+    CrawlRepository,
+    PaperRepository,
+    PreflightRepository,
+    SummaryRepository,
+    TemplateRepository,
+)
 from arxiv_local_daily.repositories import MetadataSyncRepository
 from arxiv_local_daily.services import ingest_daily_crawl_sources, ingest_daily_listing_html
 
@@ -297,7 +303,10 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"date": "2026-06-04", "status": "queued"}
+    payload = response.json()
+    assert payload["date"] == "2026-06-04"
+    assert payload["status"] == "queued"
+    assert isinstance(payload["automation_run_id"], int)
     assert calls == [
         {"step": "preflight", "date": "2026-06-04", "categories": ["cs.AI"]},
         {"step": "crawl", "date": "2026-06-04", "categories": ["cs.AI"]},
@@ -312,6 +321,9 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
             "max_rounds": None,
         },
     ]
+    status_response = client.get("/api/daily/status/2026-06-04?template_name=daily_research&model=gpt-test")
+    assert status_response.json()["automation"]["status"] == "complete"
+    assert status_response.json()["automation"]["current_step"] == "complete"
 
 
 def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
@@ -371,7 +383,10 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"date": "2026-06-03", "status": "queued"}
+    payload = response.json()
+    assert payload["date"] == "2026-06-03"
+    assert payload["status"] == "queued"
+    assert isinstance(payload["automation_run_id"], int)
     assert calls == [
         {"step": "historical", "date": "2026-06-03", "categories": ["cs.AI"], "max_pages": 9},
         {"step": "metadata", "date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1},
@@ -446,6 +461,67 @@ def test_post_daily_automation_backfills_preflight_when_crawl_is_already_complet
         {"step": "metadata", "date": "2026-06-04"},
         {"step": "ai", "date": "2026-06-04"},
     ]
+
+
+def test_post_daily_automation_records_no_papers_as_finished_automation(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_historical_runner(connection, *, date: str, categories: list[str] | None, max_pages: int) -> int:
+        calls.append({"step": "historical", "date": date})
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="historical-listing", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="archive",
+            url="https://arxiv.org/list/cs.AI/2606?skip=0&show=2000",
+            status="complete",
+            http_status=200,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+        )
+        crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+        return run_id
+
+    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata", "date": date})
+        return {"status": "no_papers", "metadata": {"total": 0, "complete": 0}}
+
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        batch_size: int,
+        max_rounds: int | None,
+    ):
+        calls.append({"step": "ai", "date": date})
+        return {"status": "complete"}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            historical_crawl_runner=fake_historical_runner,
+            metadata_completion_runner=fake_metadata_runner,
+            ai_triage_completion_runner=fake_ai_runner,
+        )
+    )
+
+    response = client.post("/api/daily/automation/start", json={"date": "2026-06-04", "crawl_mode": "historical"})
+
+    assert response.status_code == 200
+    assert calls == [
+        {"step": "historical", "date": "2026-06-04"},
+        {"step": "metadata", "date": "2026-06-04"},
+    ]
+    status_response = client.get("/api/daily/status/2026-06-04")
+    automation = status_response.json()["automation"]
+    assert automation["status"] == "complete"
+    assert automation["current_step"] == "no_papers"
 
 
 def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(tmp_path):
@@ -549,6 +625,11 @@ def test_post_daily_automation_auto_waits_when_selected_date_is_after_arxiv_curr
     assert source["category"] == "arxiv-current-date"
     assert source["status"] == "waiting"
     assert "2026-06-05" in source["error"]
+    status_response = client.get("/api/daily/status/2026-06-06")
+    automation = status_response.json()["automation"]
+    assert automation["status"] == "waiting"
+    assert automation["current_step"] == "waiting_for_arxiv_update"
+    assert "2026-06-05" in automation["error"]
 
 
 def test_post_daily_automation_auto_records_waiting_when_arxiv_date_probe_fails(tmp_path):
@@ -589,6 +670,11 @@ def test_post_daily_automation_auto_records_waiting_when_arxiv_date_probe_fails(
     assert source["category"] == "arxiv-current-date"
     assert source["status"] == "waiting"
     assert "probe timeout" in source["error"]
+    status_response = client.get("/api/daily/status/2026-06-06")
+    automation = status_response.json()["automation"]
+    assert automation["status"] == "waiting"
+    assert automation["current_step"] == "waiting_for_arxiv_update"
+    assert "probe timeout" in automation["error"]
 
 
 def test_post_repair_daily_listings_uses_injected_runner(tmp_path):

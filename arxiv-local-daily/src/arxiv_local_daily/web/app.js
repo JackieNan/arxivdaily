@@ -4,12 +4,30 @@ const ArxivDailyWorkbench = (() => {
     selectedCard: null,
     templates: [],
     automationTimer: null,
+    activeStatusTimer: null,
     searchPage: 1,
     pageSize: 50,
     pageMeta: null,
   };
 
   const AUTO_AUTOMATION_INTERVAL_MS = 10 * 60 * 1000;
+  const ACTIVE_AUTOMATION_POLL_MS = 2500;
+
+  const AUTOMATION_STEP_LABELS = {
+    idle: "idle",
+    queued: "queued",
+    arxiv_date_check: "checking arXiv date",
+    preflight: "preflight",
+    crawl: "crawl",
+    crawl_already_complete: "crawl already complete",
+    metadata: "metadata",
+    ai: "AI",
+    waiting_for_arxiv_update: "waiting for arXiv update",
+    metadata_waiting: "metadata waiting",
+    no_papers: "no papers",
+    complete: "complete",
+    failed: "failed",
+  };
 
   const DEFAULT_SUMMARY_TEMPLATE = {
     name: "daily_research",
@@ -364,10 +382,19 @@ const ArxivDailyWorkbench = (() => {
         method: "POST",
         body: JSON.stringify(body),
       });
+      renderAutomationStatus({
+        id: result.automation_run_id,
+        date: dateValue(),
+        status: result.status,
+        current_step: "queued",
+        updated_at: null,
+        error: null,
+      });
       el("automation-state").textContent = result.status;
+      startActiveStatusPolling();
       await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
-      if (!silent) recordOperation(`Crawl ${dateValue()} ${result.status}`);
+      if (!silent) recordOperation(`Crawl ${dateValue()} ${result.status}; backend run #${result.automation_run_id}`);
     } catch (error) {
       el("automation-state").textContent = "failed";
       setDetail("automation-note", `Automation failed: ${error.message}`);
@@ -434,6 +461,7 @@ const ArxivDailyWorkbench = (() => {
       const params = dailyStatusParams();
       const status = await api(`/api/daily/status/${encodeURIComponent(dateValue())}?${params.toString()}`);
       renderDailyStatus(status);
+      syncActiveStatusPolling(status);
       if (!silent) recordOperation(`Daily: ${dailyStatusText(status)}`);
       return status;
     } catch (error) {
@@ -461,7 +489,38 @@ const ArxivDailyWorkbench = (() => {
     renderPipelineStatus(status);
   }
 
+  function isAutomationActive(automation) {
+    return automation && ["queued", "running"].includes(automation.status);
+  }
+
+  function syncActiveStatusPolling(status) {
+    if (isAutomationActive(status.automation)) {
+      startActiveStatusPolling();
+    } else {
+      stopActiveStatusPolling();
+    }
+  }
+
+  function startActiveStatusPolling() {
+    if (state.activeStatusTimer) return;
+    state.activeStatusTimer = window.setInterval(async () => {
+      const status = await loadDailyStatus({ silent: true });
+      await runSearch({ silent: true });
+      if (!status || !isAutomationActive(status.automation)) {
+        stopActiveStatusPolling();
+      }
+    }, ACTIVE_AUTOMATION_POLL_MS);
+  }
+
+  function stopActiveStatusPolling() {
+    if (!state.activeStatusTimer) return;
+    window.clearInterval(state.activeStatusTimer);
+    state.activeStatusTimer = null;
+  }
+
   function renderPipelineStatus(status) {
+    renderAutomationStatus(status.automation || {});
+
     const papers = paperStageStatus(status);
     renderStageStatus({
       stateId: "paper-status-state",
@@ -495,6 +554,26 @@ const ArxivDailyWorkbench = (() => {
     el(detailId).textContent = detail;
   }
 
+  function renderAutomationStatus(automation) {
+    const status = automation.status || "not_started";
+    const state = status === "not_started" ? "idle" : status;
+    const step = automation.current_step || "idle";
+    const stepLabel = AUTOMATION_STEP_LABELS[step] || step;
+    const idPart = automation.id ? `#${automation.id}` : "-";
+    let detail = automation.id
+      ? `Step: ${stepLabel}${automation.updated_at ? `; updated ${automation.updated_at}` : ""}.`
+      : "No backend automation run yet.";
+    if (automation.error) detail = `${detail} Error: ${automation.error}`;
+    renderStageStatus({
+      stateId: "automation-status-state",
+      countId: "automation-status-count",
+      detailId: "automation-status-detail",
+      state,
+      count: idPart,
+      detail,
+    });
+  }
+
   function paperStageStatus(status) {
     const parsed = Number(status.crawl.parsed_paper_count || 0);
     const expected = Number(status.crawl.expected_paper_count || 0);
@@ -503,7 +582,19 @@ const ArxivDailyWorkbench = (() => {
     const state = paperStageState(status, parsed, expected);
     const count = total > 0 ? `${parsed}/${total}` : "-";
     let detail = "No paper crawl has started.";
-    if (status.crawl.status === "waiting") {
+    if (status.automation?.status === "queued" || status.automation?.current_step === "crawl") {
+      detail = `Backend is ${status.automation.current_step || status.automation.status}.`;
+    } else if (status.automation?.current_step === "crawl_already_complete") {
+      detail = "Backend skipped crawl because the latest crawl audit is already complete.";
+    } else if (status.automation?.current_step === "preflight") {
+      detail = "Backend is verifying today's listing counts before crawl.";
+    } else if (status.automation?.status === "failed") {
+      detail = `Backend failed: ${status.automation.error || "unknown error"}.`;
+    } else if (status.automation?.status === "waiting") {
+      detail = status.automation.error || "Backend is waiting for an external condition.";
+    } else if (status.automation?.current_step === "no_papers") {
+      detail = "Backend completed; selected date currently has no papers in local crawl.";
+    } else if (status.crawl.status === "waiting") {
       detail = "Waiting for arXiv to publish the requested listing date.";
     } else if (status.preflight?.status === "complete") {
       detail = `Preflight complete; evidence ${preflightEvidenceUrl()}.`;
