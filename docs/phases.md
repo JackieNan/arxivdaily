@@ -511,8 +511,6 @@ Date baseline: 2026-06-03
   - empty tracks show no known total, colored fill shows current phase progress/state
 - Verification:
   - focused web UI tests: 2 passed, 1 warning
-  - full test suite: 143 passed, 1 warning
-  - browser verified launcher open/close, `开始抓取` POST, `Crawl 2026-06-06 queued` feedback, waiting blocker display, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
 
 ## Phase 26: Preflight Completeness Evidence
@@ -559,4 +557,25 @@ Date baseline: 2026-06-03
   - category Enter remains a keyboard shortcut for starting automation for the selected date
 - Verification:
   - focused web UI tests: 2 passed, 1 warning
+  - full test suite: 143 passed, 1 warning
+  - browser verified launcher open/close, `开始抓取` POST, `Crawl 2026-06-06 queued` feedback, waiting blocker display, and no horizontal overflow
+- Status: implemented on branch, not yet merged to `main`.
+
+## Phase 28: Pipeline Status Component
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-06-arxiv-local-daily-status-component.md`
+- Scope completed:
+  - remove Daily Automation progress bars and progress fill logic
+  - add a `pipeline-status` component with Papers, Metadata, and AI status panels
+  - render each stage as state badge, count, and short detail text
+  - show preflight evidence in the Papers stage detail when available
+  - keep state badge styling for idle, running, waiting, partial, complete, and failed
+- Important decisions:
+  - the status component is better than progress bars for long-running background jobs with waiting and partial states
+  - counts remain visible, but percentage fills are no longer used
+- Verification:
+  - focused web UI tests: 2 passed, 1 warning
+  - full test suite: 143 passed, 1 warning
+  - browser verified `pipeline-status` appears, old progress bars are absent, Papers shows `waiting`, Metadata/AI show `idle`, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.

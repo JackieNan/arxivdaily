@@ -14,13 +14,18 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="automation-panel"' in response.text
     assert 'id="date-prev"' in response.text
     assert 'id="date-next"' in response.text
-    assert 'id="automation-progress"' in response.text
-    assert 'id="paper-progress-fill"' in response.text
-    assert 'id="paper-progress-label"' in response.text
-    assert 'id="metadata-progress-fill"' in response.text
-    assert 'id="metadata-progress-label"' in response.text
-    assert 'id="ai-progress-fill"' in response.text
-    assert 'id="ai-progress-label"' in response.text
+    assert 'id="pipeline-status"' in response.text
+    assert 'id="paper-status-state"' in response.text
+    assert 'id="paper-status-count"' in response.text
+    assert 'id="paper-status-detail"' in response.text
+    assert 'id="metadata-status-state"' in response.text
+    assert 'id="metadata-status-count"' in response.text
+    assert 'id="metadata-status-detail"' in response.text
+    assert 'id="ai-status-state"' in response.text
+    assert 'id="ai-status-count"' in response.text
+    assert 'id="ai-status-detail"' in response.text
+    assert 'id="automation-progress"' not in response.text
+    assert 'id="paper-progress-fill"' not in response.text
     assert 'id="top-actions"' in response.text
     assert 'id="settings-panel"' in response.text
     assert 'id="crawl-panel"' not in response.text
@@ -122,22 +127,27 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'params.set("page", String(state.searchPage));' in js_response.text
     assert 'params.set("page_size", String(state.pageSize));' in js_response.text
     assert "renderPagination" in js_response.text
-    assert "renderPipelineProgress" in js_response.text
-    assert "renderProgressBar" in js_response.text
+    assert "renderPipelineStatus" in js_response.text
+    assert "renderStageStatus" in js_response.text
     assert "preflightPaperTotal" in js_response.text
     assert "preflightStatusText" in js_response.text
-    assert "metadataProgressCounts" in js_response.text
-    assert "aiProgressCounts" in js_response.text
+    assert "paperStageStatus" in js_response.text
+    assert "metadataStageStatus" in js_response.text
+    assert "aiStageStatus" in js_response.text
+    assert "renderPipelineProgress" not in js_response.text
+    assert "renderProgressBar" not in js_response.text
+    assert "metadataProgressCounts" not in js_response.text
+    assert "aiProgressCounts" not in js_response.text
     assert "renderPaperCrawlProgress" not in js_response.text
     assert "renderAutomationProgress" not in js_response.text
     assert "metadataProgressState" not in js_response.text
     assert "aiProgressState" not in js_response.text
     assert "status.crawl.expected_paper_count" in js_response.text
     assert "status.preflight.distinct_paper_count" in js_response.text
-    assert '"paper-progress-fill"' in js_response.text
-    assert '"metadata-progress-fill"' in js_response.text
-    assert '"ai-progress-fill"' in js_response.text
-    assert "fill.style.width" in js_response.text
+    assert '"paper-status-state"' in js_response.text
+    assert '"metadata-status-state"' in js_response.text
+    assert '"ai-status-state"' in js_response.text
+    assert "fill.style.width" not in js_response.text
     assert "paperLink" in js_response.text
     assert 'el("automation-refresh")' not in js_response.text
     assert 'el("crawl-run")' not in js_response.text
@@ -182,12 +192,16 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".automation-actions" in css_response.text
     assert ".compact-button" in css_response.text
     assert ".automation-summary" in css_response.text
-    assert ".automation-progress" in css_response.text
-    assert ".progress-track" in css_response.text
-    assert ".progress-row" in css_response.text
-    assert ".progress-name" in css_response.text
-    assert ".progress-fill" in css_response.text
-    assert ".progress-label" in css_response.text
+    assert ".pipeline-status" in css_response.text
+    assert ".stage-status" in css_response.text
+    assert ".stage-badge" in css_response.text
+    assert ".stage-count" in css_response.text
+    assert ".stage-detail" in css_response.text
+    assert ".automation-progress" not in css_response.text
+    assert ".progress-track" not in css_response.text
+    assert ".progress-row" not in css_response.text
+    assert ".progress-fill" not in css_response.text
+    assert ".progress-label" not in css_response.text
     assert ".progress-segment" not in css_response.text
     assert ".pagination-controls" in css_response.text
     assert ".source-link" in css_response.text

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase27b">
+    <link rel="stylesheet" href="/static/styles.css?v=phase28">
     <script>
       window.MathJax = {
         tex: {
@@ -68,28 +68,31 @@
             <div><span>Summary</span><strong>-</strong></div>
             <div><span>Score</span><strong>-</strong></div>
           </div>
-          <div id="automation-progress" class="automation-progress" aria-label="Daily pipeline progress">
-            <div class="progress-row" data-progress="papers">
-              <span class="progress-name">Papers</span>
-              <div class="progress-track">
-                <span id="paper-progress-fill" class="progress-fill"></span>
+          <div id="pipeline-status" class="pipeline-status" aria-label="Daily pipeline status">
+            <section class="stage-status" data-stage="papers">
+              <div class="stage-status-head">
+                <span>Papers</span>
+                <strong id="paper-status-state" class="stage-badge">idle</strong>
               </div>
-              <span id="paper-progress-label" class="progress-label">0/0</span>
-            </div>
-            <div class="progress-row" data-progress="metadata">
-              <span class="progress-name">Metadata</span>
-              <div class="progress-track">
-                <span id="metadata-progress-fill" class="progress-fill"></span>
+              <p id="paper-status-count" class="stage-count">-</p>
+              <p id="paper-status-detail" class="stage-detail">No crawl status yet.</p>
+            </section>
+            <section class="stage-status" data-stage="metadata">
+              <div class="stage-status-head">
+                <span>Metadata</span>
+                <strong id="metadata-status-state" class="stage-badge">idle</strong>
               </div>
-              <span id="metadata-progress-label" class="progress-label">0/0</span>
-            </div>
-            <div class="progress-row" data-progress="ai">
-              <span class="progress-name">AI</span>
-              <div class="progress-track">
-                <span id="ai-progress-fill" class="progress-fill"></span>
+              <p id="metadata-status-count" class="stage-count">-</p>
+              <p id="metadata-status-detail" class="stage-detail">No metadata status yet.</p>
+            </section>
+            <section class="stage-status" data-stage="ai">
+              <div class="stage-status-head">
+                <span>AI</span>
+                <strong id="ai-status-state" class="stage-badge">idle</strong>
               </div>
-              <span id="ai-progress-label" class="progress-label">0/0</span>
-            </div>
+              <p id="ai-status-count" class="stage-count">-</p>
+              <p id="ai-status-detail" class="stage-detail">No AI status yet.</p>
+            </section>
           </div>
           <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Dates are resolved against arXiv's current listing date.</p>
         </section>
@@ -318,6 +321,6 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase27b"></script>
+    <script src="/static/app.js?v=phase28"></script>
   </body>
 </html>

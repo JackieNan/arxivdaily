@@ -413,66 +413,96 @@ label span {
   gap: 6px;
 }
 
-.automation-progress {
+.pipeline-status {
   display: grid;
-  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
-.progress-row {
+.stage-status {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 84px;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.stage-status-head {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
 }
 
-.progress-name {
+.stage-status-head span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
 }
 
-.progress-track {
-  overflow: hidden;
-  height: 7px;
-  border: 1px solid #d3d9e1;
+.stage-badge {
+  max-width: 86px;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: #eef2f6;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.progress-fill {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: #3d7ea6;
-  transition: width 180ms ease, background 180ms ease;
+.stage-badge.is-idle {
+  color: var(--muted);
+  background: #fff;
 }
 
-.progress-fill.is-idle {
-  background: transparent;
+.stage-badge.is-running {
+  border-color: #b8d8e0;
+  color: var(--accent-strong);
+  background: #eef8fb;
 }
 
-.progress-fill.is-running {
-  background: #3d7ea6;
+.stage-badge.is-waiting,
+.stage-badge.is-partial {
+  border-color: #e0c16a;
+  color: var(--warn);
+  background: #fff8e6;
 }
 
-.progress-fill.is-waiting {
-  background: #d69e2e;
+.stage-badge.is-complete {
+  border-color: #b9d8c4;
+  color: var(--good);
+  background: #eef8f1;
 }
 
-.progress-fill.is-complete {
-  background: var(--good);
+.stage-badge.is-failed {
+  border-color: #e4b7b7;
+  color: var(--bad);
+  background: #fff1f1;
 }
 
-.progress-fill.is-failed {
-  background: var(--bad);
+.stage-count,
+.stage-detail {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.progress-label {
+.stage-count {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.stage-detail {
   color: var(--muted);
   font-size: 11px;
-  text-align: right;
-  white-space: nowrap;
+  line-height: 1.3;
 }
 
 .modal-backdrop {
@@ -955,6 +985,10 @@ mjx-container {
 
   .automation-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pipeline-status {
+    grid-template-columns: 1fr;
   }
 
   .template-field-row {

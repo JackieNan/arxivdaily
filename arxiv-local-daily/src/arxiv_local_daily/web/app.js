@@ -458,81 +458,107 @@ const ArxivDailyWorkbench = (() => {
     setDetail("automation-note", dailyStatusText(status));
     el("automation-state").textContent = status.status;
     el("automation-state").className = `badge status-${status.status}`;
-    renderPipelineProgress(status);
+    renderPipelineStatus(status);
   }
 
-  function renderPipelineProgress(status) {
+  function renderPipelineStatus(status) {
+    const papers = paperStageStatus(status);
+    renderStageStatus({
+      stateId: "paper-status-state",
+      countId: "paper-status-count",
+      detailId: "paper-status-detail",
+      ...papers,
+    });
+
+    const metadata = metadataStageStatus(status);
+    renderStageStatus({
+      stateId: "metadata-status-state",
+      countId: "metadata-status-count",
+      detailId: "metadata-status-detail",
+      ...metadata,
+    });
+
+    const ai = aiStageStatus(status);
+    renderStageStatus({
+      stateId: "ai-status-state",
+      countId: "ai-status-count",
+      detailId: "ai-status-detail",
+      ...ai,
+    });
+  }
+
+  function renderStageStatus({ stateId, countId, detailId, state, count, detail }) {
+    const stateNode = el(stateId);
+    stateNode.textContent = state;
+    stateNode.className = `stage-badge is-${state}`;
+    el(countId).textContent = count;
+    el(detailId).textContent = detail;
+  }
+
+  function paperStageStatus(status) {
     const parsed = Number(status.crawl.parsed_paper_count || 0);
     const expected = Number(status.crawl.expected_paper_count || 0);
     const preflightTotal = preflightPaperTotal(status);
-    renderProgressBar({
-      fillId: "paper-progress-fill",
-      labelId: "paper-progress-label",
-      label: "Papers",
-      complete: parsed,
-      total: preflightTotal || expected || parsed,
-      state: paperProgressState(status, parsed, expected),
-    });
-
-    const metadata = metadataProgressCounts(status);
-    renderProgressBar({
-      fillId: "metadata-progress-fill",
-      labelId: "metadata-progress-label",
-      label: "Metadata",
-      complete: metadata.complete,
-      total: metadata.total,
-      state: metadata.state,
-    });
-
-    const ai = aiProgressCounts(status);
-    renderProgressBar({
-      fillId: "ai-progress-fill",
-      labelId: "ai-progress-label",
-      label: "AI",
-      complete: ai.complete,
-      total: ai.total,
-      state: ai.state,
-    });
+    const total = preflightTotal || expected || parsed;
+    const state = paperStageState(status, parsed, expected);
+    const count = total > 0 ? `${parsed}/${total}` : "-";
+    let detail = "No paper crawl has started.";
+    if (status.crawl.status === "waiting") {
+      detail = "Waiting for arXiv to publish the requested listing date.";
+    } else if (status.preflight?.status === "complete") {
+      detail = `Preflight complete; evidence ${preflightEvidenceUrl()}.`;
+    } else if (status.preflight?.status && status.preflight.status !== "not_started") {
+      detail = `Preflight ${status.preflight.status}; evidence ${preflightEvidenceUrl()}.`;
+    } else if (parsed || expected) {
+      detail = `Crawl ${status.crawl.status || "unknown"} for selected date.`;
+    }
+    return { state, count, detail };
   }
 
-  function renderProgressBar({ fillId, labelId, label, complete, total, state }) {
-    const percent = total > 0 ? Math.min(Math.round((complete / total) * 100), 100) : 0;
-    const fill = el(fillId);
-    fill.style.width = `${percent}%`;
-    fill.className = `progress-fill is-${state}`;
-    el(labelId).textContent = total > 0 ? `${label} ${complete}/${total}` : `${label} -`;
-  }
-
-  function paperProgressState(status, parsed, expected) {
+  function paperStageState(status, parsed, expected) {
     if (!parsed && !expected) {
       return status.crawl.status === "waiting" ? "waiting" : "idle";
     }
     if (status.crawl.status === "complete") return "complete";
     if (status.crawl.status === "waiting") return "waiting";
-    if (status.crawl.status === "partial") return "failed";
+    if (status.crawl.status === "partial") return "partial";
     return "running";
   }
 
-  function metadataProgressCounts(status) {
+  function metadataStageStatus(status) {
     const total = Number(status.metadata.total || 0);
     const complete = Number(status.metadata.complete || 0);
-    if (!total) return { complete, total, state: "idle" };
-    if (complete === total) return { complete, total, state: "complete" };
-    if (Number(status.metadata.failed || 0)) return { complete, total, state: "failed" };
-    if (Number(status.metadata.retryable || 0)) return { complete, total, state: "waiting" };
-    return { complete, total, state: "running" };
+    const failed = Number(status.metadata.failed || 0);
+    const retryable = Number(status.metadata.retryable || 0);
+    let state = "running";
+    if (!total) state = "idle";
+    else if (complete === total) state = "complete";
+    else if (failed) state = "failed";
+    else if (retryable) state = "waiting";
+    const detailParts = [];
+    if (failed) detailParts.push(`${failed} failed`);
+    if (retryable) detailParts.push(`${retryable} retryable`);
+    const detail = total
+      ? `${complete} metadata records complete${detailParts.length ? `; ${detailParts.join("; ")}` : ""}.`
+      : "No metadata candidates yet.";
+    return { state, count: total > 0 ? `${complete}/${total}` : "-", detail };
   }
 
-  function aiProgressCounts(status) {
+  function aiStageStatus(status) {
     const total = Math.max(Number(status.summary.eligible || 0), Number(status.score.eligible || 0));
     const complete = Math.min(Number(status.summary.complete || 0), Number(status.score.complete || 0));
-    if (!total) return { complete: 0, total: 0, state: status.summary.template_missing ? "waiting" : "idle" };
-    if (complete === total) return { complete, total, state: "complete" };
-    if (Number(status.summary.failed || 0) || Number(status.score.failed || 0)) {
-      return { complete, total, state: "failed" };
-    }
-    if (status.summary.template_missing) return { complete, total, state: "waiting" };
-    return { complete, total, state: "running" };
+    let state = "running";
+    if (!total) state = status.summary.template_missing ? "waiting" : "idle";
+    else if (complete === total) state = "complete";
+    else if (Number(status.summary.failed || 0) || Number(status.score.failed || 0)) state = "failed";
+    else if (status.summary.template_missing) state = "waiting";
+    const failures = Number(status.summary.failed || 0) + Number(status.score.failed || 0);
+    let detail = total
+      ? `Summary ${status.summary.complete}/${status.summary.eligible}; score ${status.score.complete}/${status.score.eligible}.`
+      : "No AI candidates yet.";
+    if (status.summary.template_missing) detail = `${detail} Template missing.`;
+    if (failures) detail = `${detail} ${failures} failed.`;
+    return { state, count: total > 0 ? `${complete}/${total}` : "-", detail };
   }
 
   function metadataCoverageText(status, options = {}) {
