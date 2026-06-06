@@ -10,6 +10,13 @@ from arxiv_local_daily.models import (
 )
 
 
+def _listing_category_filter(categories: list[str] | None, *, column: str = "e.listing_category") -> tuple[str, tuple[str, ...]]:
+    if not categories:
+        return "", ()
+    placeholders = ", ".join("?" for _ in categories)
+    return f" AND {column} IN ({placeholders})", tuple(categories)
+
+
 class CrawlRepository:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection
@@ -439,15 +446,23 @@ class PaperRepository:
             (status, error, next_run_at, arxiv_id),
         )
 
-    def list_metadata_pending_ids_for_date(self, date: str, *, limit: int | None) -> list[str]:
+    def list_metadata_pending_ids_for_date(
+        self,
+        date: str,
+        *,
+        limit: int | None,
+        categories: list[str] | None = None,
+    ) -> list[str]:
+        category_sql, category_params = _listing_category_filter(categories)
         limit_sql = "" if limit is None else "LIMIT ?"
-        params: tuple[Any, ...] = (date,) if limit is None else (date, limit)
+        params: tuple[Any, ...] = (date, *category_params) if limit is None else (date, *category_params, limit)
         rows = self.connection.execute(
             f"""
             SELECT DISTINCT p.arxiv_id
             FROM papers p
             JOIN daily_events e ON e.arxiv_id = p.arxiv_id
             WHERE e.date = ?
+              {category_sql}
               AND p.metadata_status != 'complete'
               AND (
                 p.metadata_next_run_at IS NULL
@@ -460,14 +475,22 @@ class PaperRepository:
         ).fetchall()
         return [row["arxiv_id"] for row in rows]
 
-    def list_daily_ids_for_date(self, date: str, *, limit: int | None = None) -> list[str]:
+    def list_daily_ids_for_date(
+        self,
+        date: str,
+        *,
+        limit: int | None = None,
+        categories: list[str] | None = None,
+    ) -> list[str]:
+        category_sql, category_params = _listing_category_filter(categories, column="listing_category")
         limit_sql = "" if limit is None else "LIMIT ?"
-        params: tuple[Any, ...] = (date,) if limit is None else (date, limit)
+        params: tuple[Any, ...] = (date, *category_params) if limit is None else (date, *category_params, limit)
         rows = self.connection.execute(
             f"""
             SELECT DISTINCT arxiv_id
             FROM daily_events
             WHERE date = ?
+              {category_sql}
             ORDER BY arxiv_id
             {limit_sql}
             """,

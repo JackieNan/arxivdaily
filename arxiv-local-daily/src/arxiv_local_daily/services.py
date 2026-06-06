@@ -38,6 +38,17 @@ DAILY_LISTING_EVENT_TYPES = ("new", "cross-list", "replacement")
 DAILY_LISTING_CRAWL_MODES = ("single-source", "all-categories", "retry-incomplete")
 
 
+def _daily_event_category_filter(
+    categories: list[str] | None,
+    *,
+    table_alias: str = "e",
+) -> tuple[str, tuple[str, ...]]:
+    if not categories:
+        return "", ()
+    placeholders = ", ".join("?" for _ in categories)
+    return f" AND {table_alias}.listing_category IN ({placeholders})", tuple(categories)
+
+
 def _metadata_result(
     *,
     requested: int,
@@ -602,15 +613,16 @@ def enrich_metadata_for_date_unified(
     limit: int | None = None,
     oai_max_pages: int = 1,
     only_incomplete: bool = False,
+    categories: list[str] | None = None,
 ) -> dict[str, Any]:
     paper_repo = PaperRepository(connection)
     enrich_repo = MetadataEnrichmentRepository(connection)
     id_client = metadata_client or ArxivMetadataClient()
     oai = oai_client or OaiPmhMetadataClient()
     crawl_ids = (
-        paper_repo.list_metadata_pending_ids_for_date(date, limit=limit)
+        paper_repo.list_metadata_pending_ids_for_date(date, limit=limit, categories=categories)
         if only_incomplete
-        else paper_repo.list_daily_ids_for_date(date, limit=limit)
+        else paper_repo.list_daily_ids_for_date(date, limit=limit, categories=categories)
     )
     with transaction(connection):
         run_id = enrich_repo.create_run(date=date)
@@ -768,6 +780,7 @@ def complete_metadata_for_date(
     batch_size: int = 100,
     max_rounds: int | None = None,
     oai_max_pages: int = 1,
+    categories: list[str] | None = None,
     metadata_client: ArxivMetadataClient | None = None,
     oai_client: OaiPmhMetadataClient | None = None,
     metadata_runner: Any | None = None,
@@ -778,7 +791,7 @@ def complete_metadata_for_date(
     round_count = 0
 
     while max_rounds is None or round_count < max_rounds:
-        metadata = _daily_metadata_counts(connection, date=date)
+        metadata = _daily_metadata_counts(connection, date=date, categories=categories)
         if metadata["total"] == 0:
             return {
                 "date": date,
@@ -796,7 +809,7 @@ def complete_metadata_for_date(
                 "runs": rounds,
             }
 
-        ids = PaperRepository(connection).list_metadata_pending_ids_for_date(date, limit=batch_size)
+        ids = PaperRepository(connection).list_metadata_pending_ids_for_date(date, limit=batch_size, categories=categories)
         if not ids:
             return {
                 "date": date,
@@ -813,6 +826,9 @@ def complete_metadata_for_date(
         }
         if runner is enrich_metadata_for_date_unified:
             kwargs["only_incomplete"] = True
+            kwargs["categories"] = categories
+        elif categories is not None:
+            kwargs["categories"] = categories
         if metadata_client is not None:
             kwargs["metadata_client"] = metadata_client
         if oai_client is not None:
@@ -831,7 +847,7 @@ def complete_metadata_for_date(
                     "date": date,
                     "status": "waiting",
                     "rounds": round_count,
-                    "metadata": _daily_metadata_counts(connection, date=date),
+                    "metadata": _daily_metadata_counts(connection, date=date, categories=categories),
                     "runs": rounds,
                     "next_run_at": result.get("next_run_at"),
                 }
@@ -840,7 +856,7 @@ def complete_metadata_for_date(
         "date": date,
         "status": "max_rounds",
         "rounds": round_count,
-        "metadata": _daily_metadata_counts(connection, date=date),
+        "metadata": _daily_metadata_counts(connection, date=date, categories=categories),
         "runs": rounds,
     }
 
@@ -1000,13 +1016,16 @@ def _count_existing_complete_ai_triage_for_date(
     model: str,
     input_scope: str,
     rubric_version: str,
+    categories: list[str] | None = None,
 ) -> int:
+    category_sql, category_params = _daily_event_category_filter(categories)
     row = connection.execute(
-        """
+        f"""
         SELECT COUNT(DISTINCT p.arxiv_id) AS count
         FROM papers p
         JOIN daily_events e ON e.arxiv_id = p.arxiv_id
         WHERE e.date = ?
+          {category_sql}
           AND p.metadata_status = 'complete'
           AND COALESCE(p.abstract, '') != ''
           AND EXISTS (
@@ -1028,7 +1047,16 @@ def _count_existing_complete_ai_triage_for_date(
               AND ps.status = 'complete'
           )
         """,
-        (date, template_id, template_version, model, input_scope, model, rubric_version),
+        (
+            date,
+            *category_params,
+            template_id,
+            template_version,
+            model,
+            input_scope,
+            model,
+            rubric_version,
+        ),
     ).fetchone()
     return int(row["count"] or 0)
 
@@ -1044,10 +1072,13 @@ def _list_ai_triage_candidate_ids_for_date(
     rubric_version: str,
     limit: int | None,
     force: bool,
+    categories: list[str] | None = None,
 ) -> list[str]:
+    category_sql, category_params = _daily_event_category_filter(categories)
     limit_sql = "" if limit is None else "LIMIT ?"
     params: tuple[Any, ...] = (
         date,
+        *category_params,
         1 if force else 0,
         template_id,
         template_version,
@@ -1064,6 +1095,7 @@ def _list_ai_triage_candidate_ids_for_date(
         FROM papers p
         JOIN daily_events e ON e.arxiv_id = p.arxiv_id
         WHERE e.date = ?
+          {category_sql}
           AND p.metadata_status = 'complete'
           AND COALESCE(p.abstract, '') != ''
           AND (
@@ -1152,6 +1184,7 @@ def generate_ai_triage_for_date(
     model: str = "local",
     limit: int | None = None,
     force: bool = False,
+    categories: list[str] | None = None,
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
@@ -1175,6 +1208,7 @@ def generate_ai_triage_for_date(
             model=model,
             input_scope=input_scope,
             rubric_version=rubric_version,
+            categories=categories,
         )
     candidate_ids = _list_ai_triage_candidate_ids_for_date(
         connection,
@@ -1186,6 +1220,7 @@ def generate_ai_triage_for_date(
         rubric_version=rubric_version,
         limit=limit,
         force=force,
+        categories=categories,
     )
     if llm_client is None and not llm_api_configured():
         return {
@@ -1464,24 +1499,39 @@ def complete_ai_triage_for_date(
     model: str = "local",
     batch_size: int = 20,
     max_rounds: int | None = None,
+    categories: list[str] | None = None,
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     runs: list[dict[str, Any]] = []
     round_count = 0
+
+    def summary_coverage() -> dict[str, Any]:
+        return _summary_coverage(
+            connection,
+            date=date,
+            template_id=template_id,
+            template_name=template_name,
+            model=model,
+            categories=categories,
+        )
+
+    def score_coverage() -> dict[str, int | str]:
+        return _score_coverage(
+            connection,
+            date=date,
+            model=model,
+            rubric_version=rubric_version,
+            categories=categories,
+        )
+
     if llm_client is None and not llm_api_configured():
         return {
             "date": date,
             "status": "not_configured",
             "rounds": 0,
-            "summary": _summary_coverage(
-                connection,
-                date=date,
-                template_id=template_id,
-                template_name=template_name,
-                model=model,
-            ),
-            "score": _score_coverage(connection, date=date, model=model, rubric_version=rubric_version),
+            "summary": summary_coverage(),
+            "score": score_coverage(),
             "runs": runs,
         }
     if TemplateRepository(connection).get_template(template_id=template_id, name=template_name) is None:
@@ -1489,26 +1539,14 @@ def complete_ai_triage_for_date(
             "date": date,
             "status": "template_missing",
             "rounds": 0,
-            "summary": _summary_coverage(
-                connection,
-                date=date,
-                template_id=template_id,
-                template_name=template_name,
-                model=model,
-            ),
-            "score": _score_coverage(connection, date=date, model=model, rubric_version=rubric_version),
+            "summary": summary_coverage(),
+            "score": score_coverage(),
             "runs": runs,
         }
 
     while max_rounds is None or round_count < max_rounds:
-        summary = _summary_coverage(
-            connection,
-            date=date,
-            template_id=template_id,
-            template_name=template_name,
-            model=model,
-        )
-        score = _score_coverage(connection, date=date, model=model, rubric_version=rubric_version)
+        summary = summary_coverage()
+        score = score_coverage()
         if summary["eligible"] == summary["complete"] and score["eligible"] == score["complete"]:
             return {
                 "date": date,
@@ -1527,6 +1565,7 @@ def complete_ai_triage_for_date(
             model=model,
             limit=batch_size,
             force=False,
+            categories=categories,
             rubric_version=rubric_version,
             llm_client=llm_client,
         )
@@ -1540,25 +1579,13 @@ def complete_ai_triage_for_date(
                 "date": date,
                 "status": "failed",
                 "rounds": round_count,
-                "summary": _summary_coverage(
-                    connection,
-                    date=date,
-                    template_id=template_id,
-                    template_name=template_name,
-                    model=model,
-                ),
-                "score": _score_coverage(connection, date=date, model=model, rubric_version=rubric_version),
+                "summary": summary_coverage(),
+                "score": score_coverage(),
                 "runs": runs,
             }
 
-    summary = _summary_coverage(
-        connection,
-        date=date,
-        template_id=template_id,
-        template_name=template_name,
-        model=model,
-    )
-    score = _score_coverage(connection, date=date, model=model, rubric_version=rubric_version)
+    summary = summary_coverage()
+    score = score_coverage()
     status = "complete" if summary["eligible"] == summary["complete"] and score["eligible"] == score["complete"] else "max_rounds"
     return {
         "date": date,
@@ -1570,9 +1597,15 @@ def complete_ai_triage_for_date(
     }
 
 
-def _daily_metadata_counts(connection: sqlite3.Connection, *, date: str) -> dict[str, int]:
+def _daily_metadata_counts(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    categories: list[str] | None = None,
+) -> dict[str, int]:
+    category_sql, category_params = _daily_event_category_filter(categories)
     row = connection.execute(
-        """
+        f"""
         SELECT
             COUNT(DISTINCT p.arxiv_id) AS total,
             COUNT(DISTINCT CASE WHEN p.metadata_status = 'complete' THEN p.arxiv_id END) AS complete,
@@ -1582,8 +1615,9 @@ def _daily_metadata_counts(connection: sqlite3.Connection, *, date: str) -> dict
         FROM papers p
         JOIN daily_events e ON e.arxiv_id = p.arxiv_id
         WHERE e.date = ?
+          {category_sql}
         """,
-        (date,),
+        (date, *category_params),
     ).fetchone()
     return {key: int(row[key] or 0) for key in ["total", "complete", "pending", "failed", "retryable"]}
 
@@ -1595,10 +1629,11 @@ def _summary_coverage(
     template_id: int | None,
     template_name: str | None,
     model: str,
+    categories: list[str] | None = None,
 ) -> dict[str, Any]:
     template = TemplateRepository(connection).get_template(template_id=template_id, name=template_name)
     if template is None:
-        eligible = _eligible_daily_paper_count(connection, date=date)
+        eligible = _eligible_daily_paper_count(connection, date=date, categories=categories)
         return {
             "eligible": eligible,
             "complete": 0,
@@ -1612,8 +1647,9 @@ def _summary_coverage(
         }
 
     fields = enabled_template_fields(template)
+    category_sql, category_params = _daily_event_category_filter(categories)
     rows = connection.execute(
-        """
+        f"""
         SELECT
             p.arxiv_id,
             MAX(CASE WHEN s.status = 'complete' THEN 1 ELSE 0 END) AS has_complete,
@@ -1627,11 +1663,12 @@ def _summary_coverage(
            AND s.model = ?
            AND s.input_scope = ?
         WHERE e.date = ?
+          {category_sql}
           AND p.metadata_status = 'complete'
           AND COALESCE(p.abstract, '') != ''
         GROUP BY p.arxiv_id
         """,
-        (int(template["id"]), int(template["version"]), model, template["input_scope"], date),
+        (int(template["id"]), int(template["version"]), model, template["input_scope"], date, *category_params),
     ).fetchall()
     complete = sum(1 for row in rows if int(row["has_complete"] or 0) == 1)
     failed = sum(1 for row in rows if int(row["has_complete"] or 0) == 0 and int(row["has_failed"] or 0) == 1)
@@ -1655,9 +1692,11 @@ def _score_coverage(
     date: str,
     model: str,
     rubric_version: str,
+    categories: list[str] | None = None,
 ) -> dict[str, int | str]:
+    category_sql, category_params = _daily_event_category_filter(categories)
     rows = connection.execute(
-        """
+        f"""
         SELECT
             p.arxiv_id,
             MAX(CASE WHEN ps.status = 'complete' THEN 1 ELSE 0 END) AS has_complete,
@@ -1669,11 +1708,12 @@ def _score_coverage(
            AND ps.model = ?
            AND ps.rubric_version = ?
         WHERE e.date = ?
+          {category_sql}
           AND p.metadata_status = 'complete'
           AND COALESCE(p.abstract, '') != ''
         GROUP BY p.arxiv_id
         """,
-        (model, rubric_version, date),
+        (model, rubric_version, date, *category_params),
     ).fetchall()
     complete = sum(1 for row in rows if int(row["has_complete"] or 0) == 1)
     failed = sum(1 for row in rows if int(row["has_complete"] or 0) == 0 and int(row["has_failed"] or 0) == 1)
@@ -1687,17 +1727,24 @@ def _score_coverage(
     }
 
 
-def _eligible_daily_paper_count(connection: sqlite3.Connection, *, date: str) -> int:
+def _eligible_daily_paper_count(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    categories: list[str] | None = None,
+) -> int:
+    category_sql, category_params = _daily_event_category_filter(categories)
     row = connection.execute(
-        """
+        f"""
         SELECT COUNT(DISTINCT p.arxiv_id) AS count
         FROM papers p
         JOIN daily_events e ON e.arxiv_id = p.arxiv_id
         WHERE e.date = ?
+          {category_sql}
           AND p.metadata_status = 'complete'
           AND COALESCE(p.abstract, '') != ''
         """,
-        (date,),
+        (date, *category_params),
     ).fetchone()
     return int(row["count"] or 0)
 
@@ -1743,26 +1790,30 @@ def get_daily_pipeline_status(
     template_name: str | None = None,
     model: str = "local",
     expected_categories: list[str] | None = None,
+    categories: list[str] | None = None,
     rubric_version: str = "reading_priority_v1",
 ) -> dict[str, Any]:
+    coverage_categories = categories if categories is not None else expected_categories
     crawl = get_crawl_completeness_for_date(
         connection,
         date=date,
         expected_categories=expected_categories,
     )
-    metadata = _daily_metadata_counts(connection, date=date)
+    metadata = _daily_metadata_counts(connection, date=date, categories=coverage_categories)
     summary = _summary_coverage(
         connection,
         date=date,
         template_id=template_id,
         template_name=template_name,
         model=model,
+        categories=coverage_categories,
     )
     score = _score_coverage(
         connection,
         date=date,
         model=model,
         rubric_version=rubric_version,
+        categories=coverage_categories,
     )
     preflight = PreflightRepository(connection).latest_for_date(date) or {
         "date": date,

@@ -653,3 +653,26 @@ Date baseline: 2026-06-03
   - full test suite: 154 passed, 1 warning
   - browser verified `phase37` static assets, AI config status, June 4 daily list page `1/24` with `1192` papers, prompt preview modal content, selected-paper `not_configured` status persistence, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 32: CS Default Scope
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-06-arxiv-local-daily-cs-default-scope.md`
+- Scope completed:
+  - add all 40 `cs.*` arXiv categories to the web app as the default empty-input category scope
+  - make selected-date crawl automation send the CS category set unless the user manually enters categories or switches to all groups
+  - make metadata completion and metadata status counts use the same category scope
+  - make batch `Run Summary + Score` send the same category scope
+  - add a bottom-of-page scope panel with a low-priority `抓取全部大组` / `恢复只抓取 CS` toggle
+  - make daily status coverage accept category scope so CS-only summary/score totals match the selected workflow
+  - filter AI triage candidates, skipped counts, summary coverage, and score coverage by category when categories are supplied
+- Important decisions:
+  - backend APIs still allow all-category operation by omitting `categories`
+  - CS-only is the default product workflow, not a destructive database filter
+  - manual category input overrides both CS-only and all-groups defaults
+- Verification:
+  - focused category-scope AI/API/Web UI tests: 6 passed, 1 warning
+  - focused metadata category-scope tests: 3 passed, 1 warning
+  - full test suite: 156 passed, 1 warning
+  - browser verified `phase38` static assets, bottom scope panel visible, default CS status shows `40 cs.* categories`, all-groups toggle works, and no horizontal overflow
+- Status: implemented on branch, not yet merged to `main`.

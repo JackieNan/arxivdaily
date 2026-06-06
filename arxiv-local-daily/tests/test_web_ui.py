@@ -50,6 +50,10 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="paper-ai-status"' in response.text
     assert 'id="prompt-preview-dialog"' in response.text
     assert 'id="prompt-preview-content"' in response.text
+    assert 'id="archive-scope-panel"' in response.text
+    assert 'id="archive-scope-toggle"' in response.text
+    assert 'id="archive-scope-status"' in response.text
+    assert "Default scope: Computer Science" in response.text
     assert 'id="crawl-date-open"' in response.text
     assert "抓取指定日期" in response.text
     assert 'id="status-refresh"' in response.text
@@ -135,6 +139,13 @@ def test_static_web_assets_are_served(tmp_path):
     assert "previewSelectedPaperPrompt" in js_response.text
     assert "renderPromptPreview" in js_response.text
     assert "renderSummaryContent" in js_response.text
+    assert "CS_CATEGORIES" in js_response.text
+    assert "state.archiveScope" in js_response.text
+    assert "categoryScopeCategories" in js_response.text
+    assert "body.categories = scopedCategories" in js_response.text
+    assert 'el("archive-scope-toggle")' in js_response.text
+    assert '"cs.AI"' in js_response.text
+    assert '"cs.LG"' in js_response.text
     assert "/api/summaries/run" not in js_response.text
     assert "/api/scores/run" not in js_response.text
     assert "body.template_name = templateName" in js_response.text
@@ -241,6 +252,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".ai-action-row" in css_response.text
     assert ".prompt-preview-content" in css_response.text
     assert ".summary-content" in css_response.text
+    assert ".archive-scope-panel" in css_response.text
+    assert ".archive-scope-actions" in css_response.text
     assert ".modal-backdrop" in css_response.text
     assert ".modal-panel" in css_response.text
     assert ".modal-actions" in css_response.text

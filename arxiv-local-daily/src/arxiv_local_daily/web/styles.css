@@ -525,6 +525,41 @@ label span {
   line-height: 1.3;
 }
 
+.archive-scope-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, auto);
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  border: 1px dashed #c9d4dd;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 10px 12px;
+  color: var(--muted);
+}
+
+.archive-scope-panel strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.archive-scope-panel p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.archive-scope-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.archive-scope-actions button {
+  min-width: 132px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1086,6 +1121,14 @@ mjx-container {
 
   .ai-action-row .inline-status {
     grid-column: 1 / -1;
+  }
+
+  .archive-scope-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .archive-scope-actions {
+    justify-content: stretch;
   }
 
   .search-controls .wide {

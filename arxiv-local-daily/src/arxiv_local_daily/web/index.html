@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase37">
+    <link rel="stylesheet" href="/static/styles.css?v=phase38">
     <script>
       window.MathJax = {
         tex: {
@@ -320,6 +320,15 @@
           </section>
         </aside>
       </main>
+      <section id="archive-scope-panel" class="archive-scope-panel">
+        <div>
+          <strong>Default scope: Computer Science</strong>
+          <p id="archive-scope-status">No manual categories: crawl, status, and AI use 40 cs.* categories.</p>
+        </div>
+        <div class="archive-scope-actions">
+          <button id="archive-scope-toggle" class="secondary-button" type="button">抓取全部大组</button>
+        </div>
+      </section>
     </div>
     <div id="crawl-date-dialog" class="modal-backdrop" hidden>
       <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="crawl-date-title">
@@ -350,6 +359,6 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase37"></script>
+    <script src="/static/app.js?v=phase38"></script>
   </body>
 </html>

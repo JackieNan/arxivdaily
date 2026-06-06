@@ -241,3 +241,68 @@ def test_complete_metadata_for_date_runs_batches_until_all_complete(db):
     assert result["rounds"] == 2
     assert result["metadata"]["complete"] == 3
     assert id_client.calls == [["2606.00001", "2606.00002"], ["2606.00003"]]
+
+
+def test_complete_metadata_for_date_filters_candidates_by_categories(db):
+    cs_html = """
+    <div id="dlpage">
+      <h3>New submissions for Thu, 4 Jun 2026</h3>
+      <dl>
+        <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00001">arXiv:2606.00001</a></span></dt>
+        <dd><div class="list-title">Title: CS paper</div></dd>
+      </dl>
+    </div>
+    """
+    math_html = """
+    <div id="dlpage">
+      <h3>New submissions for Thu, 4 Jun 2026</h3>
+      <dl>
+        <dt><span class="list-identifier"><a title="Abstract" href="/abs/2606.00002">arXiv:2606.00002</a></span></dt>
+        <dd><div class="list-title">Title: Math paper</div></dd>
+      </dl>
+    </div>
+    """
+    ingest_daily_crawl_sources(
+        db,
+        date="2026-06-04",
+        mode="all-categories",
+        sources=[
+            CrawlSourceInput(
+                category="cs.AI",
+                url="https://arxiv.org/list/cs.AI/new",
+                status="complete",
+                http_status=200,
+                html=cs_html,
+            ),
+            CrawlSourceInput(
+                category="math.AG",
+                url="https://arxiv.org/list/math.AG/new",
+                status="complete",
+                http_status=200,
+                html=math_html,
+            ),
+        ],
+    )
+    id_client = EchoMetadataClient()
+
+    result = complete_metadata_for_date(
+        db,
+        date="2026-06-04",
+        batch_size=10,
+        max_rounds=5,
+        categories=["cs.AI"],
+        metadata_client=id_client,
+        oai_client=FakeOaiClient([]),
+        oai_max_pages=0,
+        sleep_fn=lambda seconds: None,
+    )
+
+    assert result["status"] == "complete"
+    assert result["metadata"]["total"] == 1
+    assert result["metadata"]["complete"] == 1
+    assert id_client.calls == [["2606.00001"]]
+    rows = db.execute("SELECT arxiv_id, metadata_status FROM papers ORDER BY arxiv_id").fetchall()
+    assert {row["arxiv_id"]: row["metadata_status"] for row in rows} == {
+        "2606.00001": "complete",
+        "2606.00002": "pending",
+    }

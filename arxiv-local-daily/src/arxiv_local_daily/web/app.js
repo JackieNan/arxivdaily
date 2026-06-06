@@ -9,10 +9,54 @@ const ArxivDailyWorkbench = (() => {
     pageSize: 50,
     pageMeta: null,
     aiConfig: null,
+    archiveScope: "cs",
   };
 
   const AUTO_AUTOMATION_INTERVAL_MS = 10 * 60 * 1000;
   const ACTIVE_AUTOMATION_POLL_MS = 2500;
+
+  const CS_CATEGORIES = [
+    "cs.AI",
+    "cs.AR",
+    "cs.CC",
+    "cs.CE",
+    "cs.CG",
+    "cs.CL",
+    "cs.CR",
+    "cs.CV",
+    "cs.CY",
+    "cs.DB",
+    "cs.DC",
+    "cs.DL",
+    "cs.DM",
+    "cs.DS",
+    "cs.ET",
+    "cs.FL",
+    "cs.GL",
+    "cs.GR",
+    "cs.GT",
+    "cs.HC",
+    "cs.IR",
+    "cs.IT",
+    "cs.LG",
+    "cs.LO",
+    "cs.MA",
+    "cs.MM",
+    "cs.MS",
+    "cs.NA",
+    "cs.NE",
+    "cs.NI",
+    "cs.OH",
+    "cs.OS",
+    "cs.PF",
+    "cs.PL",
+    "cs.RO",
+    "cs.SC",
+    "cs.SD",
+    "cs.SE",
+    "cs.SI",
+    "cs.SY",
+  ];
 
   const AUTOMATION_STEP_LABELS = {
     idle: "idle",
@@ -350,6 +394,36 @@ const ArxivDailyWorkbench = (() => {
       .filter(Boolean);
   }
 
+  function manualCategories() {
+    return splitList(el("crawl-categories").value);
+  }
+
+  function categoryScopeCategories() {
+    const manual = manualCategories();
+    if (manual.length) return manual;
+    return state.archiveScope === "cs" ? CS_CATEGORIES : [];
+  }
+
+  function renderArchiveScope() {
+    const manual = manualCategories();
+    const isCsScope = state.archiveScope === "cs";
+    const status = manual.length
+      ? `Manual categories override default scope: ${manual.join(", ")}.`
+      : isCsScope
+        ? `No manual categories: crawl, status, and AI use ${CS_CATEGORIES.length} cs.* categories.`
+        : "No manual categories: crawl, status, and AI use all arXiv groups.";
+    el("archive-scope-status").textContent = status;
+    el("archive-scope-toggle").textContent = isCsScope ? "抓取全部大组" : "恢复只抓取 CS";
+  }
+
+  function toggleArchiveScope() {
+    state.archiveScope = state.archiveScope === "cs" ? "all" : "cs";
+    renderArchiveScope();
+    const scopeText = state.archiveScope === "cs" ? "Computer Science only" : "all arXiv groups";
+    recordOperation(`Default scope changed: ${scopeText}`);
+    refreshSelectedDateView();
+  }
+
   function dateValue() {
     return el("date-input").value || todayIso();
   }
@@ -394,10 +468,10 @@ const ArxivDailyWorkbench = (() => {
     const button = silent ? null : options.button || el("crawl-date-open");
     setBusy(button, true);
     try {
-      const categories = splitList(el("crawl-categories").value);
+      const scopedCategories = categoryScopeCategories();
       const body = { date: dateValue() };
       const templateName = el("summary-template").value.trim();
-      if (categories.length) body.categories = categories;
+      if (scopedCategories.length) body.categories = scopedCategories;
       if (templateName) body.template_name = templateName;
       body.model = el("summary-model").value.trim() || "local";
       body.crawl_mode = "auto";
@@ -437,10 +511,12 @@ const ArxivDailyWorkbench = (() => {
   }
 
   function summaryRequestBody() {
+    const scopedCategories = categoryScopeCategories();
     const body = {
       date: dateValue(),
       ...aiSettingsBody(),
     };
+    if (scopedCategories.length) body.categories = scopedCategories;
     return body;
   }
 
@@ -587,8 +663,10 @@ const ArxivDailyWorkbench = (() => {
     const params = new URLSearchParams();
     const templateName = el("summary-template").value.trim();
     const model = el("summary-model").value.trim() || "local";
+    const scopedCategories = categoryScopeCategories();
     params.set("model", model);
     if (templateName) params.set("template_name", templateName);
+    scopedCategories.forEach((category) => params.append("categories", category));
     return params;
   }
 
@@ -1149,6 +1227,8 @@ const ArxivDailyWorkbench = (() => {
     el("crawl-categories").addEventListener("keydown", (event) => {
       if (event.key === "Enter") startDailyAutomation();
     });
+    el("crawl-categories").addEventListener("input", renderArchiveScope);
+    el("archive-scope-toggle").addEventListener("click", toggleArchiveScope);
     el("template-editor-toggle").addEventListener("click", toggleTemplateEditor);
     el("summary-template-save").addEventListener("click", saveSummaryTemplate);
     el("summary-score-run").addEventListener("click", runSummaryAndScore);
@@ -1172,6 +1252,7 @@ const ArxivDailyWorkbench = (() => {
       }
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
+    renderArchiveScope();
     loadSummaryTemplates();
     loadAiConfig();
     refreshSelectedDateView();

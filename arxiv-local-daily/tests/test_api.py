@@ -274,9 +274,23 @@ def test_post_crawl_run_schedules_auto_metadata_enrich(tmp_path):
         crawl_calls.append({"date": date, "categories": categories})
         return 42
 
-    def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+    def fake_completion_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
         completion_calls.append(
-            {"date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages, "max_rounds": max_rounds}
+            {
+                "date": date,
+                "batch_size": batch_size,
+                "oai_max_pages": oai_max_pages,
+                "max_rounds": max_rounds,
+                "categories": categories,
+            }
         )
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
@@ -293,7 +307,9 @@ def test_post_crawl_run_schedules_auto_metadata_enrich(tmp_path):
     assert response.status_code == 200
     assert response.json() == {"run_id": 42, "metadata_completion": "queued"}
     assert crawl_calls == [{"date": "2026-06-03", "categories": None}]
-    assert completion_calls == [{"date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1, "max_rounds": None}]
+    assert completion_calls == [
+        {"date": "2026-06-03", "batch_size": 100, "oai_max_pages": 1, "max_rounds": None, "categories": None}
+    ]
 
 
 def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(tmp_path):
@@ -322,8 +338,24 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
         calls.append({"step": "preflight", "date": date, "categories": categories})
         return {"status": "complete", "distinct_paper_count": 3}
 
-    def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
-        calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
+    def fake_completion_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
+        calls.append(
+            {
+                "step": "metadata",
+                "date": date,
+                "batch_size": batch_size,
+                "oai_max_pages": oai_max_pages,
+                "categories": categories,
+            }
+        )
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
     def fake_ai_runner(
@@ -335,6 +367,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
         model: str,
         batch_size: int,
         max_rounds: int | None,
+        categories: list[str] | None = None,
     ):
         calls.append(
             {
@@ -345,6 +378,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
                 "model": model,
                 "batch_size": batch_size,
                 "max_rounds": max_rounds,
+                "categories": categories,
             }
         )
         return {"status": "complete", "summary": {"complete": 0}, "score": {"complete": 0}}
@@ -379,7 +413,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
     assert calls == [
         {"step": "preflight", "date": "2026-06-04", "categories": ["cs.AI"]},
         {"step": "crawl", "date": "2026-06-04", "categories": ["cs.AI"]},
-        {"step": "metadata", "date": "2026-06-04", "batch_size": 100, "oai_max_pages": 1},
+        {"step": "metadata", "date": "2026-06-04", "batch_size": 100, "oai_max_pages": 1, "categories": ["cs.AI"]},
         {
             "step": "ai",
             "date": "2026-06-04",
@@ -388,6 +422,7 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
             "model": "gpt-test",
             "batch_size": 7,
             "max_rounds": None,
+            "categories": ["cs.AI"],
         },
     ]
     status_response = client.get("/api/daily/status/2026-06-04?template_name=daily_research&model=gpt-test")
@@ -441,7 +476,15 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
         crawl_repo.finish_run(run_id, status="complete", summary_counts={})
         return run_id
 
-    def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+    def fake_completion_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
         calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
@@ -454,6 +497,7 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
         model: str,
         batch_size: int,
         max_rounds: int | None,
+        categories: list[str] | None = None,
     ):
         calls.append({"step": "ai", "date": date, "model": model})
         return {"status": "complete", "summary": {"complete": 0}, "score": {"complete": 0}}
@@ -520,7 +564,15 @@ def test_post_daily_automation_backfills_preflight_when_crawl_is_already_complet
         calls.append({"step": "crawl"})
         return 1
 
-    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+    def fake_metadata_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
         calls.append({"step": "metadata", "date": date})
         return {"status": "complete", "metadata": {"total": 3, "complete": 3}}
 
@@ -533,6 +585,7 @@ def test_post_daily_automation_backfills_preflight_when_crawl_is_already_complet
         model: str,
         batch_size: int,
         max_rounds: int | None,
+        categories: list[str] | None = None,
     ):
         calls.append({"step": "ai", "date": date})
         return {"status": "complete"}
@@ -582,7 +635,15 @@ def test_post_daily_automation_records_no_papers_as_finished_automation(tmp_path
         crawl_repo.finish_run(run_id, status="complete", summary_counts={})
         return run_id
 
-    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+    def fake_metadata_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
         calls.append({"step": "metadata", "date": date})
         return {"status": "no_papers", "metadata": {"total": 0, "complete": 0}}
 
@@ -595,6 +656,7 @@ def test_post_daily_automation_records_no_papers_as_finished_automation(tmp_path
         model: str,
         batch_size: int,
         max_rounds: int | None,
+        categories: list[str] | None = None,
     ):
         calls.append({"step": "ai", "date": date})
         return {"status": "complete"}
@@ -644,7 +706,15 @@ def test_post_daily_automation_stops_before_metadata_when_historical_crawl_is_pa
         crawl_repo.finish_run(run_id, status="partial", summary_counts={})
         return run_id
 
-    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+    def fake_metadata_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
         calls.append({"step": "metadata", "date": date})
         return {"status": "no_papers", "metadata": {"total": 0, "complete": 0}}
 
@@ -711,8 +781,16 @@ def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(t
         crawl_repo.finish_run(run_id, status="complete", summary_counts={})
         return run_id
 
-    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
-        calls.append({"step": "metadata", "date": date})
+    def fake_metadata_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
+        calls.append({"step": "metadata", "date": date, "categories": categories})
         return {"status": "complete", "metadata": {"total": 0, "complete": 0}}
 
     def fake_ai_runner(
@@ -724,8 +802,9 @@ def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(t
         model: str,
         batch_size: int,
         max_rounds: int | None,
+        categories: list[str] | None = None,
     ):
-        calls.append({"step": "ai", "date": date, "model": model})
+        calls.append({"step": "ai", "date": date, "model": model, "categories": categories})
         return {"status": "complete", "summary": {"complete": 0}, "score": {"complete": 0}}
 
     client = TestClient(
@@ -748,8 +827,8 @@ def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(t
     assert calls == [
         {"step": "date", "categories": ["cs.AI"]},
         {"step": "historical", "date": "2026-06-04", "categories": ["cs.AI"], "max_pages": 7},
-        {"step": "metadata", "date": "2026-06-04"},
-        {"step": "ai", "date": "2026-06-04", "model": "local"},
+        {"step": "metadata", "date": "2026-06-04", "categories": ["cs.AI"]},
+        {"step": "ai", "date": "2026-06-04", "model": "local", "categories": ["cs.AI"]},
     ]
 
 
@@ -765,7 +844,15 @@ def test_post_daily_automation_auto_waits_when_selected_date_is_after_arxiv_curr
         calls.append({"step": "daily"})
         return 1
 
-    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+    def fake_metadata_runner(
+        connection,
+        *,
+        date: str,
+        batch_size: int,
+        oai_max_pages: int,
+        max_rounds: int | None,
+        categories: list[str] | None = None,
+    ):
         calls.append({"step": "metadata"})
         return {"status": "complete"}
 
@@ -1021,6 +1108,7 @@ def test_post_ai_triage_run_uses_injected_runner(tmp_path):
         model: str,
         limit: int | None,
         force: bool,
+        categories: list[str] | None = None,
     ):
         calls.append(
             {
@@ -1030,6 +1118,7 @@ def test_post_ai_triage_run_uses_injected_runner(tmp_path):
                 "model": model,
                 "limit": limit,
                 "force": force,
+                "categories": categories,
             }
         )
         return {"requested": 2, "completed": 2, "failed": 0, "skipped": 0}
@@ -1043,6 +1132,7 @@ def test_post_ai_triage_run_uses_injected_runner(tmp_path):
             "template_name": "daily_research",
             "model": "gpt-test",
             "force": True,
+            "categories": ["cs.AI", "cs.LG"],
         },
     )
 
@@ -1056,6 +1146,7 @@ def test_post_ai_triage_run_uses_injected_runner(tmp_path):
             "model": "gpt-test",
             "limit": None,
             "force": True,
+            "categories": ["cs.AI", "cs.LG"],
         }
     ]
 

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -106,6 +106,7 @@ class AiTriageRunRequest(BaseModel):
     model: str = "local"
     limit: int | None = None
     force: bool = False
+    categories: list[str] | None = None
 
 
 class AiPromptPreviewRequest(BaseModel):
@@ -200,6 +201,7 @@ def _run_metadata_completion_background(
     batch_size: int = 100,
     oai_max_pages: int = 1,
     max_rounds: int | None = None,
+    categories: list[str] | None = None,
 ) -> None:
     connection = connect(db_path)
     initialize_schema(connection)
@@ -210,6 +212,7 @@ def _run_metadata_completion_background(
             batch_size=batch_size,
             oai_max_pages=oai_max_pages,
             max_rounds=max_rounds,
+            categories=categories,
         )
     finally:
         connection.close()
@@ -287,7 +290,11 @@ def _run_daily_automation_background(
                 )
                 preflight_runner(connection, date=request.date, categories=request.categories)
 
-        crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
+        crawl_report = get_crawl_completeness_for_date(
+            connection,
+            date=request.date,
+            expected_categories=request.categories,
+        )
         if request.force_crawl or crawl_report["status"] != "complete":
             _update_daily_automation_run(
                 connection,
@@ -305,7 +312,11 @@ def _run_daily_automation_background(
             else:
                 crawl_runner(connection, date=request.date, categories=request.categories)
             connection.commit()
-            crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
+            crawl_report = get_crawl_completeness_for_date(
+                connection,
+                date=request.date,
+                expected_categories=request.categories,
+            )
             if crawl_report["status"] != "complete":
                 _update_daily_automation_run(
                     connection,
@@ -339,6 +350,7 @@ def _run_daily_automation_background(
             batch_size=request.batch_size,
             oai_max_pages=request.oai_max_pages,
             max_rounds=None,
+            categories=request.categories,
         )
         metadata_complete = metadata_result.get("status") == "complete"
         if metadata_complete:
@@ -356,6 +368,7 @@ def _run_daily_automation_background(
                 model=request.model,
                 batch_size=request.ai_batch_size,
                 max_rounds=None,
+                categories=request.categories,
             )
             _update_daily_automation_run(
                 connection,
@@ -615,6 +628,7 @@ def create_app(
                     batch_size=100,
                     oai_max_pages=1,
                     max_rounds=None,
+                    categories=request.categories,
                 )
                 response["metadata_completion"] = "queued"
             return response
@@ -674,6 +688,7 @@ def create_app(
         template_id: int | None = None,
         template_name: str | None = None,
         model: str = "local",
+        categories: list[str] | None = Query(default=None),
     ):
         connection = get_connection()
         try:
@@ -683,6 +698,8 @@ def create_app(
                 template_id=template_id,
                 template_name=template_name,
                 model=model,
+                expected_categories=categories,
+                categories=categories,
             )
         finally:
             connection.close()
@@ -813,6 +830,7 @@ def create_app(
                 model=request.model,
                 limit=request.limit,
                 force=request.force,
+                categories=request.categories,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

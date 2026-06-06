@@ -86,16 +86,22 @@ def _triage_response(arxiv_id: str = "2606.00001", total: int = 88) -> str:
     )
 
 
-def _seed_daily_paper(db, arxiv_id: str = "2606.00001") -> int:
+def _seed_daily_paper(
+    db,
+    arxiv_id: str = "2606.00001",
+    *,
+    category: str = "cs.AI",
+    create_template: bool = True,
+) -> int:
     paper_repo = PaperRepository(db)
     paper_repo.upsert_daily_event(
         date="2026-06-03",
         event=ParsedDailyEvent(
             arxiv_id=arxiv_id,
             event_type="new",
-            listing_category="cs.AI",
-            primary_category="cs.AI",
-            source_url="https://arxiv.org/list/cs.AI/new",
+            listing_category=category,
+            primary_category=category,
+            source_url=f"https://arxiv.org/list/{category}/new",
         ),
     )
     paper_repo.upsert_metadata(
@@ -104,12 +110,15 @@ def _seed_daily_paper(db, arxiv_id: str = "2606.00001") -> int:
             title=f"Structured Summaries for Daily Research {arxiv_id}",
             abstract="This paper proposes configurable summaries for daily research triage.",
             authors=["Ada Lovelace", "Alan Turing"],
-            primary_category="cs.AI",
-            categories=["cs.AI", "cs.LG"],
+            primary_category=category,
+            categories=[category],
             abs_url=f"https://arxiv.org/abs/{arxiv_id}",
             pdf_url=f"https://arxiv.org/pdf/{arxiv_id}",
         )
     )
+    if not create_template:
+        db.commit()
+        return 0
     template_id = TemplateRepository(db).create_template(_template_input())
     db.commit()
     return template_id
@@ -217,6 +226,27 @@ def test_generate_ai_triage_for_paper_persists_summary_and_score(db):
     score = ScoreRepository(db).get_latest_score("2606.00001")
     assert score["status"] == "complete"
     assert score["score_total"] == 88
+
+
+def test_generate_ai_triage_for_date_filters_candidates_by_categories(db):
+    template_id = _seed_daily_paper(db, "2606.00001", category="cs.AI")
+    _seed_daily_paper(db, "2606.00002", category="math.AG", create_template=False)
+    client = FakeTriageClient([_triage_response("2606.00001")])
+
+    result = generate_ai_triage_for_date(
+        db,
+        date="2026-06-03",
+        template_id=template_id,
+        model="gpt-test",
+        categories=["cs.AI"],
+        llm_client=client,
+    )
+
+    assert result["requested"] == 1
+    assert result["completed"] == 1
+    assert len(client.calls) == 1
+    assert db.execute("SELECT COUNT(*) AS count FROM summaries WHERE arxiv_id = ?", ("2606.00002",)).fetchone()["count"] == 0
+    assert ScoreRepository(db).get_latest_score("2606.00002") is None
 
 
 def test_complete_ai_triage_for_date_runs_batches_until_all_candidates_are_done(db):
