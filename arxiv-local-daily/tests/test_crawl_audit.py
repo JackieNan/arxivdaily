@@ -72,6 +72,33 @@ def test_crawl_completeness_report_ignores_historical_oai_metadata_runs(db):
     assert report["complete_category_count"] == 0
 
 
+def test_crawl_completeness_report_rejects_poisoned_historical_archive_complete_rows(db):
+    crawl_repo = CrawlRepository(db)
+    run_id = crawl_repo.create_run(date="2026-06-04", mode="historical-listing", status="running")
+    crawl_repo.record_source(
+        run_id=run_id,
+        category="cs.AI",
+        event_section="archive",
+        url="https://arxiv.org/list/cs.AI/2606?skip=0&show=2000",
+        status="complete",
+        http_status=404,
+        parsed_count=0,
+        expected_count=0,
+        missing_count=0,
+        error="archive page not found; treated as no submissions",
+    )
+    crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+    db.commit()
+
+    report = build_crawl_completeness_report(db, date="2026-06-04", expected_categories=["cs.AI"])
+
+    assert report["status"] == "partial"
+    assert report["failed_category_count"] == 1
+    assert report["retry_categories"] == ["cs.AI"]
+    assert report["categories"][0]["status"] == "failed"
+    assert report["categories"][0]["error"] == "archive page not found; treated as no submissions"
+
+
 def test_crawl_completeness_report_marks_all_complete_sources_complete(db):
     ingest_daily_crawl_sources(
         db,

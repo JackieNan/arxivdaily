@@ -126,6 +126,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert "body.template_name = templateName" in js_response.text
     assert 'body.model = el("summary-model").value.trim() || "local";' in js_response.text
     assert 'body.crawl_mode = "auto";' in js_response.text
+    assert "body.force_crawl = true" in js_response.text
     assert "shiftIsoDate" in js_response.text
     assert 'new Date(Date.UTC(year, month - 1, day + delta))' in js_response.text
     assert 'new Date(`${dateValue()}T00:00:00`)' not in js_response.text
@@ -139,6 +140,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert "renderStageStatus" in js_response.text
     assert "renderAutomationStatus" in js_response.text
     assert "AUTOMATION_STEP_LABELS" in js_response.text
+    assert "crawl_incomplete" in js_response.text
     assert "result.automation_run_id" in js_response.text
     assert "status.automation" in js_response.text
     assert "preflightPaperTotal" in js_response.text

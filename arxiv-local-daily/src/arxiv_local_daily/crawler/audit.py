@@ -11,8 +11,19 @@ def _unique_sorted(values: list[str] | None) -> list[str]:
     return sorted(dict.fromkeys(values))
 
 
+def _is_poisoned_complete_source(row: dict[str, Any]) -> bool:
+    error = row["error"] or ""
+    return row["status"] == "complete" and (
+        row["http_status"] == 404 or "archive page not found" in error
+    )
+
+
 def _effective_category_status(category: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    complete_rows = [row for row in rows if row["status"] == "complete"]
+    complete_rows = [
+        row
+        for row in rows
+        if row["status"] == "complete" and not _is_poisoned_complete_source(row)
+    ]
     if complete_rows:
         row = complete_rows[-1]
         return {

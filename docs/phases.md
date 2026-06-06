@@ -604,3 +604,29 @@ Date baseline: 2026-06-03
   - browser verified active polling updated the same card to `complete`, `Step: no papers`, with the error detail `metadata skipped because selected date has no papers`
   - browser width check showed no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 30: Historical Pastweek Crawl Fix
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-06-arxiv-local-daily-historical-pastweek-fix.md`
+- Scope completed:
+  - add `/list/{category}/pastweek?skip=...&show=2000` as the first source for recent historical subject listing crawl
+  - keep month archive URL fallback for later diagnostics and older-date extension
+  - parse date-only pastweek sections by allowing `parse_historical_listing_for_date` to use a default `new` event type
+  - filter historical and pastweek entries by target subject category
+  - treat historical 404 pages as failed instead of complete-zero
+  - make crawl audit reject old poisoned complete rows with archive-page 404 evidence
+  - stop daily automation after incomplete crawl instead of continuing to metadata and reporting `no_papers`
+  - add `crawl_incomplete` UI status
+  - make the selected-date crawl launcher send `force_crawl=true` so user clicks really re-run the crawl even after an old bad complete-zero audit
+  - bump static asset query version to load the fixed frontend code
+- Important decisions:
+  - for current-week historical dates, arXiv `pastweek` is the reliable subject listing source
+  - `no_papers` should only mean the crawl completed and genuinely found no papers; crawl failures must remain crawl failures
+  - the explicit `抓取指定日期` action should force a fresh crawl, not silently trust prior audit state
+- Verification:
+  - focused parser/live-crawl/audit/API/web UI tests: 78 passed, 1 warning
+  - full test suite: 150 passed, 1 warning
+  - direct arXiv URL probe confirmed `/list/cs.AI/pastweek?skip=0&show=2000` returns 200 and date-only sections
+  - browser verified 2026-06-04 run #8 completed with Papers `1192/1192`, Metadata `1192/1192`, Backend `complete`
+- Status: implemented on branch, not yet merged to `main`.

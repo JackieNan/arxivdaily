@@ -20,6 +20,7 @@ const ArxivDailyWorkbench = (() => {
     preflight: "preflight",
     crawl: "crawl",
     crawl_already_complete: "crawl already complete",
+    crawl_incomplete: "crawl incomplete",
     metadata: "metadata",
     ai: "AI",
     waiting_for_arxiv_update: "waiting for arXiv update",
@@ -378,6 +379,7 @@ const ArxivDailyWorkbench = (() => {
       if (templateName) body.template_name = templateName;
       body.model = el("summary-model").value.trim() || "local";
       body.crawl_mode = "auto";
+      body.force_crawl = true;
       const result = await api("/api/daily/automation/start", {
         method: "POST",
         body: JSON.stringify(body),
@@ -588,6 +590,8 @@ const ArxivDailyWorkbench = (() => {
       detail = "Backend skipped crawl because the latest crawl audit is already complete.";
     } else if (status.automation?.current_step === "preflight") {
       detail = "Backend is verifying today's listing counts before crawl.";
+    } else if (status.automation?.current_step === "crawl_incomplete") {
+      detail = `Backend stopped after incomplete crawl: ${status.automation.error || "crawl did not complete"}.`;
     } else if (status.automation?.status === "failed") {
       detail = `Backend failed: ${status.automation.error || "unknown error"}.`;
     } else if (status.automation?.status === "waiting") {

@@ -115,6 +115,7 @@ class DailyAutomationStartRequest(BaseModel):
     date: str
     categories: list[str] | None = None
     crawl_mode: str = "auto"
+    force_crawl: bool = False
     batch_size: int = Field(default=100, ge=1, le=500)
     oai_max_pages: int = Field(default=1, ge=0, le=100)
     historical_max_pages: int = Field(default=100, ge=1, le=500)
@@ -263,7 +264,7 @@ def _run_daily_automation_background(
                 preflight_runner(connection, date=request.date, categories=request.categories)
 
         crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
-        if crawl_report["status"] != "complete":
+        if request.force_crawl or crawl_report["status"] != "complete":
             _update_daily_automation_run(
                 connection,
                 automation_run_id,
@@ -280,6 +281,21 @@ def _run_daily_automation_background(
             else:
                 crawl_runner(connection, date=request.date, categories=request.categories)
             connection.commit()
+            crawl_report = get_crawl_completeness_for_date(connection, date=request.date)
+            if crawl_report["status"] != "complete":
+                _update_daily_automation_run(
+                    connection,
+                    automation_run_id,
+                    status="failed",
+                    current_step="crawl_incomplete",
+                    error=(
+                        f"crawl {crawl_report['status']}: "
+                        f"{crawl_report['complete_category_count']}/{crawl_report['expected_category_count']} "
+                        "categories complete"
+                    ),
+                    finished=True,
+                )
+                return
         else:
             _update_daily_automation_run(
                 connection,

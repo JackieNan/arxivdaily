@@ -79,6 +79,20 @@ def _extract_primary_category(dd: Tag | None) -> str | None:
     return match.group(1) if match else None
 
 
+def _extract_categories(dd: Tag | None) -> list[str]:
+    if dd is None:
+        return []
+    subjects = dd.select_one(".list-subjects")
+    subject_text = subjects.get_text(" ", strip=True) if subjects else dd.get_text(" ", strip=True)
+    return list(dict.fromkeys(CATEGORY_RE.findall(subject_text)))
+
+
+def _matches_category_filter(dd: Tag | None, category: str | None) -> bool:
+    if category is None:
+        return True
+    return category in _extract_categories(dd)
+
+
 def _extract_listing_title(dd: Tag | None) -> str | None:
     if dd is None:
         return None
@@ -169,6 +183,8 @@ def parse_historical_listing_for_date(
     date: str,
     listing_category: str,
     source_url: str,
+    filter_category: str | None = None,
+    default_event_type: str | None = None,
 ) -> list[ParsedDailyEvent]:
     soup = BeautifulSoup(html, "html.parser")
     dlpage = soup.select_one("#dlpage") or soup
@@ -185,7 +201,7 @@ def parse_historical_listing_for_date(
             detected_event_type = _heading_to_event_type(text)
             if heading_date is not None:
                 current_date_matches = heading_date == date
-                current_event_type = detected_event_type if current_date_matches else None
+                current_event_type = (detected_event_type or default_event_type) if current_date_matches else None
                 continue
             if detected_event_type is not None:
                 current_event_type = detected_event_type if current_date_matches else None
@@ -196,6 +212,8 @@ def parse_historical_listing_for_date(
         if arxiv_id is None:
             continue
         dd = node.find_next_sibling("dd")
+        if not _matches_category_filter(dd, filter_category):
+            continue
         events.append(
             ParsedDailyEvent(
                 arxiv_id=arxiv_id,

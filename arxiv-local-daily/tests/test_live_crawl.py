@@ -7,6 +7,7 @@ from arxiv_local_daily.crawler.live import (
     build_category_taxonomy_url,
     build_daily_listing_url,
     build_historical_listing_url,
+    build_pastweek_listing_url,
     fetch_current_arxiv_listing_date,
     run_historical_listing_crawl,
     run_live_daily_crawl,
@@ -84,7 +85,19 @@ def test_build_category_taxonomy_url():
 
 def test_build_historical_listing_url_uses_month_archive_and_pagination():
     assert build_historical_listing_url("https://arxiv.org", "cs.AI", "2026-06-05", skip=2000, show=2000) == (
-        "https://arxiv.org/list/cs.AI/2606?skip=2000&show=2000"
+        "https://arxiv.org/list/cs/2606?skip=2000&show=2000"
+    )
+    assert build_historical_listing_url("https://arxiv.org", "cond-mat.mtrl-sci", "2026-06-05") == (
+        "https://arxiv.org/list/cond-mat/2606?skip=0&show=2000"
+    )
+    assert build_historical_listing_url("https://arxiv.org", "hep-th", "2026-06-05") == (
+        "https://arxiv.org/list/hep-th/2606?skip=0&show=2000"
+    )
+
+
+def test_build_pastweek_listing_url_uses_subject_category_and_pagination():
+    assert build_pastweek_listing_url("https://arxiv.org", "cs.AI", skip=2000, show=2000) == (
+        "https://arxiv.org/list/cs.AI/pastweek?skip=2000&show=2000"
     )
 
 
@@ -268,12 +281,25 @@ def test_run_historical_listing_crawl_fetches_archive_page_and_replaces_historic
       <h4>New submissions</h4>
       <dl>
         <dt><a title="Abstract" href="/abs/2606.00010">arXiv:2606.00010</a></dt>
-        <dd><div class="list-title">Title: Exact Historical Paper</div></dd>
+        <dd>
+          <div class="list-title">Title: Exact Historical Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Artificial Intelligence (cs.AI)</span></div>
+        </dd>
       </dl>
       <h4>Cross submissions</h4>
       <dl>
         <dt><a title="Abstract" href="/abs/2606.00011">arXiv:2606.00011</a></dt>
-        <dd><div class="list-title">Title: Exact Cross Paper</div></dd>
+        <dd>
+          <div class="list-title">Title: Exact Cross Paper</div>
+          <div class="list-subjects">
+            <span class="primary-subject">Machine Learning (cs.LG)</span>; Artificial Intelligence (cs.AI)
+          </div>
+        </dd>
+        <dt><a title="Abstract" href="/abs/2606.00012">arXiv:2606.00012</a></dt>
+        <dd>
+          <div class="list-title">Title: Other CS Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Computer Vision (cs.CV)</span></div>
+        </dd>
       </dl>
     </div>
     """
@@ -315,7 +341,7 @@ def test_run_historical_listing_crawl_fetches_archive_page_and_replaces_historic
         http_client=client,
     )
 
-    assert requested_urls == ["https://arxiv.org/list/cs.AI/2606?skip=0&show=2000"]
+    assert requested_urls == ["https://arxiv.org/list/cs.AI/pastweek?skip=0&show=2000"]
     run = db.execute("SELECT mode, status FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
     source = db.execute("SELECT category, status, parsed_count FROM crawl_run_sources WHERE run_id = ?", (run_id,)).fetchone()
     events = db.execute(
@@ -382,8 +408,45 @@ def test_run_historical_listing_crawl_paginates_until_page_dates_are_older_than_
     event_count = db.execute("SELECT COUNT(*) AS count FROM daily_events WHERE date = ?", ("2026-06-05",)).fetchone()["count"]
 
     assert requested_urls == [
-        "https://arxiv.org/list/cs.AI/2606?skip=0&show=2000",
-        "https://arxiv.org/list/cs.AI/2606?skip=2000&show=2000",
+        "https://arxiv.org/list/cs.AI/pastweek?skip=0&show=2000",
+        "https://arxiv.org/list/cs.AI/pastweek?skip=2000&show=2000",
     ]
     assert dict(source) == {"status": "complete", "parsed_count": 0, "expected_count": 0}
     assert event_count == 0
+
+
+def test_run_historical_listing_crawl_treats_archive_404_as_failed(db):
+    requested_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(str(request.url))
+        return httpx.Response(404, text="Not Found")
+
+    client = ArxivHttpClient(transport=httpx.MockTransport(handler), retry_sleep_seconds=0)
+
+    run_id = run_historical_listing_crawl(
+        db,
+        date="2026-06-05",
+        categories=["cs.AI"],
+        http_client=client,
+    )
+
+    run = db.execute("SELECT status FROM crawl_runs WHERE id = ?", (run_id,)).fetchone()
+    source = db.execute(
+        "SELECT url, status, http_status, parsed_count, expected_count, error FROM crawl_run_sources WHERE run_id = ?",
+        (run_id,),
+    ).fetchone()
+
+    assert requested_urls == [
+        "https://arxiv.org/list/cs.AI/pastweek?skip=0&show=2000",
+        "https://arxiv.org/list/cs/2606?skip=0&show=2000",
+    ]
+    assert run["status"] == "partial"
+    assert dict(source) == {
+        "url": "https://arxiv.org/list/cs/2606?skip=0&show=2000",
+        "status": "failed",
+        "http_status": 404,
+        "parsed_count": 0,
+        "expected_count": None,
+        "error": "historical month page not found",
+    }

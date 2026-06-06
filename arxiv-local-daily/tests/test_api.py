@@ -247,7 +247,21 @@ def test_post_daily_automation_start_runs_crawl_then_metadata_and_ai_completion(
 
     def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
         calls.append({"step": "crawl", "date": date, "categories": categories})
-        return 43
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="all-categories", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="all",
+            url="https://arxiv.org/list/cs.AI/new",
+            status="complete",
+            http_status=200,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+        )
+        crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+        return run_id
 
     def fake_preflight_runner(connection, *, date: str, categories: list[str] | None):
         calls.append({"step": "preflight", "date": date, "categories": categories})
@@ -332,7 +346,21 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
 
     def fake_crawl_runner(connection, *, date: str, categories: list[str] | None) -> int:
         calls.append({"step": "crawl", "date": date, "categories": categories})
-        return 43
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="all-categories", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="all",
+            url="https://arxiv.org/list/cs.AI/new",
+            status="complete",
+            http_status=200,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+        )
+        crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+        return run_id
 
     def fake_historical_runner(
         connection,
@@ -342,7 +370,21 @@ def test_post_daily_automation_start_can_run_historical_mode(tmp_path):
         max_pages: int,
     ) -> int:
         calls.append({"step": "historical", "date": date, "categories": categories, "max_pages": max_pages})
-        return 44
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="historical-listing", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="archive",
+            url="https://arxiv.org/list/cs/2606?skip=0&show=2000",
+            status="complete",
+            http_status=200,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+        )
+        crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+        return run_id
 
     def fake_completion_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
         calls.append({"step": "metadata", "date": date, "batch_size": batch_size, "oai_max_pages": oai_max_pages})
@@ -524,6 +566,52 @@ def test_post_daily_automation_records_no_papers_as_finished_automation(tmp_path
     assert automation["current_step"] == "no_papers"
 
 
+def test_post_daily_automation_stops_before_metadata_when_historical_crawl_is_partial(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_historical_runner(connection, *, date: str, categories: list[str] | None, max_pages: int) -> int:
+        calls.append({"step": "historical", "date": date})
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="historical-listing", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="archive",
+            url="https://arxiv.org/list/cs/2606?skip=0&show=2000",
+            status="failed",
+            http_status=404,
+            parsed_count=0,
+            expected_count=None,
+            missing_count=0,
+            error="historical archive page not found",
+        )
+        crawl_repo.finish_run(run_id, status="partial", summary_counts={})
+        return run_id
+
+    def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
+        calls.append({"step": "metadata", "date": date})
+        return {"status": "no_papers", "metadata": {"total": 0, "complete": 0}}
+
+    client = TestClient(
+        create_app(
+            database_path=db_path,
+            historical_crawl_runner=fake_historical_runner,
+            metadata_completion_runner=fake_metadata_runner,
+        )
+    )
+
+    response = client.post("/api/daily/automation/start", json={"date": "2026-06-04", "crawl_mode": "historical"})
+
+    assert response.status_code == 200
+    assert calls == [{"step": "historical", "date": "2026-06-04"}]
+    status_response = client.get("/api/daily/status/2026-06-04")
+    automation = status_response.json()["automation"]
+    assert automation["status"] == "failed"
+    assert automation["current_step"] == "crawl_incomplete"
+    assert "0/1 categories complete" in automation["error"]
+
+
 def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     calls: list[dict] = []
@@ -534,11 +622,39 @@ def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(t
 
     def fake_daily_runner(connection, *, date: str, categories: list[str] | None) -> int:
         calls.append({"step": "daily", "date": date, "categories": categories})
-        return 11
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="all-categories", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="all",
+            url="https://arxiv.org/list/cs.AI/new",
+            status="complete",
+            http_status=200,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+        )
+        crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+        return run_id
 
     def fake_historical_runner(connection, *, date: str, categories: list[str] | None, max_pages: int) -> int:
         calls.append({"step": "historical", "date": date, "categories": categories, "max_pages": max_pages})
-        return 12
+        crawl_repo = CrawlRepository(connection)
+        run_id = crawl_repo.create_run(date=date, mode="historical-listing", status="running")
+        crawl_repo.record_source(
+            run_id=run_id,
+            category="cs.AI",
+            event_section="archive",
+            url="https://arxiv.org/list/cs/2606?skip=0&show=2000",
+            status="complete",
+            http_status=200,
+            parsed_count=0,
+            expected_count=0,
+            missing_count=0,
+        )
+        crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+        return run_id
 
     def fake_metadata_runner(connection, *, date: str, batch_size: int, oai_max_pages: int, max_rounds: int | None):
         calls.append({"step": "metadata", "date": date})

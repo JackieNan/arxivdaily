@@ -291,3 +291,72 @@ def test_parse_historical_listing_for_date_supports_event_headings_with_embedded
     )
 
     assert [(event.arxiv_id, event.event_type) for event in events] == [("2606.00010", "new")]
+
+
+def test_parse_historical_listing_for_date_can_filter_month_archive_by_category():
+    html = """
+    <div id="dlpage">
+      <h3>Fri, 5 Jun 2026</h3>
+      <h4>New submissions</h4>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00010">arXiv:2606.00010</a></dt>
+        <dd>
+          <div class="list-title">Title: AI Primary Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Artificial Intelligence (cs.AI)</span></div>
+        </dd>
+        <dt><a title="Abstract" href="/abs/2606.00011">arXiv:2606.00011</a></dt>
+        <dd>
+          <div class="list-title">Title: ML Cross Paper</div>
+          <div class="list-subjects">
+            <span class="primary-subject">Machine Learning (cs.LG)</span>; Artificial Intelligence (cs.AI)
+          </div>
+        </dd>
+        <dt><a title="Abstract" href="/abs/2606.00012">arXiv:2606.00012</a></dt>
+        <dd>
+          <div class="list-title">Title: Other CS Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Computer Vision (cs.CV)</span></div>
+        </dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_historical_listing_for_date(
+        html,
+        date="2026-06-05",
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs/2606?skip=0&show=2000",
+        filter_category="cs.AI",
+    )
+
+    assert [(event.arxiv_id, event.primary_category, event.title) for event in events] == [
+        ("2606.00010", "cs.AI", "AI Primary Paper"),
+        ("2606.00011", "cs.LG", "ML Cross Paper"),
+    ]
+
+
+def test_parse_historical_listing_for_date_supports_pastweek_date_only_sections():
+    html = """
+    <div id="dlpage">
+      <h3>Fri, 5 Jun 2026 (showing 2 of 2 entries )</h3>
+      <dl>
+        <dt><a title="Abstract" href="/abs/2606.00010">arXiv:2606.00010</a></dt>
+        <dd>
+          <div class="list-title">Title: Date Only Paper</div>
+          <div class="list-subjects"><span class="primary-subject">Artificial Intelligence (cs.AI)</span></div>
+        </dd>
+      </dl>
+    </div>
+    """
+
+    events = parse_historical_listing_for_date(
+        html,
+        date="2026-06-05",
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/pastweek?skip=0&show=2000",
+        filter_category="cs.AI",
+        default_event_type="new",
+    )
+
+    assert [(event.arxiv_id, event.event_type, event.title) for event in events] == [
+        ("2606.00010", "new", "Date Only Paper"),
+    ]

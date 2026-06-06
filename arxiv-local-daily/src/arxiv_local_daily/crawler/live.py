@@ -19,7 +19,12 @@ def build_daily_listing_url(base_url: str, category: str) -> str:
 
 def build_historical_listing_url(base_url: str, category: str, date: str, *, skip: int = 0, show: int = 2000) -> str:
     month_code = f"{date[2:4]}{date[5:7]}"
-    return f"{base_url.rstrip('/')}/list/{category}/{month_code}?skip={skip}&show={show}"
+    archive = category.split(".", 1)[0]
+    return f"{base_url.rstrip('/')}/list/{archive}/{month_code}?skip={skip}&show={show}"
+
+
+def build_pastweek_listing_url(base_url: str, category: str, *, skip: int = 0, show: int = 2000) -> str:
+    return f"{base_url.rstrip('/')}/list/{category}/pastweek?skip={skip}&show={show}"
 
 
 def build_category_taxonomy_url(base_url: str) -> str:
@@ -196,58 +201,96 @@ def run_historical_listing_crawl(
     crawl_categories = categories if categories is not None else discover_categories(client, base_url=base_url)
     sources: list[tuple[CrawlSourceInput, list[ParsedDailyEvent]]] = []
     cleanup_categories: list[str] = []
+    page_cache: dict[str, tuple[int, str]] = {}
 
     for category in crawl_categories:
-        first_url = build_historical_listing_url(base_url, category, date, skip=0, show=page_size)
         category_events: list[ParsedDailyEvent] = []
-        source_status = "complete"
+        source_status = "incomplete"
         http_status: int | None = None
         error: str | None = None
         expected_count = 0
-        reached_terminal_page = False
+        source_url = build_pastweek_listing_url(base_url, category, skip=0, show=page_size)
 
-        for page_index in range(max_pages):
-            skip = page_index * page_size
-            url = build_historical_listing_url(base_url, category, date, skip=skip, show=page_size)
-            try:
-                response = client.fetch_text(url)
-            except Exception as exc:
-                source_status = "failed"
-                error = str(exc)
-                http_status = None
-                reached_terminal_page = True
-                break
-            http_status = response.status_code
-            if response.status_code == 404:
-                error = "archive page not found; treated as no submissions"
-                reached_terminal_page = True
-                break
-            if response.status_code != 200:
-                source_status = "failed"
-                error = f"HTTP {response.status_code}"
-                reached_terminal_page = True
-                break
-
-            page_events = parse_historical_listing_for_date(
-                response.text,
-                date=date,
-                listing_category=category,
-                source_url=url,
+        source_options = [
+            ("pastweek", category),
+            ("month", category),
+        ]
+        for source_kind, filter_category in source_options:
+            reached_terminal_page = False
+            source_status = "complete"
+            source_error: str | None = None
+            source_http_status: int | None = None
+            source_events: list[ParsedDailyEvent] = []
+            source_first_url = (
+                build_pastweek_listing_url(base_url, category, skip=0, show=page_size)
+                if source_kind == "pastweek"
+                else build_historical_listing_url(base_url, category, date, skip=0, show=page_size)
             )
-            if page_events:
-                category_events.extend(page_events)
+
+            for page_index in range(max_pages):
+                skip = page_index * page_size
+                url = (
+                    build_pastweek_listing_url(base_url, category, skip=skip, show=page_size)
+                    if source_kind == "pastweek"
+                    else build_historical_listing_url(base_url, category, date, skip=skip, show=page_size)
+                )
+                try:
+                    if url in page_cache:
+                        status_code, html = page_cache[url]
+                    else:
+                        response = client.fetch_text(url)
+                        status_code, html = response.status_code, response.text
+                        page_cache[url] = (status_code, html)
+                except Exception as exc:
+                    source_status = "failed"
+                    source_error = str(exc)
+                    source_http_status = None
+                    reached_terminal_page = True
+                    break
+                source_http_status = status_code
+                if status_code == 404:
+                    source_status = "failed"
+                    source_error = f"historical {source_kind} page not found"
+                    reached_terminal_page = True
+                    break
+                if status_code != 200:
+                    source_status = "failed"
+                    source_error = f"HTTP {status_code}"
+                    reached_terminal_page = True
+                    break
+
+                page_events = parse_historical_listing_for_date(
+                    html,
+                    date=date,
+                    listing_category=category,
+                    source_url=url,
+                    filter_category=filter_category,
+                    default_event_type="new" if source_kind == "pastweek" else None,
+                )
+                if page_events:
+                    source_events.extend(page_events)
+                    reached_terminal_page = True
+                    break
+
+                dates_seen = parse_listing_dates(html)
+                if date in dates_seen or _historical_page_has_passed_target(dates_seen, date):
+                    reached_terminal_page = True
+                    break
+
+            if source_status == "complete" and not reached_terminal_page:
+                source_status = "incomplete"
+                source_error = (
+                    f"historical {source_kind} listing crawl reached max_pages={max_pages} "
+                    f"before finding or passing {date}"
+                )
+
+            source_url = source_first_url
+            http_status = source_http_status
+            error = source_error
+            if source_status == "complete":
+                category_events = source_events
                 expected_count = len(category_events)
-                reached_terminal_page = True
                 break
-
-            dates_seen = parse_listing_dates(response.text)
-            if date in dates_seen or _historical_page_has_passed_target(dates_seen, date):
-                reached_terminal_page = True
-                break
-
-        if source_status == "complete" and not reached_terminal_page:
-            source_status = "incomplete"
-            error = f"historical listing crawl reached max_pages={max_pages} before finding or passing {date}"
 
         if source_status == "complete":
             cleanup_categories.append(category)
@@ -258,7 +301,7 @@ def run_historical_listing_crawl(
                 CrawlSourceInput(
                     category=category,
                     event_section="archive",
-                    url=first_url,
+                    url=source_url,
                     status=source_status,
                     http_status=http_status,
                     expected_count=expected_count if source_status == "complete" else None,
