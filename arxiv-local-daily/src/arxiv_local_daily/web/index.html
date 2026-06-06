@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=phase27b">
     <script>
       window.MathJax = {
         tex: {
@@ -55,7 +55,10 @@
               <span>Categories</span>
               <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
             </label>
-            <button id="automation-refresh" class="secondary-button" type="button">Refresh Status</button>
+            <div class="automation-actions">
+              <button id="crawl-date-open" type="button">抓取指定日期</button>
+              <button id="status-refresh" class="secondary-button compact-button" type="button">刷新状态</button>
+            </div>
           </div>
           <div id="automation-summary" class="metric-grid automation-summary">
             <div><span>Status</span><strong>-</strong></div>
@@ -298,6 +301,23 @@
         </aside>
       </main>
     </div>
-    <script src="/static/app.js"></script>
+    <div id="crawl-date-dialog" class="modal-backdrop" hidden>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="crawl-date-title">
+        <div class="modal-header">
+          <h2 id="crawl-date-title">抓取指定日期</h2>
+          <button id="crawl-date-cancel" class="icon-button" type="button" aria-label="Close">x</button>
+        </div>
+        <label>
+          <span>目标日期</span>
+          <input id="crawl-date-target" type="date">
+        </label>
+        <p class="inline-status">系统会自动判断当前 daily 或历史 listing，持续补齐 papers、metadata 和 AI 结果；若 arXiv 尚未更新到该日期，会记录 waiting。</p>
+        <div class="modal-actions">
+          <button id="crawl-date-confirm" type="button">开始抓取</button>
+          <button id="crawl-date-dismiss" class="secondary-button" type="button">取消</button>
+        </div>
+      </section>
+    </div>
+    <script src="/static/app.js?v=phase27b"></script>
   </body>
 </html>

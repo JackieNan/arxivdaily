@@ -307,6 +307,20 @@ label span {
   grid-template-columns: minmax(140px, 1fr) minmax(96px, auto);
 }
 
+.automation-actions {
+  display: grid;
+  grid-template-columns: minmax(136px, 1fr) minmax(76px, auto);
+  gap: 6px;
+  align-items: end;
+  min-width: 0;
+}
+
+.compact-button {
+  min-width: 0;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
 .settings-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
@@ -459,6 +473,58 @@ label span {
   font-size: 11px;
   text-align: right;
   white-space: nowrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-panel {
+  display: grid;
+  gap: 12px;
+  width: min(420px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  padding: 14px;
+}
+
+.modal-header,
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+}
+
+.icon-button {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
 }
 
 .metric-grid div {
@@ -895,6 +961,11 @@ mjx-container {
     grid-template-columns: 1fr;
   }
 
+  .modal-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .search-controls .wide {
     grid-column: 1 / -1;
   }
@@ -915,6 +986,11 @@ mjx-container {
   .settings-grid,
   .search-controls,
   .automation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-actions,
+  .modal-actions {
     grid-template-columns: 1fr;
   }
 

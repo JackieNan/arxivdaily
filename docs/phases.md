@@ -511,6 +511,8 @@ Date baseline: 2026-06-03
   - empty tracks show no known total, colored fill shows current phase progress/state
 - Verification:
   - focused web UI tests: 2 passed, 1 warning
+  - full test suite: 143 passed, 1 warning
+  - browser verified launcher open/close, `开始抓取` POST, `Crawl 2026-06-06 queued` feedback, waiting blocker display, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
 
 ## Phase 26: Preflight Completeness Evidence
@@ -539,4 +541,22 @@ Date baseline: 2026-06-03
 - Verification:
   - focused API/live/parser/preflight tests: 63 passed, 1 warning
   - full test suite: 143 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.
+
+## Phase 27: Selected-Date Crawl Launcher
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-06-arxiv-local-daily-date-crawl-launcher.md`
+- Scope completed:
+  - replace the primary `Refresh Status` automation button with `抓取指定日期`
+  - add a date crawl launcher dialog with target date selection and explicit `开始抓取`
+  - keep a smaller `刷新状态` control that only reloads daily status/search
+  - make date picker changes and previous/next buttons refresh the selected-date view without starting a crawl
+  - keep background polling for status/search refresh without silently launching new crawl jobs
+- Important decisions:
+  - viewing a date and starting a crawl are separate actions
+  - the launcher continues to use backend `crawl_mode=auto`, so arXiv listing date still decides daily, historical, or waiting behavior
+  - category Enter remains a keyboard shortcut for starting automation for the selected date
+- Verification:
+  - focused web UI tests: 2 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.

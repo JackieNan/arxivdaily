@@ -322,12 +322,35 @@ const ArxivDailyWorkbench = (() => {
   function changeDateByDays(delta) {
     el("date-input").value = shiftIsoDate(dateValue(), delta);
     state.searchPage = 1;
-    startDailyAutomation();
+    refreshSelectedDateView();
+  }
+
+  async function refreshSelectedDateView() {
+    await loadDailyStatus({ silent: true });
+    await runSearch({ silent: true });
+  }
+
+  function openDateCrawlDialog() {
+    el("crawl-date-target").value = dateValue();
+    el("crawl-date-dialog").hidden = false;
+    el("crawl-date-target").focus();
+  }
+
+  function closeDateCrawlDialog() {
+    el("crawl-date-dialog").hidden = true;
+  }
+
+  async function confirmDateCrawl() {
+    const targetDate = el("crawl-date-target").value || dateValue();
+    el("date-input").value = targetDate;
+    state.searchPage = 1;
+    await startDailyAutomation({ button: el("crawl-date-confirm") });
+    closeDateCrawlDialog();
   }
 
   async function startDailyAutomation(options = {}) {
     const silent = options.silent === true;
-    const button = silent ? null : el("automation-refresh");
+    const button = silent ? null : options.button || el("crawl-date-open");
     setBusy(button, true);
     try {
       const categories = splitList(el("crawl-categories").value);
@@ -342,13 +365,13 @@ const ArxivDailyWorkbench = (() => {
         body: JSON.stringify(body),
       });
       el("automation-state").textContent = result.status;
-      if (!silent) recordOperation(`Daily automation ${result.status}`);
       await loadDailyStatus({ silent: true });
-      await runSearch();
+      await runSearch({ silent: true });
+      if (!silent) recordOperation(`Crawl ${dateValue()} ${result.status}`);
     } catch (error) {
       el("automation-state").textContent = "failed";
       setDetail("automation-note", `Automation failed: ${error.message}`);
-      if (!silent) recordOperation(`Daily automation failed: ${error.message}`);
+      if (!silent) recordOperation(`Crawl failed: ${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -405,7 +428,7 @@ const ArxivDailyWorkbench = (() => {
 
   async function loadDailyStatus(options = {}) {
     const silent = options.silent === true;
-    const button = silent ? null : el("automation-refresh");
+    const button = silent ? null : el("status-refresh");
     setBusy(button, true);
     try {
       const params = dailyStatusParams();
@@ -809,13 +832,20 @@ const ArxivDailyWorkbench = (() => {
     el("date-input").value = todayIso();
     el("date-prev").addEventListener("click", () => changeDateByDays(-1));
     el("date-next").addEventListener("click", () => changeDateByDays(1));
-    el("automation-refresh").addEventListener("click", () => {
+    el("crawl-date-open").addEventListener("click", openDateCrawlDialog);
+    el("crawl-date-confirm").addEventListener("click", confirmDateCrawl);
+    el("crawl-date-cancel").addEventListener("click", closeDateCrawlDialog);
+    el("crawl-date-dismiss").addEventListener("click", closeDateCrawlDialog);
+    el("crawl-date-dialog").addEventListener("click", (event) => {
+      if (event.target === el("crawl-date-dialog")) closeDateCrawlDialog();
+    });
+    el("status-refresh").addEventListener("click", () => {
       loadDailyStatus();
       runSearch({ silent: true });
     });
     el("date-input").addEventListener("change", () => {
       state.searchPage = 1;
-      startDailyAutomation();
+      refreshSelectedDateView();
     });
     el("crawl-categories").addEventListener("keydown", (event) => {
       if (event.key === "Enter") startDailyAutomation();
@@ -842,15 +872,23 @@ const ArxivDailyWorkbench = (() => {
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();
-    startDailyAutomation({ silent: true });
+    refreshSelectedDateView();
     if (!state.automationTimer) {
       state.automationTimer = window.setInterval(() => {
-        startDailyAutomation({ silent: true });
+        refreshSelectedDateView();
       }, AUTO_AUTOMATION_INTERVAL_MS);
     }
   }
 
-  return { bind, runSearch, startDailyAutomation, runSummaryAndScore, loadDailyStatus };
+  return {
+    bind,
+    runSearch,
+    startDailyAutomation,
+    runSummaryAndScore,
+    loadDailyStatus,
+    openDateCrawlDialog,
+    confirmDateCrawl,
+  };
 })();
 
 window.addEventListener("DOMContentLoaded", ArxivDailyWorkbench.bind);

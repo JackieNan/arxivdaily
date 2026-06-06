@@ -36,8 +36,16 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="summary-template-save"' in response.text
     assert 'id="summary-template-help"' in response.text
     assert 'id="summary-score-run"' in response.text
-    assert 'id="automation-refresh"' in response.text
-    assert "Refresh Status" in response.text
+    assert 'id="crawl-date-open"' in response.text
+    assert "抓取指定日期" in response.text
+    assert 'id="status-refresh"' in response.text
+    assert "刷新状态" in response.text
+    assert 'id="crawl-date-dialog"' in response.text
+    assert 'id="crawl-date-target"' in response.text
+    assert 'id="crawl-date-confirm"' in response.text
+    assert "开始抓取" in response.text
+    assert 'id="automation-refresh"' not in response.text
+    assert "Refresh Status" not in response.text
     assert 'id="automation-summary"' in response.text
     assert 'id="automation-note"' in response.text
     assert "then runs AI summary and score" in response.text
@@ -89,7 +97,13 @@ def test_static_web_assets_are_served(tmp_path):
     assert "AUTO_AUTOMATION_INTERVAL_MS" in js_response.text
     assert "window.setInterval" in js_response.text
     assert "state.automationTimer" in js_response.text
-    assert "startDailyAutomation({ silent: true })" in js_response.text
+    assert "refreshSelectedDateView" in js_response.text
+    assert "startDailyAutomation({ silent: true })" not in js_response.text
+    assert "openDateCrawlDialog" in js_response.text
+    assert "confirmDateCrawl" in js_response.text
+    assert 'el("crawl-date-open").addEventListener("click", openDateCrawlDialog);' in js_response.text
+    assert 'startDailyAutomation({ button: el("crawl-date-confirm") })' in js_response.text
+    assert 'el("status-refresh")' in js_response.text
     assert "/api/daily/automation/start" in js_response.text
     assert "/api/daily/status/" in js_response.text
     assert "/api/preflight/" in js_response.text
@@ -125,7 +139,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert '"ai-progress-fill"' in js_response.text
     assert "fill.style.width" in js_response.text
     assert "paperLink" in js_response.text
-    assert 'el("automation-refresh")' in js_response.text
+    assert 'el("automation-refresh")' not in js_response.text
     assert 'el("crawl-run")' not in js_response.text
     assert 'el("daily-status-run")' not in js_response.text
     assert 'setDetail("daily-detail"' not in js_response.text
@@ -165,6 +179,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".top-actions .panel" in css_response.text
     assert ".top-actions button" in css_response.text
     assert ".automation-grid" in css_response.text
+    assert ".automation-actions" in css_response.text
+    assert ".compact-button" in css_response.text
     assert ".automation-summary" in css_response.text
     assert ".automation-progress" in css_response.text
     assert ".progress-track" in css_response.text
@@ -178,6 +194,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".template-editor" in css_response.text
     assert ".template-field-row" in css_response.text
     assert ".summary-score-grid" in css_response.text
+    assert ".modal-backdrop" in css_response.text
+    assert ".modal-panel" in css_response.text
+    assert ".modal-actions" in css_response.text
     assert "#template-editor-toggle" in css_response.text
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css_response.text
     assert "grid-column: 1 / -1;" in css_response.text
