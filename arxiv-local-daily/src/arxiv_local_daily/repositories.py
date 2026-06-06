@@ -826,6 +826,7 @@ class SummaryRepository:
                 categories_json,
                 abs_url,
                 pdf_url,
+                metadata_status,
                 published_at,
                 updated_at
             FROM papers

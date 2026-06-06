@@ -1289,6 +1289,172 @@ def generate_ai_triage_for_date(
     }
 
 
+def generate_ai_triage_for_paper(
+    connection: sqlite3.Connection,
+    *,
+    arxiv_id: str,
+    template_id: int | None = None,
+    template_name: str | None = None,
+    model: str = "local",
+    force: bool = False,
+    rubric_version: str = "reading_priority_v1",
+    llm_client: LLMClient | None = None,
+) -> dict[str, Any]:
+    template_repo = TemplateRepository(connection)
+    template = template_repo.get_template(template_id=template_id, name=template_name)
+    if template is None:
+        raise ValueError("summary template not found")
+
+    summary_repo = SummaryRepository(connection)
+    score_repo = ScoreRepository(connection)
+    paper = summary_repo.get_paper_for_summary(arxiv_id)
+    template_id_value = int(template["id"])
+    template_version = int(template["version"])
+    input_scope = template["input_scope"]
+    base_result = {
+        "arxiv_id": arxiv_id,
+        "template_id": template_id_value,
+        "template_version": template_version,
+        "rubric_version": rubric_version,
+    }
+
+    if paper is None:
+        return {
+            **base_result,
+            "status": "not_found",
+            "requested": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 1,
+        }
+    if paper["metadata_status"] != "complete" or not str(paper["abstract"] or "").strip():
+        return {
+            **base_result,
+            "status": "not_eligible",
+            "requested": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 1,
+        }
+    if not force and _has_complete_summary(
+        connection,
+        arxiv_id=arxiv_id,
+        template_id=template_id_value,
+        template_version=template_version,
+        model=model,
+        input_scope=input_scope,
+    ) and _has_complete_score(
+        connection,
+        arxiv_id=arxiv_id,
+        model=model,
+        rubric_version=rubric_version,
+    ):
+        return {
+            **base_result,
+            "status": "skipped",
+            "requested": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 1,
+        }
+    if llm_client is None and not llm_api_configured():
+        return {
+            **base_result,
+            "status": "not_configured",
+            "requested": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+
+    client = llm_client or OpenAICompatibleChatClient.from_env()
+    expected_keys = [field["key"] for field in enabled_template_fields(template)]
+    try:
+        response_text = client.complete(
+            model=model,
+            messages=build_ai_triage_messages(paper=paper, template=template),
+        )
+        content = parse_ai_triage_response(response_text, expected_summary_keys=expected_keys)
+        with transaction(connection):
+            summary_repo.upsert_summary(
+                arxiv_id=arxiv_id,
+                template_id=template_id_value,
+                template_version=template_version,
+                model=model,
+                language=template["language"],
+                input_scope=input_scope,
+                content=content["summary"],
+                status="complete",
+            )
+            score_repo.upsert_score(
+                arxiv_id=arxiv_id,
+                model=model,
+                rubric_version=rubric_version,
+                content=content["score"],
+                status="complete",
+            )
+        return {
+            **base_result,
+            "status": "complete",
+            "requested": 1,
+            "completed": 1,
+            "failed": 0,
+            "skipped": 0,
+        }
+    except Exception as exc:
+        error = str(exc)
+        with transaction(connection):
+            if force or not _has_complete_summary(
+                connection,
+                arxiv_id=arxiv_id,
+                template_id=template_id_value,
+                template_version=template_version,
+                model=model,
+                input_scope=input_scope,
+            ):
+                summary_repo.upsert_summary(
+                    arxiv_id=arxiv_id,
+                    template_id=template_id_value,
+                    template_version=template_version,
+                    model=model,
+                    language=template["language"],
+                    input_scope=input_scope,
+                    content={"error": error},
+                    status="failed",
+                )
+            if force or not _has_complete_score(
+                connection,
+                arxiv_id=arxiv_id,
+                model=model,
+                rubric_version=rubric_version,
+            ):
+                score_repo.upsert_score(
+                    arxiv_id=arxiv_id,
+                    model=model,
+                    rubric_version=rubric_version,
+                    content={
+                        "score_total": 0,
+                        "score_relevance": 0,
+                        "score_novelty": 0,
+                        "score_technical_depth": 0,
+                        "score_evidence": 0,
+                        "score_actionability": 0,
+                        "recommended_action": "skip",
+                        "rationale": error,
+                    },
+                    status="failed",
+                )
+        return {
+            **base_result,
+            "status": "failed",
+            "requested": 1,
+            "completed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "error": error,
+        }
+
+
 def complete_ai_triage_for_date(
     connection: sqlite3.Connection,
     *,

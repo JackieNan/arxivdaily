@@ -257,7 +257,7 @@ label span {
 
 .detail-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   max-height: calc(100vh - 190px);
   min-height: 500px;
 }
@@ -333,6 +333,26 @@ label span {
 #template-editor-toggle,
 #summary-score-run {
   grid-column: 1 / -1;
+}
+
+.ai-config-card {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 7px 8px;
+}
+
+.ai-config-card strong {
+  font-size: 12px;
+}
+
+.ai-config-card span {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .template-editor {
@@ -530,6 +550,10 @@ label span {
   background: var(--panel);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
   padding: 14px;
+}
+
+.prompt-preview-panel {
+  width: min(860px, 100%);
 }
 
 .modal-header,
@@ -766,6 +790,20 @@ label span {
   font-size: 12px;
 }
 
+.ai-action-row {
+  display: grid;
+  grid-template-columns: minmax(82px, auto) minmax(110px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 0;
+}
+
+.ai-action-row .inline-status {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .paper-content {
   display: grid;
   gap: 12px;
@@ -822,11 +860,53 @@ label span {
   padding: 10px;
 }
 
-.summary-section pre {
+.summary-content {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.summary-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.summary-field h5 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.summary-field ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.summary-field li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.summary-section pre,
+.prompt-preview-content {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.prompt-preview-content {
+  max-height: min(68vh, 680px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  color: var(--text);
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 mjx-container {
@@ -1000,6 +1080,14 @@ mjx-container {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .ai-action-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-action-row .inline-status {
+    grid-column: 1 / -1;
+  }
+
   .search-controls .wide {
     grid-column: 1 / -1;
   }
@@ -1024,6 +1112,7 @@ mjx-container {
   }
 
   .automation-actions,
+  .ai-action-row,
   .modal-actions {
     grid-template-columns: 1fr;
   }

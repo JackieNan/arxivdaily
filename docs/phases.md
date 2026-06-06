@@ -630,3 +630,26 @@ Date baseline: 2026-06-03
   - direct arXiv URL probe confirmed `/list/cs.AI/pastweek?skip=0&show=2000` returns 200 and date-only sections
   - browser verified 2026-06-04 run #8 completed with Papers `1192/1192`, Metadata `1192/1192`, Backend `complete`
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 31: AI Usability And Single Paper Triage
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-06-arxiv-local-daily-ai-usability.md`
+- Scope completed:
+  - add masked LLM API configuration status at `GET /api/ai/config`
+  - add prompt preview at `POST /api/ai/prompt-preview` so the exact system/user messages can be inspected before calling an LLM
+  - add `generate_ai_triage_for_paper` for one selected paper using the same summary+score prompt as daily batch triage
+  - add `POST /api/papers/{arxiv_id}/ai-triage/run` for selected-paper AI runs
+  - show AI API status in Settings without exposing the API key
+  - add Paper detail actions for `Run AI` and `Preview Prompt`
+  - render summary content as readable fields instead of raw JSON
+- Important decisions:
+  - prompt preview is a no-cost/no-LLM call and is the first debugging step before batch AI runs
+  - selected-paper AI runs use `force=true` from the UI because they are a deliberate debugging action
+  - batch daily AI remains separate and continues to use the existing automation path
+- Verification:
+  - focused AI/API/Web UI tests: 6 passed, 1 warning
+  - focused Web UI regression tests after status fix: 2 passed, 1 warning
+  - full test suite: 154 passed, 1 warning
+  - browser verified `phase37` static assets, AI config status, June 4 daily list page `1/24` with `1192` papers, prompt preview modal content, selected-paper `not_configured` status persistence, and no horizontal overflow
+- Status: implemented on branch, not yet merged to `main`.

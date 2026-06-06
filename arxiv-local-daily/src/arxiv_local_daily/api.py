@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -31,6 +32,7 @@ from arxiv_local_daily.services import (
     enrich_metadata_for_date,
     enrich_metadata_for_date_unified,
     generate_ai_triage_for_date,
+    generate_ai_triage_for_paper,
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
     get_daily_pipeline_status,
@@ -39,6 +41,13 @@ from arxiv_local_daily.services import (
     run_daily_pipeline,
     run_oai_metadata_sync,
     score_papers_for_date,
+)
+from arxiv_local_daily.summary import (
+    DEFAULT_LLM_BASE_URL,
+    SCORE_KEYS,
+    build_ai_triage_messages,
+    enabled_template_fields,
+    llm_api_configured,
 )
 
 
@@ -99,6 +108,20 @@ class AiTriageRunRequest(BaseModel):
     force: bool = False
 
 
+class AiPromptPreviewRequest(BaseModel):
+    arxiv_id: str
+    template_id: int | None = None
+    template_name: str | None = None
+    model: str = "local"
+
+
+class PaperAiTriageRunRequest(BaseModel):
+    template_id: int | None = None
+    template_name: str | None = None
+    model: str = "local"
+    force: bool = False
+
+
 class DailyPipelineRunRequest(BaseModel):
     date: str
     categories: list[str] | None = None
@@ -140,6 +163,7 @@ OaiSyncRunner = Callable[..., dict[str, Any]]
 SummaryRunner = Callable[..., dict[str, Any]]
 ScoreRunner = Callable[..., dict[str, Any]]
 AiTriageRunner = Callable[..., dict[str, Any]]
+PaperAiTriageRunner = Callable[..., dict[str, Any]]
 DailyPipelineRunner = Callable[..., dict[str, Any]]
 MetadataCompletionRunner = Callable[..., dict[str, Any]]
 AiTriageCompletionRunner = Callable[..., dict[str, Any]]
@@ -435,6 +459,7 @@ def create_app(
     summary_runner: SummaryRunner = generate_summaries_for_date,
     score_runner: ScoreRunner = score_papers_for_date,
     ai_triage_runner: AiTriageRunner = generate_ai_triage_for_date,
+    paper_ai_triage_runner: PaperAiTriageRunner = generate_ai_triage_for_paper,
     daily_pipeline_runner: DailyPipelineRunner = run_daily_pipeline,
     metadata_completion_runner: MetadataCompletionRunner = complete_metadata_for_date,
     ai_triage_completion_runner: AiTriageCompletionRunner = complete_ai_triage_for_date,
@@ -794,6 +819,56 @@ def create_app(
         finally:
             connection.close()
 
+    @app.get("/api/ai/config")
+    def get_ai_config():
+        base_url = os.getenv("ARXIV_DAILY_LLM_BASE_URL", DEFAULT_LLM_BASE_URL).rstrip("/")
+        return {
+            "configured": llm_api_configured(),
+            "api_key_present": bool(os.getenv("ARXIV_DAILY_LLM_API_KEY")),
+            "base_url": base_url,
+            "temperature": os.getenv("ARXIV_DAILY_LLM_TEMPERATURE", "0"),
+            "env": {
+                "api_key": "ARXIV_DAILY_LLM_API_KEY",
+                "base_url": "ARXIV_DAILY_LLM_BASE_URL",
+                "temperature": "ARXIV_DAILY_LLM_TEMPERATURE",
+            },
+        }
+
+    @app.post("/api/ai/prompt-preview")
+    def preview_ai_prompt(request: AiPromptPreviewRequest):
+        connection = get_connection()
+        try:
+            template = TemplateRepository(connection).get_template(
+                template_id=request.template_id,
+                name=request.template_name,
+            )
+            if template is None:
+                raise HTTPException(status_code=400, detail="summary template not found")
+            paper = SummaryRepository(connection).get_paper_for_summary(request.arxiv_id)
+            if paper is None:
+                raise HTTPException(status_code=404, detail="paper not found")
+            fields = enabled_template_fields(template)
+            messages = build_ai_triage_messages(paper=paper, template=template)
+            return {
+                "model": request.model,
+                "paper": {
+                    "arxiv_id": paper["arxiv_id"],
+                    "title": paper["title"],
+                },
+                "template": {
+                    "id": int(template["id"]),
+                    "name": template["name"],
+                    "version": int(template["version"]),
+                    "language": template["language"],
+                    "input_scope": template["input_scope"],
+                },
+                "summary_keys": [field["key"] for field in fields],
+                "score_keys": SCORE_KEYS,
+                "messages": messages,
+            }
+        finally:
+            connection.close()
+
     @app.get("/api/summary-templates")
     def list_summary_templates():
         connection = get_connection()
@@ -824,6 +899,23 @@ def create_app(
             if detail is None:
                 return {"paper": None, "events": [], "summaries": [], "discussions": []}
             return detail
+        finally:
+            connection.close()
+
+    @app.post("/api/papers/{arxiv_id}/ai-triage/run")
+    def run_paper_ai_triage(arxiv_id: str, request: PaperAiTriageRunRequest):
+        connection = get_connection()
+        try:
+            return paper_ai_triage_runner(
+                connection,
+                arxiv_id=arxiv_id,
+                template_id=request.template_id,
+                template_name=request.template_name,
+                model=request.model,
+                force=request.force,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         finally:
             connection.close()
 

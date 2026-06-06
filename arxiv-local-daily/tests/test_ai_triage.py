@@ -7,7 +7,11 @@ from arxiv_local_daily.models import (
     SummaryTemplateInput,
 )
 from arxiv_local_daily.repositories import PaperRepository, ScoreRepository, TemplateRepository
-from arxiv_local_daily.services import complete_ai_triage_for_date, generate_ai_triage_for_date
+from arxiv_local_daily.services import (
+    complete_ai_triage_for_date,
+    generate_ai_triage_for_date,
+    generate_ai_triage_for_paper,
+)
 from arxiv_local_daily.summary import build_ai_triage_messages, parse_ai_triage_response
 
 
@@ -178,6 +182,41 @@ def test_generate_ai_triage_for_date_persists_summary_and_score_with_one_llm_cal
     assert score["status"] == "complete"
     assert score["score_total"] == 88
     assert score["rationale"] == "主题直接服务每日阅读筛选，值得优先阅读。"
+
+
+def test_generate_ai_triage_for_paper_persists_summary_and_score(db):
+    template_id = _seed_daily_paper(db)
+    client = FakeTriageClient([_triage_response()])
+
+    result = generate_ai_triage_for_paper(
+        db,
+        arxiv_id="2606.00001",
+        template_id=template_id,
+        model="gpt-test",
+        llm_client=client,
+    )
+
+    assert result == {
+        "status": "complete",
+        "arxiv_id": "2606.00001",
+        "requested": 1,
+        "completed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "template_id": template_id,
+        "template_version": 1,
+        "rubric_version": "reading_priority_v1",
+    }
+    assert len(client.calls) == 1
+    assert client.calls[0]["model"] == "gpt-test"
+
+    summary_row = db.execute("SELECT * FROM summaries WHERE arxiv_id = ?", ("2606.00001",)).fetchone()
+    assert summary_row["status"] == "complete"
+    assert json.loads(summary_row["content_json"])["tldr"].startswith("这篇论文")
+
+    score = ScoreRepository(db).get_latest_score("2606.00001")
+    assert score["status"] == "complete"
+    assert score["score_total"] == 88
 
 
 def test_complete_ai_triage_for_date_runs_batches_until_all_candidates_are_done(db):

@@ -44,6 +44,12 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="summary-template-save"' in response.text
     assert 'id="summary-template-help"' in response.text
     assert 'id="summary-score-run"' in response.text
+    assert 'id="ai-config-status"' in response.text
+    assert 'id="paper-ai-run"' in response.text
+    assert 'id="paper-prompt-preview"' in response.text
+    assert 'id="paper-ai-status"' in response.text
+    assert 'id="prompt-preview-dialog"' in response.text
+    assert 'id="prompt-preview-content"' in response.text
     assert 'id="crawl-date-open"' in response.text
     assert "抓取指定日期" in response.text
     assert 'id="status-refresh"' in response.text
@@ -121,6 +127,14 @@ def test_static_web_assets_are_served(tmp_path):
     assert "/api/daily/status/" in js_response.text
     assert "/api/preflight/" in js_response.text
     assert "/api/ai-triage/run" in js_response.text
+    assert "/api/ai/config" in js_response.text
+    assert "/api/ai/prompt-preview" in js_response.text
+    assert '/ai-triage/run"' in js_response.text
+    assert "loadAiConfig" in js_response.text
+    assert "runSelectedPaperAi" in js_response.text
+    assert "previewSelectedPaperPrompt" in js_response.text
+    assert "renderPromptPreview" in js_response.text
+    assert "renderSummaryContent" in js_response.text
     assert "/api/summaries/run" not in js_response.text
     assert "/api/scores/run" not in js_response.text
     assert "body.template_name = templateName" in js_response.text
@@ -223,6 +237,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".template-editor" in css_response.text
     assert ".template-field-row" in css_response.text
     assert ".summary-score-grid" in css_response.text
+    assert ".ai-config-card" in css_response.text
+    assert ".ai-action-row" in css_response.text
+    assert ".prompt-preview-content" in css_response.text
+    assert ".summary-content" in css_response.text
     assert ".modal-backdrop" in css_response.text
     assert ".modal-panel" in css_response.text
     assert ".modal-actions" in css_response.text

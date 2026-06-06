@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase36">
+    <link rel="stylesheet" href="/static/styles.css?v=phase37">
     <script>
       window.MathJax = {
         tex: {
@@ -123,6 +123,10 @@
             <button id="summary-score-run" type="button">Run Summary + Score</button>
           </div>
           <p id="summary-template-help" class="inline-status">No template loaded.</p>
+          <div id="ai-config-card" class="ai-config-card">
+            <strong id="ai-config-state">AI API unknown</strong>
+            <span id="ai-config-status">Loading AI configuration.</span>
+          </div>
           <section id="template-editor" class="template-editor" hidden>
             <div class="template-editor-title">
               <h3>Template Modules</h3>
@@ -278,6 +282,11 @@
               <h2>Paper</h2>
               <span id="paper-id" class="badge">none</span>
             </div>
+            <div class="ai-action-row">
+              <button id="paper-ai-run" type="button" disabled>Run AI</button>
+              <button id="paper-prompt-preview" class="secondary-button" type="button" disabled>Preview Prompt</button>
+              <span id="paper-ai-status" class="inline-status">Select a paper for AI actions.</span>
+            </div>
             <article id="paper-content" class="paper-content">
               <p class="empty-state">No paper selected.</p>
             </article>
@@ -329,6 +338,18 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase36"></script>
+    <div id="prompt-preview-dialog" class="modal-backdrop" hidden>
+      <section class="modal-panel prompt-preview-panel" role="dialog" aria-modal="true" aria-labelledby="prompt-preview-title">
+        <div class="modal-header">
+          <h2 id="prompt-preview-title">Prompt Preview</h2>
+          <button id="prompt-preview-close" class="icon-button" type="button" aria-label="Close">x</button>
+        </div>
+        <pre id="prompt-preview-content" class="prompt-preview-content"></pre>
+        <div class="modal-actions">
+          <button id="prompt-preview-dismiss" class="secondary-button" type="button">Close</button>
+        </div>
+      </section>
+    </div>
+    <script src="/static/app.js?v=phase37"></script>
   </body>
 </html>

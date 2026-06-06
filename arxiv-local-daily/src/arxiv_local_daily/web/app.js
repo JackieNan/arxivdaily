@@ -8,6 +8,7 @@ const ArxivDailyWorkbench = (() => {
     searchPage: 1,
     pageSize: 50,
     pageMeta: null,
+    aiConfig: null,
   };
 
   const AUTO_AUTOMATION_INTERVAL_MS = 10 * 60 * 1000;
@@ -243,6 +244,27 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
+  async function loadAiConfig() {
+    try {
+      const config = await api("/api/ai/config");
+      state.aiConfig = config;
+      const stateText = config.configured ? "AI API configured" : "AI API not configured";
+      const detail = config.configured
+        ? `${config.base_url}; key ${config.api_key_present ? "present" : "not required"}; temperature ${config.temperature}`
+        : `Set ${config.env.api_key} or use a custom ${config.env.base_url}.`;
+      el("ai-config-state").textContent = stateText;
+      el("ai-config-state").className = config.configured ? "status-complete" : "status-pending";
+      setDetail("ai-config-status", detail);
+      return config;
+    } catch (error) {
+      state.aiConfig = null;
+      el("ai-config-state").textContent = "AI API status failed";
+      el("ai-config-state").className = "status-failed";
+      setDetail("ai-config-status", error.message);
+      return null;
+    }
+  }
+
   function templateFields(template) {
     if (Array.isArray(template.fields)) return template.fields;
     if (typeof template.fields_json === "string") {
@@ -406,13 +428,19 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
-  function summaryRequestBody() {
+  function aiSettingsBody() {
     const templateName = el("summary-template").value.trim();
+    const body = {};
+    if (templateName) body.template_name = templateName;
+    body.model = el("summary-model").value.trim() || "local";
+    return body;
+  }
+
+  function summaryRequestBody() {
     const body = {
       date: dateValue(),
-      model: el("summary-model").value.trim() || "local",
+      ...aiSettingsBody(),
     };
-    if (templateName) body.template_name = templateName;
     return body;
   }
 
@@ -444,6 +472,115 @@ const ArxivDailyWorkbench = (() => {
     } finally {
       setBusy(button, false);
     }
+  }
+
+  function setPaperAiControlsEnabled(enabled) {
+    el("paper-ai-run").disabled = !enabled;
+    el("paper-prompt-preview").disabled = !enabled;
+  }
+
+  function setPaperAiStatus(message) {
+    setDetail("paper-ai-status", message);
+  }
+
+  async function runSelectedPaperAi() {
+    if (!state.selectedPaperId) {
+      setPaperAiStatus("Select a paper before running AI.");
+      return;
+    }
+    const button = el("paper-ai-run");
+    setBusy(button, true);
+    try {
+      const body = {
+        ...aiSettingsBody(),
+        force: true,
+      };
+      const result = await api(`/api/papers/${encodeURIComponent(state.selectedPaperId)}/ai-triage/run`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const message = paperAiResultMessage(result);
+      setPaperAiStatus(message);
+      recordOperation(message);
+      await loadDailyStatus({ silent: true });
+      await runSearch({ silent: true });
+      await loadPaper(state.selectedPaperId);
+      setPaperAiStatus(message);
+    } catch (error) {
+      const message = `Paper AI failed: ${error.message}`;
+      setPaperAiStatus(message);
+      recordOperation(message);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function paperAiResultMessage(result) {
+    if (result.status === "not_configured") {
+      return "AI API not configured. Set ARXIV_DAILY_LLM_API_KEY or ARXIV_DAILY_LLM_BASE_URL.";
+    }
+    if (result.status === "not_eligible") {
+      return "Selected paper needs complete metadata and abstract before AI can run.";
+    }
+    if (result.status === "skipped") {
+      return "Selected paper already has complete summary and score for this template/model.";
+    }
+    if (result.status === "complete") {
+      return `AI complete for ${result.arxiv_id}.`;
+    }
+    if (result.status === "failed") {
+      return `AI failed for ${result.arxiv_id}: ${result.error || "unknown error"}`;
+    }
+    return `AI ${result.status || "finished"} for ${result.arxiv_id || state.selectedPaperId}.`;
+  }
+
+  async function previewSelectedPaperPrompt() {
+    if (!state.selectedPaperId) {
+      setPaperAiStatus("Select a paper before previewing prompt.");
+      return;
+    }
+    const button = el("paper-prompt-preview");
+    setBusy(button, true);
+    try {
+      const data = await api("/api/ai/prompt-preview", {
+        method: "POST",
+        body: JSON.stringify({
+          arxiv_id: state.selectedPaperId,
+          ...aiSettingsBody(),
+        }),
+      });
+      renderPromptPreview(data);
+      setPaperAiStatus(`Prompt preview ready for ${state.selectedPaperId}.`);
+    } catch (error) {
+      const message = `Prompt preview failed: ${error.message}`;
+      setPaperAiStatus(message);
+      recordOperation(message);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
+  function renderPromptPreview(data) {
+    const header = [
+      `Model: ${data.model}`,
+      `Paper: ${data.paper.arxiv_id} · ${data.paper.title || "-"}`,
+      `Template: ${data.template.name} v${data.template.version} · ${data.template.language} · ${data.template.input_scope}`,
+      `Summary keys: ${(data.summary_keys || []).join(", ") || "-"}`,
+      `Score keys: ${(data.score_keys || []).join(", ") || "-"}`,
+    ].join("\n");
+    const messages = (data.messages || [])
+      .map((message) => `[${message.role}]\n${message.content}`)
+      .join("\n\n");
+    el("prompt-preview-content").textContent = `${header}\n\n${messages}`;
+    openPromptPreviewDialog();
+  }
+
+  function openPromptPreviewDialog() {
+    el("prompt-preview-dialog").hidden = false;
+  }
+
+  function closePromptPreviewDialog() {
+    el("prompt-preview-dialog").hidden = true;
   }
 
   function dailyStatusParams() {
@@ -808,6 +945,8 @@ const ArxivDailyWorkbench = (() => {
     state.selectedCard = card;
     state.selectedPaperId = arxivId;
     if (card) card.classList.add("is-selected");
+    setPaperAiControlsEnabled(true);
+    setPaperAiStatus(`AI actions ready for ${arxivId}.`);
     await loadPaper(arxivId);
   }
 
@@ -826,10 +965,14 @@ const ArxivDailyWorkbench = (() => {
     const paper = detail.paper;
     if (!paper) {
       el("paper-content").innerHTML = '<p class="empty-state">Paper not found.</p>';
+      setPaperAiControlsEnabled(false);
+      setPaperAiStatus("Paper not found.");
       return;
     }
     const summaries = detail.summaries || [];
     const score = detail.score;
+    setPaperAiControlsEnabled(true);
+    setPaperAiStatus(score ? `Latest score ${score.score_total} ${score.recommended_action}.` : "Ready to preview prompt or run AI.");
     el("paper-content").innerHTML = `
       <div class="paper-hero">
         <h3>${renderLatexText(paper.title || paper.arxiv_id)}</h3>
@@ -885,9 +1028,39 @@ const ArxivDailyWorkbench = (() => {
           <span class="tag">${escapeHtml(summary.model)}</span>
           <span class="tag">${escapeHtml(summary.status)}</span>
         </div>
-        <pre>${escapeHtml(JSON.stringify(summary.content, null, 2))}</pre>
+        <div class="summary-content">${renderSummaryContent(summary.content || {})}</div>
       </div>
     `;
+  }
+
+  function renderSummaryContent(content) {
+    const entries = Object.entries(content || {});
+    if (!entries.length) return '<p class="empty-state">Empty summary.</p>';
+    return entries.map(([key, value]) => renderSummaryField(key, value)).join("");
+  }
+
+  function renderSummaryField(key, value) {
+    return `
+      <section class="summary-field">
+        <h5>${escapeHtml(key)}</h5>
+        ${renderSummaryValue(value)}
+      </section>
+    `;
+  }
+
+  function renderSummaryValue(value) {
+    if (Array.isArray(value)) {
+      if (!value.length) return '<p class="empty-state">-</p>';
+      return `<ul>${value.map((item) => `<li>${renderSummaryValueInline(item)}</li>`).join("")}</ul>`;
+    }
+    if (value && typeof value === "object") {
+      return `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+    }
+    return `<p>${renderSummaryValueInline(value)}</p>`;
+  }
+
+  function renderSummaryValueInline(value) {
+    return renderLatexText(value ?? "-");
   }
 
   function renderDiscussions(messages) {
@@ -960,6 +1133,11 @@ const ArxivDailyWorkbench = (() => {
     el("crawl-date-dialog").addEventListener("click", (event) => {
       if (event.target === el("crawl-date-dialog")) closeDateCrawlDialog();
     });
+    el("prompt-preview-close").addEventListener("click", closePromptPreviewDialog);
+    el("prompt-preview-dismiss").addEventListener("click", closePromptPreviewDialog);
+    el("prompt-preview-dialog").addEventListener("click", (event) => {
+      if (event.target === el("prompt-preview-dialog")) closePromptPreviewDialog();
+    });
     el("status-refresh").addEventListener("click", () => {
       loadDailyStatus();
       runSearch({ silent: true });
@@ -974,6 +1152,8 @@ const ArxivDailyWorkbench = (() => {
     el("template-editor-toggle").addEventListener("click", toggleTemplateEditor);
     el("summary-template-save").addEventListener("click", saveSummaryTemplate);
     el("summary-score-run").addEventListener("click", runSummaryAndScore);
+    el("paper-ai-run").addEventListener("click", runSelectedPaperAi);
+    el("paper-prompt-preview").addEventListener("click", previewSelectedPaperPrompt);
     el("search-run").addEventListener("click", () => {
       state.searchPage = 1;
       runSearch();
@@ -993,6 +1173,7 @@ const ArxivDailyWorkbench = (() => {
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     loadSummaryTemplates();
+    loadAiConfig();
     refreshSelectedDateView();
     if (!state.automationTimer) {
       state.automationTimer = window.setInterval(() => {
@@ -1006,6 +1187,10 @@ const ArxivDailyWorkbench = (() => {
     runSearch,
     startDailyAutomation,
     runSummaryAndScore,
+    runSelectedPaperAi,
+    previewSelectedPaperPrompt,
+    renderPromptPreview,
+    loadAiConfig,
     loadDailyStatus,
     openDateCrawlDialog,
     confirmDateCrawl,

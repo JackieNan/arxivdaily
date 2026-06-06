@@ -38,6 +38,61 @@ def _client_with_seed_data(tmp_path: Path) -> TestClient:
     return TestClient(create_app(database_path=db_path))
 
 
+def _seed_ai_ready_paper(db_path: Path) -> int:
+    connection = connect(db_path)
+    initialize_schema(connection)
+    PaperRepository(connection).upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="2606.00001",
+            event_type="new",
+            listing_category="cs.AI",
+            primary_category="cs.AI",
+            source_url="https://arxiv.org/list/cs.AI/new",
+        ),
+    )
+    PaperRepository(connection).upsert_metadata(
+        PaperMetadata(
+            arxiv_id="2606.00001",
+            title="Structured Summaries for Daily Research",
+            abstract="This paper proposes configurable summaries for daily research triage.",
+            authors=["Ada Lovelace", "Alan Turing"],
+            primary_category="cs.AI",
+            categories=["cs.AI", "cs.LG"],
+            abs_url="https://arxiv.org/abs/2606.00001",
+            pdf_url="https://arxiv.org/pdf/2606.00001",
+        )
+    )
+    template_id = TemplateRepository(connection).create_template(
+        SummaryTemplateInput(
+            name="daily_research",
+            language="Chinese",
+            system_prompt="Summarize papers for a Chinese research reading queue.",
+            input_scope="abstract",
+            is_default=True,
+            fields=[
+                SummaryTemplateField(
+                    key="keywords",
+                    label="关键词",
+                    order=1,
+                    prompt="提炼中文关键词。",
+                    field_type="keywords",
+                ),
+                SummaryTemplateField(
+                    key="tldr",
+                    label="一句话结论",
+                    order=2,
+                    prompt="用一句中文概括论文贡献。",
+                    field_type="short_sentence",
+                ),
+            ],
+        )
+    )
+    connection.commit()
+    connection.close()
+    return template_id
+
+
 def test_get_day_papers_returns_ingested_events(tmp_path):
     client = _client_with_seed_data(tmp_path)
 
@@ -1000,6 +1055,105 @@ def test_post_ai_triage_run_uses_injected_runner(tmp_path):
             "template_name": "daily_research",
             "model": "gpt-test",
             "limit": None,
+            "force": True,
+        }
+    ]
+
+
+def test_get_ai_config_reports_masked_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARXIV_DAILY_LLM_API_KEY", "sk-test-secret")
+    monkeypatch.setenv("ARXIV_DAILY_LLM_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("ARXIV_DAILY_LLM_TEMPERATURE", "0.2")
+    client = TestClient(create_app(database_path=tmp_path / "api.sqlite3"))
+
+    response = client.get("/api/ai/config")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is True
+    assert data["api_key_present"] is True
+    assert data["base_url"] == "https://llm.example.test/v1"
+    assert data["temperature"] == "0.2"
+    assert data["env"] == {
+        "api_key": "ARXIV_DAILY_LLM_API_KEY",
+        "base_url": "ARXIV_DAILY_LLM_BASE_URL",
+        "temperature": "ARXIV_DAILY_LLM_TEMPERATURE",
+    }
+    assert "sk-test-secret" not in str(data)
+
+
+def test_post_ai_prompt_preview_returns_messages(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    template_id = _seed_ai_ready_paper(db_path)
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.post(
+        "/api/ai/prompt-preview",
+        json={"arxiv_id": "2606.00001", "template_id": template_id, "model": "gpt-test"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["model"] == "gpt-test"
+    assert data["paper"] == {
+        "arxiv_id": "2606.00001",
+        "title": "Structured Summaries for Daily Research",
+    }
+    assert data["template"]["id"] == template_id
+    assert data["template"]["name"] == "daily_research"
+    assert data["summary_keys"] == ["keywords", "tldr"]
+    assert "score_total" in data["score_keys"]
+    assert [message["role"] for message in data["messages"]] == ["system", "user"]
+    assert "Structured Summaries for Daily Research" in data["messages"][1]["content"]
+    assert "提炼中文关键词" in data["messages"][1]["content"]
+
+
+def test_post_paper_ai_triage_run_uses_injected_runner(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    calls: list[dict] = []
+
+    def fake_paper_ai_runner(
+        connection,
+        *,
+        arxiv_id: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        force: bool,
+    ):
+        calls.append(
+            {
+                "arxiv_id": arxiv_id,
+                "template_id": template_id,
+                "template_name": template_name,
+                "model": model,
+                "force": force,
+            }
+        )
+        return {
+            "status": "complete",
+            "arxiv_id": arxiv_id,
+            "requested": 1,
+            "completed": 1,
+            "failed": 0,
+            "skipped": 0,
+        }
+
+    client = TestClient(create_app(database_path=db_path, paper_ai_triage_runner=fake_paper_ai_runner))
+
+    response = client.post(
+        "/api/papers/2606.00001/ai-triage/run",
+        json={"template_name": "daily_research", "model": "gpt-test", "force": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "complete"
+    assert calls == [
+        {
+            "arxiv_id": "2606.00001",
+            "template_id": None,
+            "template_name": "daily_research",
+            "model": "gpt-test",
             "force": True,
         }
     ]
