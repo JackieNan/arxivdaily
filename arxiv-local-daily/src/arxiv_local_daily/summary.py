@@ -1,4 +1,6 @@
 from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 import json
 import os
@@ -26,6 +28,52 @@ class LLMClient(Protocol):
 
 FENCED_JSON_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.IGNORECASE | re.DOTALL)
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_LLM_MODEL = "local"
+DEFAULT_LLM_CONFIG_PATH = Path("config/llm.local.json")
+
+
+@dataclass(frozen=True)
+class LLMApiConfig:
+    base_url: str
+    api_key: str | None
+    model: str
+    temperature: float
+    config_path: Path
+    config_file_present: bool
+
+
+def _llm_config_path() -> Path:
+    return Path(os.getenv("ARXIV_DAILY_LLM_CONFIG", str(DEFAULT_LLM_CONFIG_PATH)))
+
+
+def _load_llm_config_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    loaded = json.loads(path.read_text())
+    if not isinstance(loaded, dict):
+        raise ValueError("LLM config file must contain a JSON object")
+    return loaded
+
+
+def load_llm_api_config() -> LLMApiConfig:
+    config_path = _llm_config_path()
+    file_values = _load_llm_config_file(config_path)
+    base_url = str(os.getenv("ARXIV_DAILY_LLM_BASE_URL", file_values.get("base_url", DEFAULT_LLM_BASE_URL))).rstrip("/")
+    api_key = os.getenv("ARXIV_DAILY_LLM_API_KEY", file_values.get("api_key"))
+    model = str(os.getenv("ARXIV_DAILY_LLM_MODEL", file_values.get("model", DEFAULT_LLM_MODEL)))
+    temperature = float(os.getenv("ARXIV_DAILY_LLM_TEMPERATURE", file_values.get("temperature", 0)))
+    return LLMApiConfig(
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        config_path=config_path,
+        config_file_present=config_path.exists(),
+    )
+
+
+def resolve_llm_model(model: str | None = None) -> str:
+    return model or load_llm_api_config().model
 
 
 def _value(row: Mapping[str, Any] | Any, key: str, default: Any = None) -> Any:
@@ -267,10 +315,11 @@ class OpenAICompatibleChatClient:
 
     @classmethod
     def from_env(cls) -> "OpenAICompatibleChatClient":
+        config = load_llm_api_config()
         return cls(
-            base_url=os.getenv("ARXIV_DAILY_LLM_BASE_URL", DEFAULT_LLM_BASE_URL),
-            api_key=os.getenv("ARXIV_DAILY_LLM_API_KEY"),
-            temperature=float(os.getenv("ARXIV_DAILY_LLM_TEMPERATURE", "0")),
+            base_url=config.base_url,
+            api_key=config.api_key,
+            temperature=config.temperature,
         )
 
     def complete(self, *, model: str, messages: list[dict[str, str]]) -> str:
@@ -305,5 +354,5 @@ class OpenAICompatibleChatClient:
 
 
 def llm_api_configured() -> bool:
-    base_url = os.getenv("ARXIV_DAILY_LLM_BASE_URL", DEFAULT_LLM_BASE_URL).rstrip("/")
-    return bool(os.getenv("ARXIV_DAILY_LLM_API_KEY")) or base_url != DEFAULT_LLM_BASE_URL
+    config = load_llm_api_config()
+    return bool(config.api_key) or config.base_url != DEFAULT_LLM_BASE_URL

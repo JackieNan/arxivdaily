@@ -31,6 +31,7 @@ from arxiv_local_daily.summary import (
     parse_ai_triage_response,
     parse_score_response,
     parse_summary_response,
+    resolve_llm_model,
 )
 
 METADATA_RATE_LIMIT_BACKOFF_SECONDS = 10 * 60
@@ -872,6 +873,7 @@ def generate_summaries_for_date(
     force: bool = False,
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     template_repo = TemplateRepository(connection)
     template = template_repo.get_template(template_id=template_id, name=template_name)
     if template is None:
@@ -953,6 +955,7 @@ def score_papers_for_date(
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     score_repo = ScoreRepository(connection)
     candidate_ids = score_repo.list_score_candidate_ids_for_date(
         date=date,
@@ -1188,6 +1191,7 @@ def generate_ai_triage_for_date(
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     template_repo = TemplateRepository(connection)
     template = template_repo.get_template(template_id=template_id, name=template_name)
     if template is None:
@@ -1335,6 +1339,7 @@ def generate_ai_triage_for_paper(
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     template_repo = TemplateRepository(connection)
     template = template_repo.get_template(template_id=template_id, name=template_name)
     if template is None:
@@ -1503,6 +1508,7 @@ def complete_ai_triage_for_date(
     rubric_version: str = "reading_priority_v1",
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     runs: list[dict[str, Any]] = []
     round_count = 0
 
@@ -1793,6 +1799,7 @@ def get_daily_pipeline_status(
     categories: list[str] | None = None,
     rubric_version: str = "reading_priority_v1",
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     coverage_categories = categories if categories is not None else expected_categories
     crawl = get_crawl_completeness_for_date(
         connection,
@@ -1872,6 +1879,7 @@ def run_daily_pipeline(
     summary_runner: Any | None = None,
     score_runner: Any | None = None,
 ) -> dict[str, Any]:
+    model = resolve_llm_model(model)
     if crawl_runner is None:
         from arxiv_local_daily.crawler.live import run_live_daily_crawl
 

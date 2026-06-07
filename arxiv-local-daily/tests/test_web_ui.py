@@ -91,6 +91,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="left-rail"' not in response.text
     assert "Summary limit" not in response.text
     assert "Score limit" not in response.text
+    assert 'id="summary-model"' not in response.text
 
 
 def test_static_web_assets_are_served(tmp_path):
@@ -149,7 +150,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert "/api/summaries/run" not in js_response.text
     assert "/api/scores/run" not in js_response.text
     assert "body.template_name = templateName" in js_response.text
-    assert 'body.model = el("summary-model").value.trim() || "local";' in js_response.text
+    assert 'el("summary-model")' not in js_response.text
+    assert 'body.model = el("summary-model").value.trim() || "local";' not in js_response.text
+    assert 'Model: ${data.model}' not in js_response.text
     assert 'body.crawl_mode = "auto";' in js_response.text
     assert "body.force_crawl = true" in js_response.text
     assert "shiftIsoDate" in js_response.text

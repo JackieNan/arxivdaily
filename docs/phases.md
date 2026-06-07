@@ -676,3 +676,27 @@ Date baseline: 2026-06-03
   - full test suite: 156 passed, 1 warning
   - browser verified `phase38` static assets, bottom scope panel visible, default CS status shows `40 cs.* categories`, all-groups toggle works, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 33: LLM Config File and Model UI Removal
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-llm-config-file.md`
+- Scope completed:
+  - remove the Settings `Model` input from the web workbench
+  - stop web daily automation, batch AI, status, and prompt-preview requests from sending model names
+  - resolve omitted model values on the backend from LLM configuration
+  - add local JSON config support at `config/llm.local.json`
+  - keep environment variables as overrides over the local config file
+  - add `config/llm.example.json` as a non-secret template
+  - ignore `config/llm.local.json` in git
+  - keep `/api/ai/config` masked while reporting config-file path/presence, key presence, base URL, and temperature
+  - remove model tags/text from the summary detail and prompt preview surfaces
+- Important decisions:
+  - model identity is backend configuration, not a recurring UI workflow input
+  - config precedence is env > `config/llm.local.json` > defaults
+  - API keys must stay in untracked local files or environment variables
+- Verification:
+  - focused config-file/API/Web UI tests: 5 passed, 1 warning
+  - full test suite: 158 passed, 1 warning
+  - browser verified `phase39` static assets, Settings has no Model input, AI config status points to `config/llm.local.json`, and no horizontal overflow
+- Status: implemented on branch, not yet merged to `main`.

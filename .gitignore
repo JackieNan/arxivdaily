@@ -3,6 +3,7 @@
 daily-arXiv-ai-enhanced/
 zotero-arxiv-daily/
 arxiv-local-daily/data/
+arxiv-local-daily/config/llm.local.json
 
 .DS_Store
 __pycache__/

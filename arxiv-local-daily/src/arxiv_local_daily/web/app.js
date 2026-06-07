@@ -293,9 +293,10 @@ const ArxivDailyWorkbench = (() => {
       const config = await api("/api/ai/config");
       state.aiConfig = config;
       const stateText = config.configured ? "AI API configured" : "AI API not configured";
+      const configSource = config.config_file_present ? `file ${config.config_path}` : "environment/defaults";
       const detail = config.configured
-        ? `${config.base_url}; key ${config.api_key_present ? "present" : "not required"}; temperature ${config.temperature}`
-        : `Set ${config.env.api_key} or use a custom ${config.env.base_url}.`;
+        ? `${config.base_url}; key ${config.api_key_present ? "present" : "not required"}; ${configSource}; temperature ${config.temperature}`
+        : `Create ${config.config_path} or set ${config.env.api_key} / ${config.env.base_url}.`;
       el("ai-config-state").textContent = stateText;
       el("ai-config-state").className = config.configured ? "status-complete" : "status-pending";
       setDetail("ai-config-status", detail);
@@ -473,7 +474,6 @@ const ArxivDailyWorkbench = (() => {
       const templateName = el("summary-template").value.trim();
       if (scopedCategories.length) body.categories = scopedCategories;
       if (templateName) body.template_name = templateName;
-      body.model = el("summary-model").value.trim() || "local";
       body.crawl_mode = "auto";
       body.force_crawl = true;
       const result = await api("/api/daily/automation/start", {
@@ -506,7 +506,6 @@ const ArxivDailyWorkbench = (() => {
     const templateName = el("summary-template").value.trim();
     const body = {};
     if (templateName) body.template_name = templateName;
-    body.model = el("summary-model").value.trim() || "local";
     return body;
   }
 
@@ -593,13 +592,13 @@ const ArxivDailyWorkbench = (() => {
 
   function paperAiResultMessage(result) {
     if (result.status === "not_configured") {
-      return "AI API not configured. Set ARXIV_DAILY_LLM_API_KEY or ARXIV_DAILY_LLM_BASE_URL.";
+      return "AI API not configured. Create config/llm.local.json or set the LLM environment variables.";
     }
     if (result.status === "not_eligible") {
       return "Selected paper needs complete metadata and abstract before AI can run.";
     }
     if (result.status === "skipped") {
-      return "Selected paper already has complete summary and score for this template/model.";
+      return "Selected paper already has complete summary and score for the current AI configuration.";
     }
     if (result.status === "complete") {
       return `AI complete for ${result.arxiv_id}.`;
@@ -638,7 +637,6 @@ const ArxivDailyWorkbench = (() => {
 
   function renderPromptPreview(data) {
     const header = [
-      `Model: ${data.model}`,
       `Paper: ${data.paper.arxiv_id} · ${data.paper.title || "-"}`,
       `Template: ${data.template.name} v${data.template.version} · ${data.template.language} · ${data.template.input_scope}`,
       `Summary keys: ${(data.summary_keys || []).join(", ") || "-"}`,
@@ -662,9 +660,7 @@ const ArxivDailyWorkbench = (() => {
   function dailyStatusParams() {
     const params = new URLSearchParams();
     const templateName = el("summary-template").value.trim();
-    const model = el("summary-model").value.trim() || "local";
     const scopedCategories = categoryScopeCategories();
-    params.set("model", model);
     if (templateName) params.set("template_name", templateName);
     scopedCategories.forEach((category) => params.append("categories", category));
     return params;
@@ -1103,7 +1099,6 @@ const ArxivDailyWorkbench = (() => {
       <div class="summary-section">
         <div class="tag-row">
           <span class="tag">${escapeHtml(summary.template_name || `template ${summary.template_id}`)}</span>
-          <span class="tag">${escapeHtml(summary.model)}</span>
           <span class="tag">${escapeHtml(summary.status)}</span>
         </div>
         <div class="summary-content">${renderSummaryContent(summary.content || {})}</div>

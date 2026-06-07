@@ -1151,6 +1151,39 @@ def test_post_ai_triage_run_uses_injected_runner(tmp_path):
     ]
 
 
+def test_post_ai_triage_run_uses_config_model_when_request_omits_model(tmp_path, monkeypatch):
+    db_path = tmp_path / "api.sqlite3"
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm.local.json").write_text(
+        '{"base_url":"https://llm.example.test/v1","api_key":"sk-local-secret","model":"deepseek-v4-pro"}'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ARXIV_DAILY_LLM_MODEL", raising=False)
+    calls: list[dict] = []
+
+    def fake_ai_runner(
+        connection,
+        *,
+        date: str,
+        template_id: int | None,
+        template_name: str | None,
+        model: str,
+        limit: int | None,
+        force: bool,
+        categories: list[str] | None = None,
+    ):
+        calls.append({"date": date, "model": model})
+        return {"requested": 0, "completed": 0, "failed": 0, "skipped": 0}
+
+    client = TestClient(create_app(database_path=db_path, ai_triage_runner=fake_ai_runner))
+
+    response = client.post("/api/ai-triage/run", json={"date": "2026-06-03"})
+
+    assert response.status_code == 200
+    assert calls == [{"date": "2026-06-03", "model": "deepseek-v4-pro"}]
+
+
 def test_get_ai_config_reports_masked_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("ARXIV_DAILY_LLM_API_KEY", "sk-test-secret")
     monkeypatch.setenv("ARXIV_DAILY_LLM_BASE_URL", "https://llm.example.test/v1")
@@ -1165,12 +1198,48 @@ def test_get_ai_config_reports_masked_environment(tmp_path, monkeypatch):
     assert data["api_key_present"] is True
     assert data["base_url"] == "https://llm.example.test/v1"
     assert data["temperature"] == "0.2"
+    assert data["config_file_present"] is False
     assert data["env"] == {
         "api_key": "ARXIV_DAILY_LLM_API_KEY",
         "base_url": "ARXIV_DAILY_LLM_BASE_URL",
+        "model": "ARXIV_DAILY_LLM_MODEL",
         "temperature": "ARXIV_DAILY_LLM_TEMPERATURE",
+        "config": "ARXIV_DAILY_LLM_CONFIG",
     }
     assert "sk-test-secret" not in str(data)
+
+
+def test_get_ai_config_reports_masked_local_config_file(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "llm.local.json").write_text(
+        """
+        {
+          "base_url": "https://llm.example.test/v1",
+          "api_key": "sk-local-secret",
+          "model": "deepseek-v4-pro",
+          "temperature": 0.2
+        }
+        """
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ARXIV_DAILY_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("ARXIV_DAILY_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("ARXIV_DAILY_LLM_MODEL", raising=False)
+    monkeypatch.delenv("ARXIV_DAILY_LLM_TEMPERATURE", raising=False)
+    client = TestClient(create_app(database_path=tmp_path / "api.sqlite3"))
+
+    response = client.get("/api/ai/config")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is True
+    assert data["api_key_present"] is True
+    assert data["base_url"] == "https://llm.example.test/v1"
+    assert data["temperature"] == "0.2"
+    assert data["config_file_present"] is True
+    assert data["config_path"].endswith("config/llm.local.json")
+    assert "sk-local-secret" not in str(data)
 
 
 def test_post_ai_prompt_preview_returns_messages(tmp_path):

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -43,11 +42,12 @@ from arxiv_local_daily.services import (
     score_papers_for_date,
 )
 from arxiv_local_daily.summary import (
-    DEFAULT_LLM_BASE_URL,
     SCORE_KEYS,
     build_ai_triage_messages,
     enabled_template_fields,
+    load_llm_api_config,
     llm_api_configured,
+    resolve_llm_model,
 )
 
 
@@ -87,14 +87,14 @@ class SummaryRunRequest(BaseModel):
     date: str
     template_id: int | None = None
     template_name: str | None = None
-    model: str = "local"
+    model: str | None = None
     limit: int | None = None
     force: bool = False
 
 
 class ScoreRunRequest(BaseModel):
     date: str
-    model: str = "local"
+    model: str | None = None
     limit: int | None = None
     force: bool = False
 
@@ -103,7 +103,7 @@ class AiTriageRunRequest(BaseModel):
     date: str
     template_id: int | None = None
     template_name: str | None = None
-    model: str = "local"
+    model: str | None = None
     limit: int | None = None
     force: bool = False
     categories: list[str] | None = None
@@ -113,13 +113,13 @@ class AiPromptPreviewRequest(BaseModel):
     arxiv_id: str
     template_id: int | None = None
     template_name: str | None = None
-    model: str = "local"
+    model: str | None = None
 
 
 class PaperAiTriageRunRequest(BaseModel):
     template_id: int | None = None
     template_name: str | None = None
-    model: str = "local"
+    model: str | None = None
     force: bool = False
 
 
@@ -129,7 +129,7 @@ class DailyPipelineRunRequest(BaseModel):
     expected_categories: list[str] | None = None
     template_id: int | None = None
     template_name: str | None = None
-    model: str = "local"
+    model: str | None = None
     force_summary: bool = False
     force_score: bool = False
     oai_max_pages: int = Field(default=1, ge=0, le=100)
@@ -145,7 +145,7 @@ class DailyAutomationStartRequest(BaseModel):
     historical_max_pages: int = Field(default=100, ge=1, le=500)
     template_id: int | None = None
     template_name: str | None = None
-    model: str = "local"
+    model: str | None = None
     ai_batch_size: int = Field(default=20, ge=1, le=100)
 
 
@@ -637,6 +637,7 @@ def create_app(
 
     @app.post("/api/daily/automation/start")
     def start_daily_automation(request: DailyAutomationStartRequest, background_tasks: BackgroundTasks):
+        request.model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             automation_run_id = DailyAutomationRepository(connection).create_run(
@@ -687,9 +688,10 @@ def create_app(
         date: str,
         template_id: int | None = None,
         template_name: str | None = None,
-        model: str = "local",
+        model: str | None = None,
         categories: list[str] | None = Query(default=None),
     ):
+        resolved_model = resolve_llm_model(model)
         connection = get_connection()
         try:
             return get_daily_pipeline_status(
@@ -697,7 +699,7 @@ def create_app(
                 date=date,
                 template_id=template_id,
                 template_name=template_name,
-                model=model,
+                model=resolved_model,
                 expected_categories=categories,
                 categories=categories,
             )
@@ -706,6 +708,7 @@ def create_app(
 
     @app.post("/api/daily/pipeline/run")
     def run_daily_pipeline_endpoint(request: DailyPipelineRunRequest):
+        model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             return daily_pipeline_runner(
@@ -715,7 +718,7 @@ def create_app(
                 expected_categories=request.expected_categories,
                 template_id=request.template_id,
                 template_name=request.template_name,
-                model=request.model,
+                model=model,
                 force_summary=request.force_summary,
                 force_score=request.force_score,
                 oai_max_pages=request.oai_max_pages,
@@ -788,6 +791,7 @@ def create_app(
 
     @app.post("/api/summaries/run")
     def run_summaries(request: SummaryRunRequest):
+        model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             return summary_runner(
@@ -795,7 +799,7 @@ def create_app(
                 date=request.date,
                 template_id=request.template_id,
                 template_name=request.template_name,
-                model=request.model,
+                model=model,
                 limit=request.limit,
                 force=request.force,
             )
@@ -806,12 +810,13 @@ def create_app(
 
     @app.post("/api/scores/run")
     def run_scores(request: ScoreRunRequest):
+        model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             return score_runner(
                 connection,
                 date=request.date,
-                model=request.model,
+                model=model,
                 limit=request.limit,
                 force=request.force,
             )
@@ -820,6 +825,7 @@ def create_app(
 
     @app.post("/api/ai-triage/run")
     def run_ai_triage(request: AiTriageRunRequest):
+        model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             return ai_triage_runner(
@@ -827,7 +833,7 @@ def create_app(
                 date=request.date,
                 template_id=request.template_id,
                 template_name=request.template_name,
-                model=request.model,
+                model=model,
                 limit=request.limit,
                 force=request.force,
                 categories=request.categories,
@@ -839,21 +845,26 @@ def create_app(
 
     @app.get("/api/ai/config")
     def get_ai_config():
-        base_url = os.getenv("ARXIV_DAILY_LLM_BASE_URL", DEFAULT_LLM_BASE_URL).rstrip("/")
+        config = load_llm_api_config()
         return {
             "configured": llm_api_configured(),
-            "api_key_present": bool(os.getenv("ARXIV_DAILY_LLM_API_KEY")),
-            "base_url": base_url,
-            "temperature": os.getenv("ARXIV_DAILY_LLM_TEMPERATURE", "0"),
+            "api_key_present": bool(config.api_key),
+            "base_url": config.base_url,
+            "temperature": f"{config.temperature:g}",
+            "config_path": str(config.config_path),
+            "config_file_present": config.config_file_present,
             "env": {
                 "api_key": "ARXIV_DAILY_LLM_API_KEY",
                 "base_url": "ARXIV_DAILY_LLM_BASE_URL",
+                "model": "ARXIV_DAILY_LLM_MODEL",
                 "temperature": "ARXIV_DAILY_LLM_TEMPERATURE",
+                "config": "ARXIV_DAILY_LLM_CONFIG",
             },
         }
 
     @app.post("/api/ai/prompt-preview")
     def preview_ai_prompt(request: AiPromptPreviewRequest):
+        model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             template = TemplateRepository(connection).get_template(
@@ -868,7 +879,7 @@ def create_app(
             fields = enabled_template_fields(template)
             messages = build_ai_triage_messages(paper=paper, template=template)
             return {
-                "model": request.model,
+                "model": model,
                 "paper": {
                     "arxiv_id": paper["arxiv_id"],
                     "title": paper["title"],
@@ -922,6 +933,7 @@ def create_app(
 
     @app.post("/api/papers/{arxiv_id}/ai-triage/run")
     def run_paper_ai_triage(arxiv_id: str, request: PaperAiTriageRunRequest):
+        model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
             return paper_ai_triage_runner(
@@ -929,7 +941,7 @@ def create_app(
                 arxiv_id=arxiv_id,
                 template_id=request.template_id,
                 template_name=request.template_name,
-                model=request.model,
+                model=model,
                 force=request.force,
             )
         except ValueError as exc:
