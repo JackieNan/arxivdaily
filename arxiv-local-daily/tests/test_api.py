@@ -737,8 +737,9 @@ def test_post_daily_automation_stops_before_metadata_when_historical_crawl_is_pa
     assert "0/1 categories complete" in automation["error"]
 
 
-def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(tmp_path):
+def test_post_daily_automation_auto_uses_arxiv_current_date_for_mode_selection(tmp_path, monkeypatch):
     db_path = tmp_path / "api.sqlite3"
+    monkeypatch.setenv("ARXIV_DAILY_LLM_CONFIG", str(tmp_path / "missing-llm-config.json"))
     calls: list[dict] = []
 
     def fake_arxiv_date_resolver(*, categories: list[str] | None):
@@ -1185,6 +1186,7 @@ def test_post_ai_triage_run_uses_config_model_when_request_omits_model(tmp_path,
 
 
 def test_get_ai_config_reports_masked_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARXIV_DAILY_LLM_CONFIG", str(tmp_path / "missing-llm-config.json"))
     monkeypatch.setenv("ARXIV_DAILY_LLM_API_KEY", "sk-test-secret")
     monkeypatch.setenv("ARXIV_DAILY_LLM_BASE_URL", "https://llm.example.test/v1")
     monkeypatch.setenv("ARXIV_DAILY_LLM_TEMPERATURE", "0.2")

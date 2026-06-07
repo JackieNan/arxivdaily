@@ -1636,6 +1636,7 @@ def _summary_coverage(
     template_name: str | None,
     model: str,
     categories: list[str] | None = None,
+    strict_template_version: bool = True,
 ) -> dict[str, Any]:
     template = TemplateRepository(connection).get_template(template_id=template_id, name=template_name)
     if template is None:
@@ -1654,6 +1655,34 @@ def _summary_coverage(
 
     fields = enabled_template_fields(template)
     category_sql, category_params = _daily_event_category_filter(categories)
+    if strict_template_version or template_id is not None:
+        summary_join = """
+        LEFT JOIN summaries s
+            ON s.arxiv_id = p.arxiv_id
+           AND s.template_id = ?
+           AND s.template_version = ?
+           AND s.model = ?
+           AND s.input_scope = ?
+        """
+        summary_params: tuple[Any, ...] = (
+            int(template["id"]),
+            int(template["version"]),
+            model,
+            template["input_scope"],
+        )
+    else:
+        summary_join = """
+        LEFT JOIN summaries s
+            ON s.arxiv_id = p.arxiv_id
+           AND s.template_id IN (
+                SELECT id
+                FROM summary_templates
+                WHERE name = ?
+           )
+           AND s.model = ?
+           AND s.input_scope = ?
+        """
+        summary_params = (template["name"], model, template["input_scope"])
     rows = connection.execute(
         f"""
         SELECT
@@ -1662,19 +1691,14 @@ def _summary_coverage(
             MAX(CASE WHEN s.status = 'failed' THEN 1 ELSE 0 END) AS has_failed
         FROM papers p
         JOIN daily_events e ON e.arxiv_id = p.arxiv_id
-        LEFT JOIN summaries s
-            ON s.arxiv_id = p.arxiv_id
-           AND s.template_id = ?
-           AND s.template_version = ?
-           AND s.model = ?
-           AND s.input_scope = ?
+        {summary_join}
         WHERE e.date = ?
           {category_sql}
           AND p.metadata_status = 'complete'
           AND COALESCE(p.abstract, '') != ''
         GROUP BY p.arxiv_id
         """,
-        (int(template["id"]), int(template["version"]), model, template["input_scope"], date, *category_params),
+        (*summary_params, date, *category_params),
     ).fetchall()
     complete = sum(1 for row in rows if int(row["has_complete"] or 0) == 1)
     failed = sum(1 for row in rows if int(row["has_complete"] or 0) == 0 and int(row["has_failed"] or 0) == 1)
@@ -1814,6 +1838,7 @@ def get_daily_pipeline_status(
         template_name=template_name,
         model=model,
         categories=coverage_categories,
+        strict_template_version=False,
     )
     score = _score_coverage(
         connection,

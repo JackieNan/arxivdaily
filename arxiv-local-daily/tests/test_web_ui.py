@@ -43,6 +43,8 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="template-editor"' in response.text
     assert 'id="summary-template-save"' in response.text
     assert 'id="summary-template-help"' in response.text
+    assert 'id="summary-template"' not in response.text
+    assert "Template name" not in response.text
     assert 'id="summary-score-run"' in response.text
     assert 'id="ai-config-status"' in response.text
     assert 'id="paper-ai-run"' in response.text
@@ -149,7 +151,10 @@ def test_static_web_assets_are_served(tmp_path):
     assert '"cs.LG"' in js_response.text
     assert "/api/summaries/run" not in js_response.text
     assert "/api/scores/run" not in js_response.text
-    assert "body.template_name = templateName" in js_response.text
+    assert "body.template_name = templateName" not in js_response.text
+    assert 'el("summary-template")' not in js_response.text
+    assert 'params.set("template_name"' not in js_response.text
+    assert "summary.template_name" not in js_response.text
     assert 'el("summary-model")' not in js_response.text
     assert 'body.model = el("summary-model").value.trim() || "local";' not in js_response.text
     assert 'Model: ${data.model}' not in js_response.text

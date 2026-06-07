@@ -11,6 +11,7 @@ from arxiv_local_daily.services import (
     complete_ai_triage_for_date,
     generate_ai_triage_for_date,
     generate_ai_triage_for_paper,
+    get_daily_pipeline_status,
 )
 from arxiv_local_daily.summary import build_ai_triage_messages, parse_ai_triage_response
 
@@ -228,6 +229,27 @@ def test_generate_ai_triage_for_paper_persists_summary_and_score(db):
     assert score["score_total"] == 88
 
 
+def test_single_paper_ai_triage_is_reflected_in_daily_status_without_template_name(db):
+    _seed_daily_paper(db)
+    client = FakeTriageClient([_triage_response()])
+
+    generate_ai_triage_for_paper(
+        db,
+        arxiv_id="2606.00001",
+        model="gpt-test",
+        llm_client=client,
+    )
+    TemplateRepository(db).create_template(_template_input())
+    db.commit()
+
+    status = get_daily_pipeline_status(db, date="2026-06-03", model="gpt-test")
+
+    assert status["summary"]["eligible"] == 1
+    assert status["summary"]["complete"] == 1
+    assert status["score"]["eligible"] == 1
+    assert status["score"]["complete"] == 1
+
+
 def test_generate_ai_triage_for_date_filters_candidates_by_categories(db):
     template_id = _seed_daily_paper(db, "2606.00001", category="cs.AI")
     _seed_daily_paper(db, "2606.00002", category="math.AG", create_template=False)
@@ -280,6 +302,7 @@ def test_complete_ai_triage_for_date_runs_batches_until_all_candidates_are_done(
 
 def test_complete_ai_triage_for_date_skips_without_configured_llm_api(db, monkeypatch):
     template_id = _seed_daily_paper(db)
+    monkeypatch.setenv("ARXIV_DAILY_LLM_CONFIG", "missing-test-llm-config.json")
     monkeypatch.delenv("ARXIV_DAILY_LLM_API_KEY", raising=False)
     monkeypatch.delenv("ARXIV_DAILY_LLM_BASE_URL", raising=False)
 

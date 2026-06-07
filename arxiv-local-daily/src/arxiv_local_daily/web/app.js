@@ -3,6 +3,7 @@ const ArxivDailyWorkbench = (() => {
     selectedPaperId: null,
     selectedCard: null,
     templates: [],
+    summaryTemplateName: "daily_research",
     automationTimer: null,
     activeStatusTimer: null,
     searchPage: 1,
@@ -273,13 +274,14 @@ const ArxivDailyWorkbench = (() => {
       state.templates = data.templates || [];
       if (state.templates.length) {
         const defaultTemplate = state.templates.find((template) => template.is_default) || state.templates[0];
-        el("summary-template").value = defaultTemplate.name;
+        state.summaryTemplateName = defaultTemplate.name || DEFAULT_SUMMARY_TEMPLATE.name;
         populateTemplateEditor(templateFields(defaultTemplate));
         setDetail(
           "summary-template-help",
-          `Template ${defaultTemplate.name} v${defaultTemplate.version} ready.`
+          `Template v${defaultTemplate.version} ready.`
         );
       } else {
+        state.summaryTemplateName = DEFAULT_SUMMARY_TEMPLATE.name;
         populateTemplateEditor(DEFAULT_SUMMARY_TEMPLATE.fields);
         setDetail("summary-template-help", "Create a template before running summaries.");
       }
@@ -359,7 +361,7 @@ const ArxivDailyWorkbench = (() => {
   function summaryTemplatePayload() {
     return {
       ...DEFAULT_SUMMARY_TEMPLATE,
-      name: el("summary-template").value.trim() || DEFAULT_SUMMARY_TEMPLATE.name,
+      name: state.summaryTemplateName || DEFAULT_SUMMARY_TEMPLATE.name,
       fields: readTemplateEditorFields(),
     };
   }
@@ -373,12 +375,12 @@ const ArxivDailyWorkbench = (() => {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      el("summary-template").value = payload.name;
+      state.summaryTemplateName = payload.name;
       setDetail(
         "summary-template-help",
-        `Template ${payload.name} v${result.version} saved.`
+        `Template v${result.version} saved.`
       );
-      recordOperation(`Saved summary template ${payload.name}`);
+      recordOperation("Saved summary template");
       await loadSummaryTemplates();
     } catch (error) {
       setDetail("summary-template-help", `Template create failed: ${error.message}`);
@@ -471,9 +473,7 @@ const ArxivDailyWorkbench = (() => {
     try {
       const scopedCategories = categoryScopeCategories();
       const body = { date: dateValue() };
-      const templateName = el("summary-template").value.trim();
       if (scopedCategories.length) body.categories = scopedCategories;
-      if (templateName) body.template_name = templateName;
       body.crawl_mode = "auto";
       body.force_crawl = true;
       const result = await api("/api/daily/automation/start", {
@@ -503,10 +503,7 @@ const ArxivDailyWorkbench = (() => {
   }
 
   function aiSettingsBody() {
-    const templateName = el("summary-template").value.trim();
-    const body = {};
-    if (templateName) body.template_name = templateName;
-    return body;
+    return {};
   }
 
   function summaryRequestBody() {
@@ -638,7 +635,7 @@ const ArxivDailyWorkbench = (() => {
   function renderPromptPreview(data) {
     const header = [
       `Paper: ${data.paper.arxiv_id} · ${data.paper.title || "-"}`,
-      `Template: ${data.template.name} v${data.template.version} · ${data.template.language} · ${data.template.input_scope}`,
+      `Template: v${data.template.version} · ${data.template.language} · ${data.template.input_scope}`,
       `Summary keys: ${(data.summary_keys || []).join(", ") || "-"}`,
       `Score keys: ${(data.score_keys || []).join(", ") || "-"}`,
     ].join("\n");
@@ -659,9 +656,7 @@ const ArxivDailyWorkbench = (() => {
 
   function dailyStatusParams() {
     const params = new URLSearchParams();
-    const templateName = el("summary-template").value.trim();
     const scopedCategories = categoryScopeCategories();
-    if (templateName) params.set("template_name", templateName);
     scopedCategories.forEach((category) => params.append("categories", category));
     return params;
   }
@@ -1098,7 +1093,6 @@ const ArxivDailyWorkbench = (() => {
     return `
       <div class="summary-section">
         <div class="tag-row">
-          <span class="tag">${escapeHtml(summary.template_name || `template ${summary.template_id}`)}</span>
           <span class="tag">${escapeHtml(summary.status)}</span>
         </div>
         <div class="summary-content">${renderSummaryContent(summary.content || {})}</div>

@@ -700,3 +700,29 @@ Date baseline: 2026-06-03
   - full test suite: 158 passed, 1 warning
   - browser verified `phase39` static assets, Settings has no Model input, AI config status points to `config/llm.local.json`, and no horizontal overflow
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 34: Default Template UI and Single-Paper AI Status
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-default-template-ui.md`
+- Scope completed:
+  - remove the Settings `Template name` input from the web workbench
+  - keep template module editing and saving, using the backend default template name internally
+  - stop web daily automation, daily status, batch AI, selected-paper AI, and prompt-preview requests from sending `template_name`
+  - remove template-name display from summary detail tags and prompt-preview headers
+  - make daily status display count completed summaries across historical versions of the same template name so template edits do not hide already generated AI summaries
+  - keep AI generation strict to the current template version so batch jobs can still regenerate current-version summaries
+  - add a regression test that selected-paper AI completion is visible in daily summary/score status without a template-name query, even after a newer default template version is saved
+  - bump web static asset version to `phase40`
+- Important decisions:
+  - template identity is backend/default-template configuration, not a routine UI setting
+  - the web app should use one consistent default template path so single-paper AI and daily status counts cannot drift because of a stale UI text field
+  - daily status remains scoped to the selected date and category scope; non-CS AI outputs do not increment the CS-only `1/N` progress count
+  - backend API compatibility for explicit `template_name` is preserved for non-web callers
+- Verification:
+  - focused Web UI + AI status tests: 3 passed, 1 warning
+  - full test suite: 159 passed, 1 warning
+  - browser verified `phase40` static assets, no Settings `Template name` input/text, no horizontal overflow, and Settings uses the local config file without showing a model input
+  - local API verified the existing one completed non-CS AI paper now appears as `summary 1/2071` and `score 1/2071` for 2026-06-05 all-group status after a newer template version exists
+  - browser verified 2026-06-05 CS-only status remains `summary 0/1196`, `score 0/1196` because the existing completed AI paper is `physics.atom-ph`, outside the current CS scope
+- Status: implemented on branch, not yet merged to `main`.
