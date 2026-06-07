@@ -39,12 +39,14 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="discussion-panel"' in response.text
     assert 'id="search-detail"' in response.text
     assert 'id="operation-log"' in response.text
-    assert 'id="template-editor-toggle"' in response.text
-    assert 'id="template-editor"' in response.text
-    assert 'id="summary-template-save"' in response.text
-    assert 'id="summary-template-help"' in response.text
+    assert 'id="template-editor-toggle"' not in response.text
+    assert 'id="template-editor"' not in response.text
+    assert 'id="summary-template-save"' not in response.text
+    assert 'id="summary-template-help"' not in response.text
     assert 'id="summary-template"' not in response.text
     assert "Template name" not in response.text
+    assert "Edit Template" not in response.text
+    assert "Save Template" not in response.text
     assert 'id="summary-score-run"' in response.text
     assert 'id="ai-config-status"' in response.text
     assert 'id="paper-ai-run"' in response.text
@@ -105,11 +107,11 @@ def test_static_web_assets_are_served(tmp_path):
     assert js_response.status_code == 200
     assert "ArxivDailyWorkbench" in js_response.text
     assert "readErrorMessage" in js_response.text
-    assert "DEFAULT_SUMMARY_TEMPLATE" in js_response.text
-    assert "loadSummaryTemplates" in js_response.text
-    assert "toggleTemplateEditor" in js_response.text
-    assert "saveSummaryTemplate" in js_response.text
-    assert "readTemplateEditorFields" in js_response.text
+    assert "DEFAULT_SUMMARY_TEMPLATE" not in js_response.text
+    assert "loadSummaryTemplates" not in js_response.text
+    assert "toggleTemplateEditor" not in js_response.text
+    assert "saveSummaryTemplate" not in js_response.text
+    assert "readTemplateEditorFields" not in js_response.text
     assert "runSummaryAndScore" in js_response.text
     assert "retryable" in js_response.text
     assert "next_run_at" in js_response.text
@@ -253,8 +255,6 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".progress-segment" not in css_response.text
     assert ".pagination-controls" in css_response.text
     assert ".source-link" in css_response.text
-    assert ".template-editor" in css_response.text
-    assert ".template-field-row" in css_response.text
     assert ".summary-score-grid" in css_response.text
     assert ".ai-config-card" in css_response.text
     assert ".ai-action-row" in css_response.text
@@ -265,7 +265,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".modal-backdrop" in css_response.text
     assert ".modal-panel" in css_response.text
     assert ".modal-actions" in css_response.text
-    assert "#template-editor-toggle" in css_response.text
+    assert "#template-editor-toggle" not in css_response.text
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css_response.text
     assert "grid-column: 1 / -1;" in css_response.text
     assert "minmax(150px, 1fr) minmax(92px" not in css_response.text

@@ -33,10 +33,32 @@ from arxiv_local_daily.summary import (
     parse_summary_response,
     resolve_llm_model,
 )
+from arxiv_local_daily.template_config import load_single_summary_template
 
 METADATA_RATE_LIMIT_BACKOFF_SECONDS = 10 * 60
 DAILY_LISTING_EVENT_TYPES = ("new", "cross-list", "replacement")
 DAILY_LISTING_CRAWL_MODES = ("single-source", "all-categories", "retry-incomplete")
+
+
+def ensure_single_summary_template(connection: sqlite3.Connection) -> sqlite3.Row:
+    repo = TemplateRepository(connection)
+    template_id = repo.upsert_single_template(load_single_summary_template())
+    connection.commit()
+    row = repo.get_template(template_id=template_id)
+    if row is None:
+        raise ValueError("summary template not found")
+    return row
+
+
+def _resolve_summary_template(
+    connection: sqlite3.Connection,
+    *,
+    template_id: int | None = None,
+    template_name: str | None = None,
+) -> sqlite3.Row | None:
+    if template_id is not None or template_name is not None:
+        return TemplateRepository(connection).get_template(template_id=template_id, name=template_name)
+    return ensure_single_summary_template(connection)
 
 
 def _daily_event_category_filter(
@@ -874,8 +896,7 @@ def generate_summaries_for_date(
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     model = resolve_llm_model(model)
-    template_repo = TemplateRepository(connection)
-    template = template_repo.get_template(template_id=template_id, name=template_name)
+    template = _resolve_summary_template(connection, template_id=template_id, template_name=template_name)
     if template is None:
         raise ValueError("summary template not found")
 
@@ -1035,8 +1056,6 @@ def _count_existing_complete_ai_triage_for_date(
             SELECT 1
             FROM summaries s
             WHERE s.arxiv_id = p.arxiv_id
-              AND s.template_id = ?
-              AND s.template_version = ?
               AND s.model = ?
               AND s.input_scope = ?
               AND s.status = 'complete'
@@ -1053,8 +1072,6 @@ def _count_existing_complete_ai_triage_for_date(
         (
             date,
             *category_params,
-            template_id,
-            template_version,
             model,
             input_scope,
             model,
@@ -1083,8 +1100,6 @@ def _list_ai_triage_candidate_ids_for_date(
         date,
         *category_params,
         1 if force else 0,
-        template_id,
-        template_version,
         model,
         input_scope,
         model,
@@ -1107,8 +1122,6 @@ def _list_ai_triage_candidate_ids_for_date(
                 SELECT 1
                 FROM summaries s
                 WHERE s.arxiv_id = p.arxiv_id
-                  AND s.template_id = ?
-                  AND s.template_version = ?
                   AND s.model = ?
                   AND s.input_scope = ?
                   AND s.status = 'complete'
@@ -1144,14 +1157,12 @@ def _has_complete_summary(
         SELECT 1
         FROM summaries
         WHERE arxiv_id = ?
-          AND template_id = ?
-          AND template_version = ?
           AND model = ?
           AND input_scope = ?
           AND status = 'complete'
         LIMIT 1
         """,
-        (arxiv_id, template_id, template_version, model, input_scope),
+        (arxiv_id, model, input_scope),
     ).fetchone()
     return row is not None
 
@@ -1192,8 +1203,7 @@ def generate_ai_triage_for_date(
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     model = resolve_llm_model(model)
-    template_repo = TemplateRepository(connection)
-    template = template_repo.get_template(template_id=template_id, name=template_name)
+    template = _resolve_summary_template(connection, template_id=template_id, template_name=template_name)
     if template is None:
         raise ValueError("summary template not found")
 
@@ -1340,8 +1350,7 @@ def generate_ai_triage_for_paper(
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     model = resolve_llm_model(model)
-    template_repo = TemplateRepository(connection)
-    template = template_repo.get_template(template_id=template_id, name=template_name)
+    template = _resolve_summary_template(connection, template_id=template_id, template_name=template_name)
     if template is None:
         raise ValueError("summary template not found")
 
@@ -1540,7 +1549,7 @@ def complete_ai_triage_for_date(
             "score": score_coverage(),
             "runs": runs,
         }
-    if TemplateRepository(connection).get_template(template_id=template_id, name=template_name) is None:
+    if _resolve_summary_template(connection, template_id=template_id, template_name=template_name) is None:
         return {
             "date": date,
             "status": "template_missing",
@@ -1638,7 +1647,7 @@ def _summary_coverage(
     categories: list[str] | None = None,
     strict_template_version: bool = True,
 ) -> dict[str, Any]:
-    template = TemplateRepository(connection).get_template(template_id=template_id, name=template_name)
+    template = _resolve_summary_template(connection, template_id=template_id, template_name=template_name)
     if template is None:
         eligible = _eligible_daily_paper_count(connection, date=date, categories=categories)
         return {
@@ -1655,7 +1664,7 @@ def _summary_coverage(
 
     fields = enabled_template_fields(template)
     category_sql, category_params = _daily_event_category_filter(categories)
-    if strict_template_version or template_id is not None:
+    if strict_template_version and (template_id is not None or template_name is not None):
         summary_join = """
         LEFT JOIN summaries s
             ON s.arxiv_id = p.arxiv_id

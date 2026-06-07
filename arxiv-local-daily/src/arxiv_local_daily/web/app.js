@@ -2,8 +2,6 @@ const ArxivDailyWorkbench = (() => {
   const state = {
     selectedPaperId: null,
     selectedCard: null,
-    templates: [],
-    summaryTemplateName: "daily_research",
     automationTimer: null,
     activeStatusTimer: null,
     searchPage: 1,
@@ -74,56 +72,6 @@ const ArxivDailyWorkbench = (() => {
     no_papers: "no papers",
     complete: "complete",
     failed: "failed",
-  };
-
-  const DEFAULT_SUMMARY_TEMPLATE = {
-    name: "daily_research",
-    language: "Chinese",
-    system_prompt: "你是本地 arXiv 论文阅读数据库的中文研究助理。请用简洁中文总结论文，只返回 JSON。",
-    input_scope: "abstract",
-    is_default: true,
-    fields: [
-      {
-        key: "keywords",
-        label: "关键词",
-        order: 1,
-        prompt: "提炼 5-8 个中文关键词。保留必要英文术语、模型名和 LaTeX 符号。",
-        field_type: "keywords",
-        enabled: true,
-      },
-      {
-        key: "tldr",
-        label: "一句话结论",
-        order: 2,
-        prompt: "用一句中文概括论文的核心贡献。",
-        field_type: "short_sentence",
-        enabled: true,
-      },
-      {
-        key: "method",
-        label: "核心方法",
-        order: 3,
-        prompt: "用 2-3 个中文要点解释核心方法。",
-        field_type: "bullets",
-        enabled: true,
-      },
-      {
-        key: "value",
-        label: "阅读价值",
-        order: 4,
-        prompt: "用中文说明为什么这篇论文值得阅读或暂时跳过。",
-        field_type: "bullets",
-        enabled: true,
-      },
-      {
-        key: "limits",
-        label: "局限",
-        order: 5,
-        prompt: "用中文列出明显局限、缺失证据或需要进一步确认的点。",
-        field_type: "bullets",
-        enabled: true,
-      },
-    ],
   };
 
   const el = (id) => document.getElementById(id);
@@ -268,37 +216,17 @@ const ArxivDailyWorkbench = (() => {
     });
   }
 
-  async function loadSummaryTemplates() {
-    try {
-      const data = await api("/api/summary-templates");
-      state.templates = data.templates || [];
-      if (state.templates.length) {
-        const defaultTemplate = state.templates.find((template) => template.is_default) || state.templates[0];
-        state.summaryTemplateName = defaultTemplate.name || DEFAULT_SUMMARY_TEMPLATE.name;
-        populateTemplateEditor(templateFields(defaultTemplate));
-        setDetail(
-          "summary-template-help",
-          `Template v${defaultTemplate.version} ready.`
-        );
-      } else {
-        state.summaryTemplateName = DEFAULT_SUMMARY_TEMPLATE.name;
-        populateTemplateEditor(DEFAULT_SUMMARY_TEMPLATE.fields);
-        setDetail("summary-template-help", "Create a template before running summaries.");
-      }
-    } catch (error) {
-      setDetail("summary-template-help", `Template load failed: ${error.message}`);
-    }
-  }
-
   async function loadAiConfig() {
     try {
       const config = await api("/api/ai/config");
       state.aiConfig = config;
       const stateText = config.configured ? "AI API configured" : "AI API not configured";
       const configSource = config.config_file_present ? `file ${config.config_path}` : "environment/defaults";
+      const template = config.summary_template || {};
+      const templateSource = template.config_file_present ? `template ${template.config_path}` : `template default (${template.config_path})`;
       const detail = config.configured
-        ? `${config.base_url}; key ${config.api_key_present ? "present" : "not required"}; ${configSource}; temperature ${config.temperature}`
-        : `Create ${config.config_path} or set ${config.env.api_key} / ${config.env.base_url}.`;
+        ? `${config.base_url}; key ${config.api_key_present ? "present" : "not required"}; ${configSource}; ${templateSource}; temperature ${config.temperature}`
+        : `Create ${config.config_path} or set ${config.env.api_key} / ${config.env.base_url}; template ${template.config_path}.`;
       el("ai-config-state").textContent = stateText;
       el("ai-config-state").className = config.configured ? "status-complete" : "status-pending";
       setDetail("ai-config-status", detail);
@@ -309,84 +237,6 @@ const ArxivDailyWorkbench = (() => {
       el("ai-config-state").className = "status-failed";
       setDetail("ai-config-status", error.message);
       return null;
-    }
-  }
-
-  function templateFields(template) {
-    if (Array.isArray(template.fields)) return template.fields;
-    if (typeof template.fields_json === "string") {
-      try {
-        const fields = JSON.parse(template.fields_json);
-        if (Array.isArray(fields)) return fields;
-      } catch (error) {
-        console.warn("Template fields_json parse failed", error);
-      }
-    }
-    return DEFAULT_SUMMARY_TEMPLATE.fields;
-  }
-
-  function toggleTemplateEditor() {
-    const editor = el("template-editor");
-    const nextHidden = !editor.hidden;
-    editor.hidden = nextHidden;
-    el("template-editor-toggle").textContent = nextHidden ? "Edit Template" : "Close Template";
-  }
-
-  function populateTemplateEditor(fields) {
-    const byKey = new Map((fields || []).map((field) => [field.key, field]));
-    for (const row of document.querySelectorAll(".template-field-row")) {
-      const field = byKey.get(row.dataset.templateKey);
-      if (!field) continue;
-      row.querySelector("[data-template-enabled]").checked = field.enabled !== false;
-      row.querySelector("[data-template-label]").value = field.label || row.dataset.templateKey;
-      row.querySelector("[data-template-prompt]").value = field.prompt || "";
-    }
-  }
-
-  function readTemplateEditorFields() {
-    return Array.from(document.querySelectorAll(".template-field-row")).map((row, index) => {
-      const label = row.querySelector("[data-template-label]").value.trim();
-      const prompt = row.querySelector("[data-template-prompt]").value.trim();
-      return {
-        key: row.dataset.templateKey,
-        label: label || row.dataset.templateKey,
-        order: index + 1,
-        prompt,
-        field_type: row.dataset.templateType,
-        enabled: row.querySelector("[data-template-enabled]").checked,
-      };
-    });
-  }
-
-  function summaryTemplatePayload() {
-    return {
-      ...DEFAULT_SUMMARY_TEMPLATE,
-      name: state.summaryTemplateName || DEFAULT_SUMMARY_TEMPLATE.name,
-      fields: readTemplateEditorFields(),
-    };
-  }
-
-  async function saveSummaryTemplate() {
-    const button = el("summary-template-save");
-    setBusy(button, true);
-    try {
-      const payload = summaryTemplatePayload();
-      const result = await api("/api/summary-templates", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      state.summaryTemplateName = payload.name;
-      setDetail(
-        "summary-template-help",
-        `Template v${result.version} saved.`
-      );
-      recordOperation("Saved summary template");
-      await loadSummaryTemplates();
-    } catch (error) {
-      setDetail("summary-template-help", `Template create failed: ${error.message}`);
-      recordOperation(`Template create failed: ${error.message}`);
-    } finally {
-      setBusy(button, false);
     }
   }
 
@@ -531,15 +381,12 @@ const ArxivDailyWorkbench = (() => {
       const message = triage.status === "not_configured"
         ? "LLM API not configured"
         : `AI triage ${triage.completed}/${triage.requested}; failed ${triage.failed}`;
-      setDetail("summary-template-help", message);
+      setDetail("ai-config-status", message);
       recordOperation(message);
       await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
     } catch (error) {
-      const templateHint = error.message === "summary template not found"
-        ? " Save a template first."
-        : "";
-      setDetail("summary-template-help", `Summary/score failed: ${error.message}.${templateHint}`);
+      setDetail("ai-config-status", `Summary/score failed: ${error.message}.`);
       recordOperation(`Summary/score failed: ${error.message}`);
     } finally {
       setBusy(button, false);
@@ -635,7 +482,7 @@ const ArxivDailyWorkbench = (() => {
   function renderPromptPreview(data) {
     const header = [
       `Paper: ${data.paper.arxiv_id} · ${data.paper.title || "-"}`,
-      `Template: v${data.template.version} · ${data.template.language} · ${data.template.input_scope}`,
+      `Template: ${data.template.language} · ${data.template.input_scope}`,
       `Summary keys: ${(data.summary_keys || []).join(", ") || "-"}`,
       `Score keys: ${(data.score_keys || []).join(", ") || "-"}`,
     ].join("\n");
@@ -1218,8 +1065,6 @@ const ArxivDailyWorkbench = (() => {
     });
     el("crawl-categories").addEventListener("input", renderArchiveScope);
     el("archive-scope-toggle").addEventListener("click", toggleArchiveScope);
-    el("template-editor-toggle").addEventListener("click", toggleTemplateEditor);
-    el("summary-template-save").addEventListener("click", saveSummaryTemplate);
     el("summary-score-run").addEventListener("click", runSummaryAndScore);
     el("paper-ai-run").addEventListener("click", runSelectedPaperAi);
     el("paper-prompt-preview").addEventListener("click", previewSelectedPaperPrompt);
@@ -1242,7 +1087,6 @@ const ArxivDailyWorkbench = (() => {
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     renderArchiveScope();
-    loadSummaryTemplates();
     loadAiConfig();
     refreshSelectedDateView();
     if (!state.automationTimer) {

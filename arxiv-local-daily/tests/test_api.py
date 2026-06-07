@@ -1244,14 +1244,36 @@ def test_get_ai_config_reports_masked_local_config_file(tmp_path, monkeypatch):
     assert "sk-local-secret" not in str(data)
 
 
-def test_post_ai_prompt_preview_returns_messages(tmp_path):
+def test_post_ai_prompt_preview_returns_messages(tmp_path, monkeypatch):
     db_path = tmp_path / "api.sqlite3"
-    template_id = _seed_ai_ready_paper(db_path)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "summary_template.local.json").write_text(
+        """
+        {
+          "language": "Chinese",
+          "system_prompt": "Use the local single template.",
+          "input_scope": "abstract",
+          "fields": [
+            {
+              "key": "keywords",
+              "label": "关键词",
+              "order": 1,
+              "prompt": "提炼本地配置关键词。",
+              "field_type": "keywords",
+              "enabled": true
+            }
+          ]
+        }
+        """
+    )
+    monkeypatch.chdir(tmp_path)
+    _seed_ai_ready_paper(db_path)
     client = TestClient(create_app(database_path=db_path))
 
     response = client.post(
         "/api/ai/prompt-preview",
-        json={"arxiv_id": "2606.00001", "template_id": template_id, "model": "gpt-test"},
+        json={"arxiv_id": "2606.00001", "model": "gpt-test"},
     )
 
     assert response.status_code == 200
@@ -1261,13 +1283,12 @@ def test_post_ai_prompt_preview_returns_messages(tmp_path):
         "arxiv_id": "2606.00001",
         "title": "Structured Summaries for Daily Research",
     }
-    assert data["template"]["id"] == template_id
-    assert data["template"]["name"] == "daily_research"
-    assert data["summary_keys"] == ["keywords", "tldr"]
+    assert data["template"]["source"] == "config"
+    assert data["summary_keys"] == ["keywords"]
     assert "score_total" in data["score_keys"]
     assert [message["role"] for message in data["messages"]] == ["system", "user"]
     assert "Structured Summaries for Daily Research" in data["messages"][1]["content"]
-    assert "提炼中文关键词" in data["messages"][1]["content"]
+    assert "提炼本地配置关键词" in data["messages"][1]["content"]
 
 
 def test_post_paper_ai_triage_run_uses_injected_runner(tmp_path):
@@ -1435,16 +1456,15 @@ def test_post_oai_metadata_sync_start_creates_background_run(tmp_path):
     assert status_response.json()["run"]["status"] == "complete"
 
 
-def test_list_summary_templates_starts_empty(tmp_path):
+def test_list_summary_templates_endpoint_is_removed(tmp_path):
     client = _client_with_seed_data(tmp_path)
 
     response = client.get("/api/summary-templates")
 
-    assert response.status_code == 200
-    assert response.json() == {"templates": []}
+    assert response.status_code == 404
 
 
-def test_post_summary_template_creates_versioned_template(tmp_path):
+def test_post_summary_template_endpoint_is_removed(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     client = TestClient(create_app(database_path=db_path))
 
@@ -1469,8 +1489,7 @@ def test_post_summary_template_creates_versioned_template(tmp_path):
         },
     )
 
-    assert response.status_code == 200
-    assert response.json() == {"template_id": 1, "version": 1}
+    assert response.status_code == 404
 
 
 def test_post_summaries_run_uses_injected_runner(tmp_path):

@@ -14,7 +14,7 @@ from arxiv_local_daily.crawler.live import (
 )
 from arxiv_local_daily.crawler.preflight import run_daily_listing_preflight
 from arxiv_local_daily.db import connect, initialize_schema, transaction
-from arxiv_local_daily.models import PaperDiscussionInput, SummaryTemplateInput
+from arxiv_local_daily.models import PaperDiscussionInput
 from arxiv_local_daily.repositories import (
     CrawlRepository,
     DailyAutomationRepository,
@@ -23,7 +23,6 @@ from arxiv_local_daily.repositories import (
     PreflightRepository,
     SearchRepository,
     SummaryRepository,
-    TemplateRepository,
 )
 from arxiv_local_daily.services import (
     complete_ai_triage_for_date,
@@ -35,12 +34,14 @@ from arxiv_local_daily.services import (
     generate_summaries_for_date,
     get_crawl_completeness_for_date,
     get_daily_pipeline_status,
+    ensure_single_summary_template,
     repair_contaminated_daily_listing_dates,
     retry_incomplete_crawl_categories_for_date,
     run_daily_pipeline,
     run_oai_metadata_sync,
     score_papers_for_date,
 )
+from arxiv_local_daily.template_config import summary_template_config_status
 from arxiv_local_daily.summary import (
     SCORE_KEYS,
     build_ai_triage_messages,
@@ -853,6 +854,7 @@ def create_app(
             "temperature": f"{config.temperature:g}",
             "config_path": str(config.config_path),
             "config_file_present": config.config_file_present,
+            "summary_template": summary_template_config_status(),
             "env": {
                 "api_key": "ARXIV_DAILY_LLM_API_KEY",
                 "base_url": "ARXIV_DAILY_LLM_BASE_URL",
@@ -867,10 +869,7 @@ def create_app(
         model = resolve_llm_model(request.model)
         connection = get_connection()
         try:
-            template = TemplateRepository(connection).get_template(
-                template_id=request.template_id,
-                name=request.template_name,
-            )
+            template = ensure_single_summary_template(connection)
             if template is None:
                 raise HTTPException(status_code=400, detail="summary template not found")
             paper = SummaryRepository(connection).get_paper_for_summary(request.arxiv_id)
@@ -886,8 +885,7 @@ def create_app(
                 },
                 "template": {
                     "id": int(template["id"]),
-                    "name": template["name"],
-                    "version": int(template["version"]),
+                    "source": "config",
                     "language": template["language"],
                     "input_scope": template["input_scope"],
                 },
@@ -895,28 +893,6 @@ def create_app(
                 "score_keys": SCORE_KEYS,
                 "messages": messages,
             }
-        finally:
-            connection.close()
-
-    @app.get("/api/summary-templates")
-    def list_summary_templates():
-        connection = get_connection()
-        try:
-            repo = TemplateRepository(connection)
-            rows = repo.list_templates()
-            return {"templates": [_row_to_dict(row) for row in rows]}
-        finally:
-            connection.close()
-
-    @app.post("/api/summary-templates")
-    def create_summary_template(template: SummaryTemplateInput):
-        connection = get_connection()
-        try:
-            repo = TemplateRepository(connection)
-            template_id = repo.create_template(template)
-            connection.commit()
-            row = repo.get_template(template_id=template_id)
-            return {"template_id": template_id, "version": row["version"]}
         finally:
             connection.close()
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase40">
+    <link rel="stylesheet" href="/static/styles.css?v=phase41">
     <script>
       window.MathJax = {
         tex: {
@@ -111,92 +111,12 @@
             <span class="badge">summary + score</span>
           </div>
           <div class="action-grid settings-grid summary-score-grid">
-            <button id="template-editor-toggle" class="secondary-button" type="button">Edit Template</button>
             <button id="summary-score-run" type="button">Run Summary + Score</button>
           </div>
-          <p id="summary-template-help" class="inline-status">No template loaded.</p>
           <div id="ai-config-card" class="ai-config-card">
             <strong id="ai-config-state">AI API unknown</strong>
             <span id="ai-config-status">Loading AI configuration.</span>
           </div>
-          <section id="template-editor" class="template-editor" hidden>
-            <div class="template-editor-title">
-              <h3>Template Modules</h3>
-              <button id="summary-template-save" type="button">Save Template</button>
-            </div>
-            <div class="template-field-list">
-              <div class="template-field-row" data-template-key="keywords" data-template-type="keywords">
-                <label class="template-enabled">
-                  <input data-template-enabled type="checkbox" checked>
-                  <span>Enable</span>
-                </label>
-                <label>
-                  <span>Module</span>
-                  <input data-template-label type="text" value="关键词">
-                </label>
-                <label class="wide">
-                  <span>Prompt</span>
-                  <textarea data-template-prompt rows="2">提炼 5-8 个中文关键词。保留必要英文术语、模型名和 LaTeX 符号。</textarea>
-                </label>
-              </div>
-              <div class="template-field-row" data-template-key="tldr" data-template-type="short_sentence">
-                <label class="template-enabled">
-                  <input data-template-enabled type="checkbox" checked>
-                  <span>Enable</span>
-                </label>
-                <label>
-                  <span>Module</span>
-                  <input data-template-label type="text" value="一句话结论">
-                </label>
-                <label class="wide">
-                  <span>Prompt</span>
-                  <textarea data-template-prompt rows="2">用一句中文概括论文的核心贡献。</textarea>
-                </label>
-              </div>
-              <div class="template-field-row" data-template-key="method" data-template-type="bullets">
-                <label class="template-enabled">
-                  <input data-template-enabled type="checkbox" checked>
-                  <span>Enable</span>
-                </label>
-                <label>
-                  <span>Module</span>
-                  <input data-template-label type="text" value="核心方法">
-                </label>
-                <label class="wide">
-                  <span>Prompt</span>
-                  <textarea data-template-prompt rows="2">用 2-3 个中文要点解释核心方法。</textarea>
-                </label>
-              </div>
-              <div class="template-field-row" data-template-key="value" data-template-type="bullets">
-                <label class="template-enabled">
-                  <input data-template-enabled type="checkbox" checked>
-                  <span>Enable</span>
-                </label>
-                <label>
-                  <span>Module</span>
-                  <input data-template-label type="text" value="阅读价值">
-                </label>
-                <label class="wide">
-                  <span>Prompt</span>
-                  <textarea data-template-prompt rows="2">用中文说明为什么这篇论文值得阅读或暂时跳过。</textarea>
-                </label>
-              </div>
-              <div class="template-field-row" data-template-key="limits" data-template-type="bullets">
-                <label class="template-enabled">
-                  <input data-template-enabled type="checkbox" checked>
-                  <span>Enable</span>
-                </label>
-                <label>
-                  <span>Module</span>
-                  <input data-template-label type="text" value="局限">
-                </label>
-                <label class="wide">
-                  <span>Prompt</span>
-                  <textarea data-template-prompt rows="2">用中文列出明显局限、缺失证据或需要进一步确认的点。</textarea>
-                </label>
-              </div>
-            </div>
-          </section>
         </section>
       </section>
 
@@ -351,6 +271,6 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase40"></script>
+    <script src="/static/app.js?v=phase41"></script>
   </body>
 </html>

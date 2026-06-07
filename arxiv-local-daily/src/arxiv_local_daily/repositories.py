@@ -690,6 +690,69 @@ class TemplateRepository:
     def __init__(self, connection: sqlite3.Connection):
         self.connection = connection
 
+    def upsert_single_template(self, template: SummaryTemplateInput) -> int:
+        fields_json = json.dumps([field.model_dump() for field in template.fields], sort_keys=True, ensure_ascii=False)
+        current = self.connection.execute(
+            """
+            SELECT id
+            FROM summary_templates
+            WHERE name = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (template.name,),
+        ).fetchone()
+        if current is None:
+            current = self.connection.execute(
+                """
+                SELECT id
+                FROM summary_templates
+                ORDER BY is_default DESC, id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        if current is None:
+            cursor = self.connection.execute(
+                """
+                INSERT INTO summary_templates
+                    (name, language, version, fields_json, system_prompt, input_scope, is_default)
+                VALUES (?, ?, 1, ?, ?, ?, 1)
+                """,
+                (
+                    template.name,
+                    template.language,
+                    fields_json,
+                    template.system_prompt,
+                    template.input_scope,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+        template_id = int(current["id"])
+        self.connection.execute("UPDATE summary_templates SET is_default = 0 WHERE id != ?", (template_id,))
+        self.connection.execute(
+            """
+            UPDATE summary_templates
+            SET name = ?,
+                language = ?,
+                version = 1,
+                fields_json = ?,
+                system_prompt = ?,
+                input_scope = ?,
+                is_default = 1
+            WHERE id = ?
+            """,
+            (
+                template.name,
+                template.language,
+                fields_json,
+                template.system_prompt,
+                template.input_scope,
+                template_id,
+            ),
+        )
+        return template_id
+
     def create_template(self, template: SummaryTemplateInput) -> int:
         current = self.connection.execute(
             "SELECT COALESCE(MAX(version), 0) AS version FROM summary_templates WHERE name = ?",

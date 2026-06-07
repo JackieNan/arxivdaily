@@ -726,3 +726,29 @@ Date baseline: 2026-06-03
   - local API verified the existing one completed non-CS AI paper now appears as `summary 1/2071` and `score 1/2071` for 2026-06-05 all-group status after a newer template version exists
   - browser verified 2026-06-05 CS-only status remains `summary 0/1196`, `score 0/1196` because the existing completed AI paper is `physics.atom-ph`, outside the current CS scope
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 35: Single Config-File Summary Template
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-single-config-template.md`
+- Scope completed:
+  - remove Settings template editing UI, including module rows and Save Template controls
+  - remove frontend calls to `/api/summary-templates`
+  - remove summary-template CRUD API routes
+  - add `config/summary_template.example.json`
+  - ignore local `config/summary_template.local.json`
+  - load the active summary template from `config/summary_template.local.json`, falling back to the built-in default when absent
+  - force internal template identity to one singleton template with version `1`
+  - keep existing template DB tables only as internal storage to avoid destructive migration
+  - make summary completion checks ignore template name/version and count by paper, model, and input scope
+  - show the summary template config path in the AI config status payload/UI text
+- Important decisions:
+  - template edits are now a local config-file workflow, not an in-app workflow
+  - there is no user-facing template name or template version
+  - old summaries remain usable in progress counts because template identity/version are no longer part of completion semantics
+- Verification:
+  - focused Web UI/API template tests: 5 passed, 1 warning
+  - full test suite: 159 passed, 1 warning
+  - browser verified `phase41` static assets, no template editor/toggle/save controls, no `Template name` text, no horizontal overflow, and Settings shows `config/summary_template.local.json`
+  - local API verified `GET /api/summary-templates` returns 404 and `/api/ai/config` reports the summary template config path
+- Status: implemented on branch, not yet merged to `main`.
