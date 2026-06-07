@@ -58,42 +58,60 @@ const ArxivDailyWorkbench = (() => {
   ];
 
   const CATEGORY_GROUPS = [
-    { id: "cs", label: "Computer Science", categories: CS_CATEGORIES },
-    { id: "math", label: "Mathematics", categories: ["math.AC", "math.AG", "math.AP", "math.AT", "math.CA", "math.CO", "math.CT", "math.CV", "math.DG", "math.DS", "math.FA", "math.GM", "math.GN", "math.GR", "math.GT", "math.HO", "math.IT", "math.KT", "math.LO", "math.MG", "math.MP", "math.NA", "math.NT", "math.OA", "math.OC", "math.PR", "math.QA", "math.RA", "math.RT", "math.SG", "math.SP", "math.ST"] },
-    { id: "stat", label: "Statistics", categories: ["stat.AP", "stat.CO", "stat.ME", "stat.ML", "stat.OT", "stat.TH"] },
-    { id: "physics", label: "Physics", categories: ["physics.acc-ph", "physics.app-ph", "physics.atm-clus", "physics.atom-ph", "physics.bio-ph", "physics.chem-ph", "physics.class-ph", "physics.comp-ph", "physics.data-an", "physics.ed-ph", "physics.flu-dyn", "physics.gen-ph", "physics.geo-ph", "physics.hist-ph", "physics.ins-det", "physics.med-ph", "physics.optics", "physics.plasm-ph", "physics.pop-ph", "physics.soc-ph", "physics.space-ph"] },
-    { id: "astro-ph", label: "Astrophysics", categories: ["astro-ph.CO", "astro-ph.EP", "astro-ph.GA", "astro-ph.HE", "astro-ph.IM", "astro-ph.SR"] },
-    { id: "cond-mat", label: "Condensed Matter", categories: ["cond-mat.dis-nn", "cond-mat.mes-hall", "cond-mat.mtrl-sci", "cond-mat.other", "cond-mat.quant-gas", "cond-mat.soft", "cond-mat.stat-mech", "cond-mat.str-el", "cond-mat.supr-con"] },
-    { id: "q-bio", label: "Quantitative Biology", categories: ["q-bio.BM", "q-bio.CB", "q-bio.GN", "q-bio.MN", "q-bio.NC", "q-bio.OT", "q-bio.PE", "q-bio.QM", "q-bio.SC", "q-bio.TO"] },
-    { id: "q-fin", label: "Quantitative Finance", categories: ["q-fin.CP", "q-fin.EC", "q-fin.GN", "q-fin.MF", "q-fin.PM", "q-fin.PR", "q-fin.RM", "q-fin.ST", "q-fin.TR"] },
-    { id: "econ", label: "Economics", categories: ["econ.EM", "econ.GN", "econ.TH"] },
-    { id: "eess", label: "Electrical Engineering and Systems Science", categories: ["eess.AS", "eess.IV", "eess.SP", "eess.SY"] },
-    { id: "nlin", label: "Nonlinear Sciences", categories: ["nlin.AO", "nlin.CD", "nlin.CG", "nlin.PS", "nlin.SI"] },
-    { id: "quant-ph", label: "Quantum Physics", categories: ["quant-ph"] },
-    { id: "math-ph", label: "Mathematical Physics", categories: ["math-ph"] },
-    { id: "gr-qc", label: "General Relativity and Quantum Cosmology", categories: ["gr-qc"] },
-    { id: "hep", label: "High Energy Physics", categories: ["hep-ex", "hep-lat", "hep-ph", "hep-th"] },
-    { id: "nucl", label: "Nuclear", categories: ["nucl-ex", "nucl-th"] },
+    { id: "cs", label: "计算机科学", categories: CS_CATEGORIES },
+    { id: "math", label: "数学", categories: ["math.AC", "math.AG", "math.AP", "math.AT", "math.CA", "math.CO", "math.CT", "math.CV", "math.DG", "math.DS", "math.FA", "math.GM", "math.GN", "math.GR", "math.GT", "math.HO", "math.IT", "math.KT", "math.LO", "math.MG", "math.MP", "math.NA", "math.NT", "math.OA", "math.OC", "math.PR", "math.QA", "math.RA", "math.RT", "math.SG", "math.SP", "math.ST"] },
+    { id: "stat", label: "统计学", categories: ["stat.AP", "stat.CO", "stat.ME", "stat.ML", "stat.OT", "stat.TH"] },
+    { id: "physics", label: "物理", categories: ["physics.acc-ph", "physics.app-ph", "physics.atm-clus", "physics.atom-ph", "physics.bio-ph", "physics.chem-ph", "physics.class-ph", "physics.comp-ph", "physics.data-an", "physics.ed-ph", "physics.flu-dyn", "physics.gen-ph", "physics.geo-ph", "physics.hist-ph", "physics.ins-det", "physics.med-ph", "physics.optics", "physics.plasm-ph", "physics.pop-ph", "physics.soc-ph", "physics.space-ph"] },
+    { id: "astro-ph", label: "天体物理", categories: ["astro-ph.CO", "astro-ph.EP", "astro-ph.GA", "astro-ph.HE", "astro-ph.IM", "astro-ph.SR"] },
+    { id: "cond-mat", label: "凝聚态物理", categories: ["cond-mat.dis-nn", "cond-mat.mes-hall", "cond-mat.mtrl-sci", "cond-mat.other", "cond-mat.quant-gas", "cond-mat.soft", "cond-mat.stat-mech", "cond-mat.str-el", "cond-mat.supr-con"] },
+    { id: "q-bio", label: "定量生物", categories: ["q-bio.BM", "q-bio.CB", "q-bio.GN", "q-bio.MN", "q-bio.NC", "q-bio.OT", "q-bio.PE", "q-bio.QM", "q-bio.SC", "q-bio.TO"] },
+    { id: "q-fin", label: "定量金融", categories: ["q-fin.CP", "q-fin.EC", "q-fin.GN", "q-fin.MF", "q-fin.PM", "q-fin.PR", "q-fin.RM", "q-fin.ST", "q-fin.TR"] },
+    { id: "econ", label: "经济学", categories: ["econ.EM", "econ.GN", "econ.TH"] },
+    { id: "eess", label: "电气工程与系统科学", categories: ["eess.AS", "eess.IV", "eess.SP", "eess.SY"] },
+    { id: "nlin", label: "非线性科学", categories: ["nlin.AO", "nlin.CD", "nlin.CG", "nlin.PS", "nlin.SI"] },
+    { id: "quant-ph", label: "量子物理", categories: ["quant-ph"] },
+    { id: "math-ph", label: "数学物理", categories: ["math-ph"] },
+    { id: "gr-qc", label: "广义相对论与量子宇宙学", categories: ["gr-qc"] },
+    { id: "hep", label: "高能物理", categories: ["hep-ex", "hep-lat", "hep-ph", "hep-th"] },
+    { id: "nucl", label: "核物理", categories: ["nucl-ex", "nucl-th"] },
   ];
 
   const AUTOMATION_STEP_LABELS = {
-    idle: "idle",
-    queued: "queued",
-    arxiv_date_check: "checking arXiv date",
-    preflight: "preflight",
-    crawl: "crawl",
-    crawl_already_complete: "crawl already complete",
-    crawl_incomplete: "crawl incomplete",
-    metadata: "metadata",
-    ai: "AI",
-    waiting_for_arxiv_update: "waiting for arXiv update",
-    metadata_waiting: "metadata waiting",
-    no_papers: "no papers",
-    complete: "complete",
-    failed: "failed",
+    idle: "空闲",
+    queued: "已排队",
+    arxiv_date_check: "检查 arXiv 日期",
+    preflight: "预检查",
+    crawl: "抓取论文",
+    crawl_already_complete: "抓取已完成",
+    crawl_incomplete: "抓取未完成",
+    metadata: "补齐元数据",
+    ai: "AI 分析",
+    waiting_for_arxiv_update: "等待 arXiv 更新",
+    metadata_waiting: "等待元数据",
+    no_papers: "无论文",
+    complete: "完成",
+    failed: "失败",
+  };
+
+  const STATUS_LABELS = {
+    idle: "空闲",
+    queued: "已排队",
+    running: "运行中",
+    waiting: "等待",
+    partial: "部分完成",
+    complete: "完成",
+    failed: "失败",
+    retryable: "可重试",
+    pending: "待处理",
+    not_started: "未开始",
+    unknown: "未知",
   };
 
   const el = (id) => document.getElementById(id);
+
+  function statusLabel(value) {
+    return STATUS_LABELS[value] || value || "-";
+  }
 
   function todayIso() {
     return new Date().toISOString().slice(0, 10);
@@ -256,10 +274,10 @@ const ArxivDailyWorkbench = (() => {
     const manual = manualCategories();
     const isCsScope = state.archiveScope === "cs";
     const status = manual.length
-      ? `Manual categories override default scope: ${manual.join(", ")}.`
+      ? `手动分类覆盖默认范围：${manual.join(", ")}。`
       : isCsScope
-        ? `No manual categories: crawl, status, and AI use ${CS_CATEGORIES.length} cs.* categories.`
-        : "No manual categories: crawl, status, and AI use all arXiv groups.";
+        ? `未填写手动分类：抓取、状态和 AI 使用 ${CS_CATEGORIES.length} 个 cs.* 分类。`
+        : "未填写手动分类：抓取、状态和 AI 使用全部 arXiv 大组。";
     el("archive-scope-status").textContent = status;
     el("archive-scope-toggle").textContent = isCsScope ? "抓取全部大组" : "恢复只抓取 CS";
   }
@@ -267,8 +285,8 @@ const ArxivDailyWorkbench = (() => {
   function toggleArchiveScope() {
     state.archiveScope = state.archiveScope === "cs" ? "all" : "cs";
     renderArchiveScope();
-    const scopeText = state.archiveScope === "cs" ? "Computer Science only" : "all arXiv groups";
-    recordOperation(`Default scope changed: ${scopeText}`);
+    const scopeText = state.archiveScope === "cs" ? "仅计算机科学" : "全部 arXiv 大组";
+    recordOperation(`默认范围已切换：${scopeText}`);
     refreshSelectedDateView();
   }
 
@@ -299,15 +317,15 @@ const ArxivDailyWorkbench = (() => {
 
   function selectedCategoriesLabel() {
     const selected = selectedSearchCategories();
-    if (!selected.length) return "All categories";
+    if (!selected.length) return "全部分类";
     if (selected.length === CS_CATEGORIES.length && CS_CATEGORIES.every((category) => selected.includes(category))) {
-      return `Computer Science (${selected.length})`;
+      return `计算机科学 (${selected.length})`;
     }
     const fullGroups = CATEGORY_GROUPS.filter((group) => group.categories.every((category) => selected.includes(category)));
     if (fullGroups.length === 1 && fullGroups[0].categories.length === selected.length) {
       return `${fullGroups[0].label} (${selected.length})`;
     }
-    return `${selected.length} categories`;
+    return `已选 ${selected.length} 个分类`;
   }
 
   function categoryGroupSelectionState(group, selected) {
@@ -440,15 +458,15 @@ const ArxivDailyWorkbench = (() => {
         updated_at: null,
         error: null,
       });
-      el("automation-state").textContent = result.status;
+      el("automation-state").textContent = statusLabel(result.status);
       startActiveStatusPolling();
       await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
-      if (!silent) recordOperation(`Crawl ${dateValue()} ${result.status}; backend run #${result.automation_run_id}`);
+      if (!silent) recordOperation(`抓取 ${dateValue()} ${statusLabel(result.status)}；后台任务 #${result.automation_run_id}`);
     } catch (error) {
-      el("automation-state").textContent = "failed";
-      setDetail("automation-note", `Automation failed: ${error.message}`);
-      if (!silent) recordOperation(`Crawl failed: ${error.message}`);
+      el("automation-state").textContent = "失败";
+      setDetail("automation-note", `自动化失败：${error.message}`);
+      if (!silent) recordOperation(`抓取失败：${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -474,15 +492,15 @@ const ArxivDailyWorkbench = (() => {
     try {
       const triage = await runAiTriageRequest();
       const message = triage.status === "not_configured"
-        ? "LLM API not configured"
-        : `AI triage ${triage.completed}/${triage.requested}; failed ${triage.failed}`;
+        ? "LLM API 未配置"
+        : `AI 分析 ${triage.completed}/${triage.requested}；失败 ${triage.failed}`;
       setDetail("automation-note", message);
       recordOperation(message);
       await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
     } catch (error) {
-      setDetail("automation-note", `Summary/score failed: ${error.message}.`);
-      recordOperation(`Summary/score failed: ${error.message}`);
+      setDetail("automation-note", `总结/评分失败：${error.message}。`);
+      recordOperation(`总结/评分失败：${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -499,7 +517,7 @@ const ArxivDailyWorkbench = (() => {
 
   async function runSelectedPaperAi() {
     if (!state.selectedPaperId) {
-      setPaperAiStatus("Select a paper before running AI.");
+      setPaperAiStatus("请先选择论文，再运行 AI。");
       return;
     }
     const button = el("paper-ai-run");
@@ -518,7 +536,7 @@ const ArxivDailyWorkbench = (() => {
       await loadPaper(state.selectedPaperId);
       setPaperAiStatus(message);
     } catch (error) {
-      const message = `Paper AI failed: ${error.message}`;
+      const message = `单篇 AI 失败：${error.message}`;
       setPaperAiStatus(message);
       recordOperation(message);
     } finally {
@@ -528,26 +546,26 @@ const ArxivDailyWorkbench = (() => {
 
   function paperAiResultMessage(result) {
     if (result.status === "not_configured") {
-      return "AI API not configured. Create config/llm.local.json or set the LLM environment variables.";
+      return "AI API 未配置。请创建 config/llm.local.json，或设置 LLM 环境变量。";
     }
     if (result.status === "not_eligible") {
-      return "Selected paper needs complete metadata and abstract before AI can run.";
+      return "当前论文需要完整元数据和摘要后才能运行 AI。";
     }
     if (result.status === "skipped") {
-      return "Selected paper already has complete summary and score for the current AI configuration.";
+      return "当前论文在现有 AI 配置下已经有完整总结和评分。";
     }
     if (result.status === "complete") {
-      return `AI complete for ${result.arxiv_id}.`;
+      return `${result.arxiv_id} 的 AI 分析已完成。`;
     }
     if (result.status === "failed") {
-      return `AI failed for ${result.arxiv_id}: ${result.error || "unknown error"}`;
+      return `${result.arxiv_id} 的 AI 分析失败：${result.error || "未知错误"}`;
     }
-    return `AI ${result.status || "finished"} for ${result.arxiv_id || state.selectedPaperId}.`;
+    return `${result.arxiv_id || state.selectedPaperId} 的 AI 状态：${result.status ? statusLabel(result.status) : "已结束"}。`;
   }
 
   async function previewSelectedPaperPrompt() {
     if (!state.selectedPaperId) {
-      setPaperAiStatus("Select a paper before previewing prompt.");
+      setPaperAiStatus("请先选择论文，再预览提示词。");
       return;
     }
     const button = el("paper-prompt-preview");
@@ -560,9 +578,9 @@ const ArxivDailyWorkbench = (() => {
         }),
       });
       renderPromptPreview(data);
-      setPaperAiStatus(`Prompt preview ready for ${state.selectedPaperId}.`);
+      setPaperAiStatus(`${state.selectedPaperId} 的提示词已生成。`);
     } catch (error) {
-      const message = `Prompt preview failed: ${error.message}`;
+      const message = `提示词预览失败：${error.message}`;
       setPaperAiStatus(message);
       recordOperation(message);
     } finally {
@@ -572,10 +590,10 @@ const ArxivDailyWorkbench = (() => {
 
   function renderPromptPreview(data) {
     const header = [
-      `Paper: ${data.paper.arxiv_id} · ${data.paper.title || "-"}`,
-      `Template: ${data.template.language} · ${data.template.input_scope}`,
-      `Summary keys: ${(data.summary_keys || []).join(", ") || "-"}`,
-      `Score keys: ${(data.score_keys || []).join(", ") || "-"}`,
+      `论文：${data.paper.arxiv_id} · ${data.paper.title || "-"}`,
+      `语言/输入范围：${data.template.language} · ${data.template.input_scope}`,
+      `总结字段：${(data.summary_keys || []).join(", ") || "-"}`,
+      `评分字段：${(data.score_keys || []).join(", ") || "-"}`,
     ].join("\n");
     const messages = (data.messages || [])
       .map((message) => `[${message.role}]\n${message.content}`)
@@ -608,12 +626,12 @@ const ArxivDailyWorkbench = (() => {
       const status = await api(`/api/daily/status/${encodeURIComponent(dateValue())}?${params.toString()}`);
       renderDailyStatus(status);
       syncActiveStatusPolling(status);
-      if (!silent) recordOperation(`Daily: ${dailyStatusText(status)}`);
+      if (!silent) recordOperation(`每日状态：${dailyStatusText(status)}`);
       return status;
     } catch (error) {
-      el("automation-state").textContent = "failed";
-      setDetail("automation-note", `Daily status failed: ${error.message}`);
-      if (!silent) recordOperation(`Daily status failed: ${error.message}`);
+      el("automation-state").textContent = "失败";
+      setDetail("automation-note", `每日状态刷新失败：${error.message}`);
+      if (!silent) recordOperation(`每日状态刷新失败：${error.message}`);
       return null;
     } finally {
       setBusy(button, false);
@@ -624,9 +642,9 @@ const ArxivDailyWorkbench = (() => {
     const ai = status.ai || {};
     const aiComplete = Number(ai.complete || 0);
     const aiEligible = Number(ai.eligible || 0);
-    el("daily-status-summary").textContent = `papers ${status.metadata.total}; AI ${aiComplete}/${aiEligible}`;
+    el("daily-status-summary").textContent = `论文 ${status.metadata.total}；AI ${aiComplete}/${aiEligible}`;
     setDetail("automation-note", dailyStatusText(status));
-    el("automation-state").textContent = status.status;
+    el("automation-state").textContent = statusLabel(status.status);
     el("automation-state").className = `badge status-${status.status}`;
     renderDailyStatusRows(status);
   }
@@ -690,7 +708,7 @@ const ArxivDailyWorkbench = (() => {
 
   function updateStatusRow({ stateId, countId, detailId, state, count, detail }) {
     const stateNode = el(stateId);
-    stateNode.textContent = state;
+    stateNode.textContent = statusLabel(state);
     stateNode.className = `stage-badge is-${state}`;
     el(countId).textContent = count;
     el(detailId).textContent = detail;
@@ -703,9 +721,9 @@ const ArxivDailyWorkbench = (() => {
     const stepLabel = AUTOMATION_STEP_LABELS[step] || step;
     const idPart = automation.id ? `#${automation.id}` : "-";
     let detail = automation.id
-      ? `Step: ${stepLabel}${automation.updated_at ? `; updated ${automation.updated_at}` : ""}.`
-      : "No backend automation run yet.";
-    if (automation.error) detail = `${detail} Error: ${automation.error}`;
+      ? `步骤：${stepLabel}${automation.updated_at ? `；更新于 ${automation.updated_at}` : ""}。`
+      : "暂无后台自动化任务。";
+    if (automation.error) detail = `${detail} 错误：${automation.error}`;
     updateStatusRow({
       stateId: "automation-status-state",
       countId: "automation-status-count",
@@ -725,31 +743,31 @@ const ArxivDailyWorkbench = (() => {
     const total = scopedTotal || expected || preflightTotal || parsed;
     const state = paperStageState(status, visibleComplete, total);
     const count = total > 0 ? `${Math.min(visibleComplete, total)}/${total}` : "-";
-    let detail = "No paper crawl has started.";
+    let detail = "尚未开始论文抓取。";
     if (status.automation?.status === "queued" || status.automation?.current_step === "crawl") {
-      detail = `Backend is ${status.automation.current_step || status.automation.status}.`;
+      detail = `后台正在${AUTOMATION_STEP_LABELS[status.automation.current_step] || statusLabel(status.automation.status)}。`;
     } else if (status.automation?.current_step === "crawl_already_complete") {
-      detail = "Backend skipped crawl because the latest crawl audit is already complete.";
+      detail = "后台已跳过抓取：最新抓取审计已经完成。";
     } else if (status.automation?.current_step === "preflight") {
-      detail = "Backend is verifying today's listing counts before crawl.";
+      detail = "后台正在抓取前核对 listing 数量。";
     } else if (status.automation?.current_step === "crawl_incomplete") {
-      detail = `Backend stopped after incomplete crawl: ${status.automation.error || "crawl did not complete"}.`;
+      detail = `后台在抓取未完成后停止：${status.automation.error || "抓取没有完成"}。`;
     } else if (status.automation?.status === "failed") {
-      detail = `Backend failed: ${status.automation.error || "unknown error"}.`;
+      detail = `后台失败：${status.automation.error || "未知错误"}。`;
     } else if (status.automation?.status === "waiting") {
-      detail = status.automation.error || "Backend is waiting for an external condition.";
+      detail = status.automation.error || "后台正在等待外部条件。";
     } else if (status.automation?.current_step === "no_papers") {
-      detail = "Backend completed; selected date currently has no papers in local crawl.";
+      detail = "后台已完成；当前日期在本地抓取中没有论文。";
     } else if (status.crawl.status === "waiting") {
-      detail = "Waiting for arXiv to publish the requested listing date.";
+      detail = "正在等待 arXiv 发布请求日期的 listing。";
     } else if (status.preflight?.status === "complete") {
       detail = scopedTotal
-        ? `Selected scope has ${scopedTotal} papers; preflight evidence ${preflightEvidenceUrl()}.`
-        : `Preflight complete; evidence ${preflightEvidenceUrl()}.`;
+        ? `当前范围有 ${scopedTotal} 篇论文；预检查证据 ${preflightEvidenceUrl()}。`
+        : `预检查完成；证据 ${preflightEvidenceUrl()}。`;
     } else if (status.preflight?.status && status.preflight.status !== "not_started") {
-      detail = `Preflight ${status.preflight.status}; evidence ${preflightEvidenceUrl()}.`;
+      detail = `预检查${statusLabel(status.preflight.status)}；证据 ${preflightEvidenceUrl()}。`;
     } else if (parsed || expected) {
-      detail = `Crawl ${status.crawl.status || "unknown"} for selected date.`;
+      detail = `当前日期抓取状态：${statusLabel(status.crawl.status || "unknown")}。`;
     }
     return { state, count, detail };
   }
@@ -775,11 +793,11 @@ const ArxivDailyWorkbench = (() => {
     else if (failed) state = "failed";
     else if (retryable) state = "waiting";
     const detailParts = [];
-    if (failed) detailParts.push(`${failed} failed`);
-    if (retryable) detailParts.push(`${retryable} retryable`);
+    if (failed) detailParts.push(`${failed} 个失败`);
+    if (retryable) detailParts.push(`${retryable} 个可重试`);
     const detail = total
-      ? `${complete} metadata records complete${detailParts.length ? `; ${detailParts.join("; ")}` : ""}.`
-      : "No metadata candidates yet.";
+      ? `${complete} 条元数据已完成${detailParts.length ? `；${detailParts.join("；")}` : ""}。`
+      : "暂无元数据候选论文。";
     return { state, count: total > 0 ? `${complete}/${total}` : "-", detail };
   }
 
@@ -797,17 +815,17 @@ const ArxivDailyWorkbench = (() => {
     else if (status.summary.template_missing) state = "waiting";
     const failures = failed || Number(status.summary.failed || 0) + Number(status.score.failed || 0);
     let detail = total
-      ? `${complete}/${total} papers already have summary + score.`
-      : "No AI candidates yet.";
-    if (status.summary.template_missing) detail = `${detail} Template missing.`;
-    if (failures) detail = `${detail} ${failures} failed.`;
+      ? `${complete}/${total} 篇论文已有总结和评分。`
+      : "暂无 AI 候选论文。";
+    if (status.summary.template_missing) detail = `${detail} 模版缺失。`;
+    if (failures) detail = `${detail} ${failures} 个失败。`;
     return { state, count: total > 0 ? `${complete}/${total}` : "-", detail };
   }
 
   function metadataCoverageText(status, options = {}) {
     if (options.compact) return `${status.metadata.complete}/${status.metadata.total}`;
-    const failed = status.metadata.failed ? `; failed ${status.metadata.failed}` : "";
-    return `${status.metadata.complete}/${status.metadata.total} complete${failed}`;
+    const failed = status.metadata.failed ? `；失败 ${status.metadata.failed}` : "";
+    return `${status.metadata.complete}/${status.metadata.total} 完成${failed}`;
   }
 
   function preflightPaperTotal(status) {
@@ -821,14 +839,14 @@ const ArxivDailyWorkbench = (() => {
   function preflightStatusText(status) {
     const preflight = status.preflight || {};
     if (!preflight.status || preflight.status === "not_started") {
-      return `Preflight not started (${preflightEvidenceUrl()}).`;
+      return `预检查未开始（${preflightEvidenceUrl()}）。`;
     }
-    const sourcePart = `${preflight.source_count || 0}/${preflight.category_count || 0} categories`;
-    const paperPart = `${status.preflight.distinct_paper_count || 0} distinct papers`;
+    const sourcePart = `${preflight.source_count || 0}/${preflight.category_count || 0} 个分类`;
+    const paperPart = `${status.preflight.distinct_paper_count || 0} 篇去重论文`;
     const errorPart = preflight.status === "complete"
-      ? "all declared counts matched"
-      : `errors ${JSON.stringify(preflight.error_counts || {})}`;
-    return `Preflight ${preflight.status}: ${paperPart}, ${sourcePart}, ${errorPart}. Evidence: ${preflightEvidenceUrl()}.`;
+      ? "声明数量全部匹配"
+      : `错误 ${JSON.stringify(preflight.error_counts || {})}`;
+    return `预检查${statusLabel(preflight.status)}：${paperPart}，${sourcePart}，${errorPart}。证据：${preflightEvidenceUrl()}。`;
   }
 
   function dailyStatusText(status) {
@@ -836,9 +854,9 @@ const ArxivDailyWorkbench = (() => {
     const aiComplete = Number(ai.complete || 0);
     const aiEligible = Number(ai.eligible || 0);
     const blockers = status.blockers && status.blockers.length
-      ? `Blockers: ${status.blockers.join(", ")}.`
-      : "No blockers.";
-    return `Papers ${status.metadata.total}; metadata ${metadataCoverageText(status)}; AI ${aiComplete}/${aiEligible}. ${preflightStatusText(status)} ${blockers}`;
+      ? `阻塞项：${status.blockers.join(", ")}。`
+      : "无阻塞项。";
+    return `论文 ${status.metadata.total}；元数据 ${metadataCoverageText(status)}；AI ${aiComplete}/${aiEligible}。${preflightStatusText(status)} ${blockers}`;
   }
 
   function searchParams() {
@@ -876,14 +894,14 @@ const ArxivDailyWorkbench = (() => {
       const scope = searchScopeLabel();
       const total = data.total ?? data.count;
       const detail = total
-        ? `${scope}: page ${data.page || 1}/${data.total_pages || 1}, showing ${data.count} of ${total} papers.`
-        : `${scope}: no matching papers with current filters.`;
+        ? `${scope}：第 ${data.page || 1}/${data.total_pages || 1} 页，显示 ${data.count}/${total} 篇论文。`
+        : `${scope}：当前筛选条件下没有匹配论文。`;
       setDetail("search-detail", detail);
-      if (!silent) recordOperation(`Search returned ${total} papers (${scope})`, detail);
+      if (!silent) recordOperation(`搜索返回 ${total} 篇论文（${scope}）`, detail);
     } catch (error) {
-      setDetail("search-detail", `Search failed:\n${error.message}`);
-      el("paper-results").innerHTML = `<p class="empty-state">Search failed: ${escapeHtml(error.message)}</p>`;
-      if (!silent) recordOperation(`Search failed: ${error.message}`);
+      setDetail("search-detail", `搜索失败：\n${error.message}`);
+      el("paper-results").innerHTML = `<p class="empty-state">搜索失败：${escapeHtml(error.message)}</p>`;
+      if (!silent) recordOperation(`搜索失败：${error.message}`);
     } finally {
       setBusy(button, false);
     }
@@ -893,7 +911,7 @@ const ArxivDailyWorkbench = (() => {
     const page = data.page || 1;
     const totalPages = data.total_pages || 1;
     const total = data.total ?? data.count ?? 0;
-    el("pagination-label").textContent = `Page ${page} / ${totalPages} · ${total} papers`;
+    el("pagination-label").textContent = `第 ${page} / ${totalPages} 页 · ${total} 篇`;
     el("pagination-prev").disabled = !data.has_prev;
     el("pagination-next").disabled = !data.has_next;
   }
@@ -909,7 +927,7 @@ const ArxivDailyWorkbench = (() => {
     const container = el("paper-results");
     container.innerHTML = "";
     if (!papers.length) {
-      container.innerHTML = '<p class="empty-state">No matching papers.</p>';
+      container.innerHTML = '<p class="empty-state">没有匹配论文。</p>';
       return;
     }
     for (const paper of papers) {
@@ -920,8 +938,8 @@ const ArxivDailyWorkbench = (() => {
       const score = paper.score && paper.score.status === "complete" ? paper.score : null;
       const keywords = Array.isArray(paper.summary_keywords) ? paper.summary_keywords : [];
       const keywordHint = paper.metadata_error
-        ? `Metadata: ${paper.metadata_error}`
-        : "尚无中文关键词，运行 Summary 后生成。";
+        ? `元数据：${paper.metadata_error}`
+        : "尚无中文关键词，运行 AI 总结后生成。";
       card.innerHTML = `
         <div class="paper-card-head">
           <h3 class="paper-card-title">${renderLatexText(paper.title || paper.arxiv_id)}</h3>
@@ -929,7 +947,7 @@ const ArxivDailyWorkbench = (() => {
         </div>
         <div class="paper-meta">
           <span class="tag">${escapeHtml(paper.arxiv_id)}</span>
-          <span class="tag">${escapeHtml(paper.metadata_status)}</span>
+          <span class="tag">${escapeHtml(statusLabel(paper.metadata_status))}</span>
           <span class="tag">${escapeHtml(paper.latest_date || "-")}</span>
           <a class="source-link" href="${escapeHtml(paperLink(paper))}" target="_blank" rel="noopener" data-source-link>arXiv</a>
         </div>
@@ -957,7 +975,7 @@ const ArxivDailyWorkbench = (() => {
     state.selectedPaperId = arxivId;
     if (card) card.classList.add("is-selected");
     setPaperAiControlsEnabled(true);
-    setPaperAiStatus(`AI actions ready for ${arxivId}.`);
+    setPaperAiStatus(`${arxivId} 已选择，可运行 AI。`);
     await loadPaper(arxivId);
   }
 
@@ -968,22 +986,22 @@ const ArxivDailyWorkbench = (() => {
       renderPaperDetail(detail);
       renderDiscussions(detail.discussions || []);
     } catch (error) {
-      recordOperation(`Paper load failed: ${error.message}`);
+      recordOperation(`论文加载失败：${error.message}`);
     }
   }
 
   function renderPaperDetail(detail) {
     const paper = detail.paper;
     if (!paper) {
-      el("paper-content").innerHTML = '<p class="empty-state">Paper not found.</p>';
+      el("paper-content").innerHTML = '<p class="empty-state">未找到论文。</p>';
       setPaperAiControlsEnabled(false);
-      setPaperAiStatus("Paper not found.");
+      setPaperAiStatus("未找到论文。");
       return;
     }
     const summaries = detail.summaries || [];
     const score = detail.score;
     setPaperAiControlsEnabled(true);
-    setPaperAiStatus(score ? `Latest score ${score.score_total} ${score.recommended_action}.` : "Ready to preview prompt or run AI.");
+    setPaperAiStatus(score ? `最新评分 ${score.score_total} ${score.recommended_action}。` : "可以预览提示词或运行 AI。");
     el("paper-content").innerHTML = `
       <div class="paper-hero">
         <h3>${renderLatexText(paper.title || paper.arxiv_id)}</h3>
@@ -991,27 +1009,27 @@ const ArxivDailyWorkbench = (() => {
       </div>
       <div class="tag-row compact-tags">
         <span class="tag">${escapeHtml(paper.arxiv_id)}</span>
-        <span class="tag">${escapeHtml(paper.metadata_status)}</span>
-        <a class="source-link" href="${escapeHtml(paperLink(paper))}" target="_blank" rel="noopener">arXiv original</a>
+        <span class="tag">${escapeHtml(statusLabel(paper.metadata_status))}</span>
+        <a class="source-link" href="${escapeHtml(paperLink(paper))}" target="_blank" rel="noopener">arXiv 原文</a>
         ${(paper.categories || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
       </div>
       ${metadataNotice(paper)}
-      ${score ? `<div class="section-block score-block"><h4>Score</h4><p>${escapeHtml(score.rationale)}</p></div>` : ""}
+      ${score ? `<div class="section-block score-block"><h4>评分</h4><p>${escapeHtml(score.rationale)}</p></div>` : ""}
       <div class="section-block">
-        <h4>Authors</h4>
+        <h4>作者</h4>
         <p>${escapeHtml((paper.authors || []).join(", ") || "-")}</p>
       </div>
       <div class="section-block">
-        <h4>Abstract</h4>
+        <h4>摘要</h4>
         <p>${renderLatexText(paper.abstract || "-")}</p>
       </div>
       <div class="section-block">
-        <h4>Events</h4>
+        <h4>事件</h4>
         <p>${escapeHtml((detail.events || []).map((event) => `${event.date} ${event.event_type} ${event.listing_category}`).join(" | ") || "-")}</p>
       </div>
       <div class="section-block">
-        <h4>Summaries</h4>
-        ${summaries.length ? summaries.map(renderSummary).join("") : '<p class="empty-state">No summaries.</p>'}
+        <h4>总结</h4>
+        ${summaries.length ? summaries.map(renderSummary).join("") : '<p class="empty-state">暂无总结。</p>'}
       </div>
     `;
     typesetMath(el("paper-content"));
@@ -1023,19 +1041,19 @@ const ArxivDailyWorkbench = (() => {
 
   function metadataNotice(paper) {
     if (paper.metadata_status === "complete" && !paper.metadata_error) return "";
-    const parts = [`status: ${paper.metadata_status}`];
-    if (paper.metadata_attempts) parts.push(`attempts: ${paper.metadata_attempts}`);
-    if (paper.metadata_next_run_at) parts.push(`next_run_at: ${paper.metadata_next_run_at}`);
-    if (paper.metadata_status === "retryable") parts.push("retryable");
-    if (paper.metadata_error) parts.push(`error: ${paper.metadata_error}`);
-    return `<div class="section-block metadata-notice"><h4>Metadata</h4><p>${escapeHtml(parts.join(" | "))}</p></div>`;
+    const parts = [`状态：${statusLabel(paper.metadata_status)}`];
+    if (paper.metadata_attempts) parts.push(`尝试次数：${paper.metadata_attempts}`);
+    if (paper.metadata_next_run_at) parts.push(`下次运行：${paper.metadata_next_run_at}`);
+    if (paper.metadata_status === "retryable") parts.push("可重试");
+    if (paper.metadata_error) parts.push(`错误：${paper.metadata_error}`);
+    return `<div class="section-block metadata-notice"><h4>元数据</h4><p>${escapeHtml(parts.join(" | "))}</p></div>`;
   }
 
   function renderSummary(summary) {
     return `
       <div class="summary-section">
         <div class="tag-row">
-          <span class="tag">${escapeHtml(summary.status)}</span>
+          <span class="tag">${escapeHtml(statusLabel(summary.status))}</span>
         </div>
         <div class="summary-content">${renderSummaryContent(summary.content || {})}</div>
       </div>
@@ -1044,7 +1062,7 @@ const ArxivDailyWorkbench = (() => {
 
   function renderSummaryContent(content) {
     const entries = Object.entries(content || {});
-    if (!entries.length) return '<p class="empty-state">Empty summary.</p>';
+    if (!entries.length) return '<p class="empty-state">空总结。</p>';
     return entries.map(([key, value]) => renderSummaryField(key, value)).join("");
   }
 
@@ -1077,7 +1095,7 @@ const ArxivDailyWorkbench = (() => {
     const list = el("discussion-list");
     list.innerHTML = "";
     if (!messages.length) {
-      list.innerHTML = '<p class="empty-state">No discussion messages.</p>';
+      list.innerHTML = '<p class="empty-state">暂无讨论消息。</p>';
       return;
     }
     for (const message of messages) {
@@ -1094,12 +1112,12 @@ const ArxivDailyWorkbench = (() => {
 
   async function addDiscussion() {
     if (!state.selectedPaperId) {
-      setStatus("Select a paper before adding a message");
+      setStatus("请先选择论文，再添加消息");
       return;
     }
     const content = el("discussion-content").value.trim();
     if (!content) {
-      setStatus("Message is empty");
+      setStatus("消息为空");
       return;
     }
     const button = el("discussion-add");
@@ -1116,7 +1134,7 @@ const ArxivDailyWorkbench = (() => {
       el("discussion-content").value = "";
       await loadPaper(state.selectedPaperId);
     } catch (error) {
-      recordOperation(`Discussion failed: ${error.message}`);
+      recordOperation(`讨论保存失败：${error.message}`);
     } finally {
       setBusy(button, false);
     }

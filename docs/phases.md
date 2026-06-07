@@ -821,3 +821,24 @@ Date baseline: 2026-06-03
   - full test suite: 162 passed, 1 warning
   - browser verified `phase45` assets, category picker expansion, CS default `50/1198`, Clear all-categories `50/2071`, and CS reset excluding the Rydberg physics paper
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 39: Chinese Web UI
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-chinese-ui.md`
+- Scope completed:
+  - translate static web labels, buttons, empty states, modal copy, and navigation text to Chinese
+  - translate dynamic daily automation, search, paper detail, AI, prompt preview, discussion, and category picker status text to Chinese
+  - add a frontend status display map so raw backend states remain stable while UI shows Chinese state labels
+  - keep arXiv category codes, API parameter values, CSS state classes, and database status values unchanged
+  - bump static assets to `phase46`
+- Important decisions:
+  - localization is display-only; no backend protocol, schema, or stored values are translated
+  - arXiv category group names are translated, but child category codes remain exact arXiv codes
+  - result status tags display Chinese labels while preserving raw values for filtering and state classes
+- Verification:
+  - JavaScript syntax check passed: `node --check arxiv-local-daily/src/arxiv_local_daily/web/app.js`
+  - focused Web UI tests: 2 passed, 1 warning
+  - full test suite: 162 passed, 1 warning
+  - browser verified `phase46` assets: Chinese title, Daily Automation, search, detail, prompt preview, discussion, and category picker labels rendered; old English labels were absent; no horizontal overflow at the current in-app browser width
+- Status: implemented on branch, not yet merged to `main`.

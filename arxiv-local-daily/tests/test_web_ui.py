@@ -10,7 +10,7 @@ def test_root_serves_web_workbench(tmp_path):
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "arXiv Daily Workbench" in response.text
+    assert "arXiv 每日论文工作台" in response.text
     assert 'id="automation-panel"' in response.text
     assert 'id="date-prev"' in response.text
     assert 'id="date-next"' in response.text
@@ -59,7 +59,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="archive-scope-panel"' in response.text
     assert 'id="archive-scope-toggle"' in response.text
     assert 'id="archive-scope-status"' in response.text
-    assert "Default scope: Computer Science" in response.text
+    assert "默认范围：计算机科学" in response.text
     assert 'id="crawl-date-open"' in response.text
     assert "抓取指定日期" in response.text
     assert 'id="status-refresh"' in response.text
@@ -72,7 +72,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert "Refresh Status" not in response.text
     assert 'id="automation-summary"' not in response.text
     assert 'id="automation-note"' in response.text
-    assert "then runs AI summary and score" in response.text
+    assert "最后运行 AI 总结和评分" in response.text
     assert 'id="search-event"' not in response.text
     assert 'id="search-metadata"' not in response.text
     assert 'id="search-summary"' not in response.text
@@ -100,6 +100,12 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="search-scope"' in response.text
     assert '<option value="daily" selected>当日</option>' in response.text
     assert '<option value="overview">总览</option>' in response.text
+    assert "论文列表" in response.text
+    assert "运行总结 + 评分" in response.text
+    assert "提示词预览" in response.text
+    assert "Daily Automation" not in response.text
+    assert "Run Summary + Score" not in response.text
+    assert "Prompt Preview" not in response.text
     assert "MathJax" in response.text
     assert "tex-chtml.js" in response.text
     assert "Settings" not in response.text
@@ -222,7 +228,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'setDetail("daily-detail"' not in js_response.text
     assert 'setDetail("settings-detail"' not in js_response.text
     assert "status.metadata.failed" in js_response.text
-    assert "Selected scope has" in js_response.text
+    assert "当前范围有" in js_response.text
     assert 'setDetail("operation-log", message);' in js_response.text
     assert 'detail ? `${message}\\n${detail}` : message' not in js_response.text
     assert "score-badge" in js_response.text
@@ -245,6 +251,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert '["summary_status", el("search-summary").value]' not in js_response.text
     assert 'params.set("date", dateValue())' in js_response.text
     assert "总览" in js_response.text
+    assert "计算机科学" in js_response.text
+    assert "AI 分析" in js_response.text
+    assert "搜索失败" in js_response.text
     assert "Loaded ${arxivId}" not in js_response.text
     assert "Apple Chancery" not in css_response.text
     assert "Brush Script" not in css_response.text
