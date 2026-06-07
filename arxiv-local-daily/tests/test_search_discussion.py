@@ -146,10 +146,12 @@ def test_search_papers_category_group_does_not_match_physics_substring(db):
     cs_results = repo.search_papers(date="2026-06-03", category="cs")
     cs_ai_results = repo.search_papers(date="2026-06-03", category="cs.AI")
     physics_results = repo.search_papers(date="2026-06-03", category="physics")
+    mixed_results = repo.search_papers(date="2026-06-03", category=["cs.AI", "physics.atom-ph"], sort="recent")
 
     assert [row["arxiv_id"] for row in cs_results] == ["2606.00001"]
     assert [row["arxiv_id"] for row in cs_ai_results] == ["2606.00001"]
     assert [row["arxiv_id"] for row in physics_results] == ["1505.07152"]
+    assert [row["arxiv_id"] for row in mixed_results] == ["1505.07152", "2606.00001"]
 
 
 def test_search_papers_supports_offset_pagination_and_total_count(db):

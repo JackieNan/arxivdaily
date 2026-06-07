@@ -8,6 +8,7 @@ const ArxivDailyWorkbench = (() => {
     pageSize: 50,
     pageMeta: null,
     archiveScope: "cs",
+    searchCategories: null,
   };
 
   const AUTO_AUTOMATION_INTERVAL_MS = 10 * 60 * 1000;
@@ -54,6 +55,25 @@ const ArxivDailyWorkbench = (() => {
     "cs.SE",
     "cs.SI",
     "cs.SY",
+  ];
+
+  const CATEGORY_GROUPS = [
+    { id: "cs", label: "Computer Science", categories: CS_CATEGORIES },
+    { id: "math", label: "Mathematics", categories: ["math.AC", "math.AG", "math.AP", "math.AT", "math.CA", "math.CO", "math.CT", "math.CV", "math.DG", "math.DS", "math.FA", "math.GM", "math.GN", "math.GR", "math.GT", "math.HO", "math.IT", "math.KT", "math.LO", "math.MG", "math.MP", "math.NA", "math.NT", "math.OA", "math.OC", "math.PR", "math.QA", "math.RA", "math.RT", "math.SG", "math.SP", "math.ST"] },
+    { id: "stat", label: "Statistics", categories: ["stat.AP", "stat.CO", "stat.ME", "stat.ML", "stat.OT", "stat.TH"] },
+    { id: "physics", label: "Physics", categories: ["physics.acc-ph", "physics.app-ph", "physics.atm-clus", "physics.atom-ph", "physics.bio-ph", "physics.chem-ph", "physics.class-ph", "physics.comp-ph", "physics.data-an", "physics.ed-ph", "physics.flu-dyn", "physics.gen-ph", "physics.geo-ph", "physics.hist-ph", "physics.ins-det", "physics.med-ph", "physics.optics", "physics.plasm-ph", "physics.pop-ph", "physics.soc-ph", "physics.space-ph"] },
+    { id: "astro-ph", label: "Astrophysics", categories: ["astro-ph.CO", "astro-ph.EP", "astro-ph.GA", "astro-ph.HE", "astro-ph.IM", "astro-ph.SR"] },
+    { id: "cond-mat", label: "Condensed Matter", categories: ["cond-mat.dis-nn", "cond-mat.mes-hall", "cond-mat.mtrl-sci", "cond-mat.other", "cond-mat.quant-gas", "cond-mat.soft", "cond-mat.stat-mech", "cond-mat.str-el", "cond-mat.supr-con"] },
+    { id: "q-bio", label: "Quantitative Biology", categories: ["q-bio.BM", "q-bio.CB", "q-bio.GN", "q-bio.MN", "q-bio.NC", "q-bio.OT", "q-bio.PE", "q-bio.QM", "q-bio.SC", "q-bio.TO"] },
+    { id: "q-fin", label: "Quantitative Finance", categories: ["q-fin.CP", "q-fin.EC", "q-fin.GN", "q-fin.MF", "q-fin.PM", "q-fin.PR", "q-fin.RM", "q-fin.ST", "q-fin.TR"] },
+    { id: "econ", label: "Economics", categories: ["econ.EM", "econ.GN", "econ.TH"] },
+    { id: "eess", label: "Electrical Engineering and Systems Science", categories: ["eess.AS", "eess.IV", "eess.SP", "eess.SY"] },
+    { id: "nlin", label: "Nonlinear Sciences", categories: ["nlin.AO", "nlin.CD", "nlin.CG", "nlin.PS", "nlin.SI"] },
+    { id: "quant-ph", label: "Quantum Physics", categories: ["quant-ph"] },
+    { id: "math-ph", label: "Mathematical Physics", categories: ["math-ph"] },
+    { id: "gr-qc", label: "General Relativity and Quantum Cosmology", categories: ["gr-qc"] },
+    { id: "hep", label: "High Energy Physics", categories: ["hep-ex", "hep-lat", "hep-ph", "hep-th"] },
+    { id: "nucl", label: "Nuclear", categories: ["nucl-ex", "nucl-th"] },
   ];
 
   const AUTOMATION_STEP_LABELS = {
@@ -250,6 +270,113 @@ const ArxivDailyWorkbench = (() => {
     const scopeText = state.archiveScope === "cs" ? "Computer Science only" : "all arXiv groups";
     recordOperation(`Default scope changed: ${scopeText}`);
     refreshSelectedDateView();
+  }
+
+  function allCategoryCodes() {
+    return CATEGORY_GROUPS.flatMap((group) => group.categories);
+  }
+
+  function selectedCategorySet() {
+    if (!(state.searchCategories instanceof Set)) {
+      state.searchCategories = new Set(CS_CATEGORIES);
+    }
+    return state.searchCategories;
+  }
+
+  function selectedSearchCategories() {
+    const selected = selectedCategorySet();
+    const ordered = allCategoryCodes().filter((category) => selected.has(category));
+    const extra = [...selected].filter((category) => !ordered.includes(category)).sort();
+    return [...ordered, ...extra];
+  }
+
+  function setSelectedSearchCategories(categories) {
+    state.searchCategories = new Set(categories);
+    state.searchPage = 1;
+    renderCategoryPicker();
+    runSearch();
+  }
+
+  function selectedCategoriesLabel() {
+    const selected = selectedSearchCategories();
+    if (!selected.length) return "All categories";
+    if (selected.length === CS_CATEGORIES.length && CS_CATEGORIES.every((category) => selected.includes(category))) {
+      return `Computer Science (${selected.length})`;
+    }
+    const fullGroups = CATEGORY_GROUPS.filter((group) => group.categories.every((category) => selected.includes(category)));
+    if (fullGroups.length === 1 && fullGroups[0].categories.length === selected.length) {
+      return `${fullGroups[0].label} (${selected.length})`;
+    }
+    return `${selected.length} categories`;
+  }
+
+  function categoryGroupSelectionState(group, selected) {
+    const count = group.categories.filter((category) => selected.has(category)).length;
+    return {
+      count,
+      checked: count === group.categories.length,
+      indeterminate: count > 0 && count < group.categories.length,
+    };
+  }
+
+  function renderCategoryPicker() {
+    const selected = selectedCategorySet();
+    const toggle = el("category-picker-toggle");
+    toggle.textContent = selectedCategoriesLabel();
+    const groupsNode = el("category-picker-groups");
+    groupsNode.innerHTML = CATEGORY_GROUPS.map((group) => {
+      const groupState = categoryGroupSelectionState(group, selected);
+      const categories = group.categories
+        .map((category) => `
+          <label class="category-option">
+            <input type="checkbox" data-category-code="${escapeHtml(category)}" ${selected.has(category) ? "checked" : ""}>
+            <span>${escapeHtml(category)}</span>
+          </label>
+        `)
+        .join("");
+      return `
+        <details class="category-group" ${groupState.count ? "open" : ""}>
+          <summary>
+            <label class="category-group-check">
+              <input type="checkbox" data-category-group="${escapeHtml(group.id)}" ${groupState.checked ? "checked" : ""}>
+              <span>${escapeHtml(group.label)}</span>
+              <em>${groupState.count}/${group.categories.length}</em>
+            </label>
+          </summary>
+          <div class="category-options">${categories}</div>
+        </details>
+      `;
+    }).join("");
+    groupsNode.querySelectorAll("input[data-category-group]").forEach((input) => {
+      const group = CATEGORY_GROUPS.find((item) => item.id === input.dataset.categoryGroup);
+      const groupState = group ? categoryGroupSelectionState(group, selected) : { indeterminate: false };
+      input.indeterminate = groupState.indeterminate;
+      input.addEventListener("click", (event) => event.stopPropagation());
+      input.addEventListener("change", () => {
+        if (!group) return;
+        const next = new Set(selectedCategorySet());
+        group.categories.forEach((category) => {
+          if (input.checked) next.add(category);
+          else next.delete(category);
+        });
+        setSelectedSearchCategories([...next]);
+      });
+    });
+    groupsNode.querySelectorAll("input[data-category-code]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const next = new Set(selectedCategorySet());
+        if (input.checked) next.add(input.dataset.categoryCode);
+        else next.delete(input.dataset.categoryCode);
+        setSelectedSearchCategories([...next]);
+      });
+    });
+  }
+
+  function toggleCategoryPicker() {
+    const picker = el("category-picker");
+    const nextHidden = !picker.hidden;
+    picker.hidden = nextHidden;
+    el("category-picker-toggle").setAttribute("aria-expanded", String(!nextHidden));
   }
 
   function dateValue() {
@@ -718,7 +845,6 @@ const ArxivDailyWorkbench = (() => {
     const params = new URLSearchParams();
     const pairs = [
       ["q", el("search-query").value.trim()],
-      ["category", el("search-category").value.trim()],
       ["sort", el("search-sort").value],
     ];
     if (el("search-scope").value === "daily") {
@@ -726,6 +852,7 @@ const ArxivDailyWorkbench = (() => {
     }
     params.set("page", String(state.searchPage));
     params.set("page_size", String(state.pageSize));
+    selectedSearchCategories().forEach((category) => params.append("category", category));
     for (const [key, value] of pairs) {
       if (value) params.set(key, value);
     }
@@ -1036,6 +1163,10 @@ const ArxivDailyWorkbench = (() => {
     el("summary-score-run").addEventListener("click", runSummaryAndScore);
     el("paper-ai-run").addEventListener("click", runSelectedPaperAi);
     el("paper-prompt-preview").addEventListener("click", previewSelectedPaperPrompt);
+    el("category-picker-toggle").addEventListener("click", toggleCategoryPicker);
+    el("category-select-cs").addEventListener("click", () => setSelectedSearchCategories(CS_CATEGORIES));
+    el("category-select-all").addEventListener("click", () => setSelectedSearchCategories(allCategoryCodes()));
+    el("category-clear").addEventListener("click", () => setSelectedSearchCategories([]));
     el("search-run").addEventListener("click", () => {
       state.searchPage = 1;
       runSearch();
@@ -1055,6 +1186,7 @@ const ArxivDailyWorkbench = (() => {
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     renderArchiveScope();
+    renderCategoryPicker();
     refreshSelectedDateView();
     if (!state.automationTimer) {
       state.automationTimer = window.setInterval(() => {

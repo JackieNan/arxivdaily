@@ -1675,6 +1675,46 @@ def test_search_papers_api_returns_filtered_results(tmp_path):
     assert data["papers"][0]["arxiv_id"] == "2606.00001"
 
 
+def test_search_papers_api_accepts_multiple_category_filters(tmp_path):
+    db_path = tmp_path / "api.sqlite3"
+    _seed_search_api_data(db_path)
+    connection = connect(db_path)
+    paper_repo = PaperRepository(connection)
+    paper_repo.upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="2606.00002",
+            event_type="new",
+            listing_category="math.ST",
+            primary_category="math.ST",
+            source_url="https://arxiv.org/list/math.ST/new",
+        ),
+    )
+    paper_repo.upsert_metadata(
+        PaperMetadata(
+            arxiv_id="2606.00002",
+            title="Statistical Methods for Daily Research",
+            abstract="Statistics paper.",
+            authors=["Florence Nightingale"],
+            primary_category="math.ST",
+            categories=["math.ST"],
+        )
+    )
+    connection.commit()
+    connection.close()
+    client = TestClient(create_app(database_path=db_path))
+
+    response = client.get(
+        "/api/search/papers",
+        params=[("date", "2026-06-03"), ("category", "cs.AI"), ("category", "math.ST"), ("sort", "recent")],
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 2
+    assert {paper["arxiv_id"] for paper in data["papers"]} == {"2606.00001", "2606.00002"}
+
+
 def test_get_paper_detail_api_returns_nested_records(tmp_path):
     db_path = tmp_path / "api.sqlite3"
     _seed_search_api_data(db_path)

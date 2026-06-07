@@ -616,6 +616,135 @@ label span {
   grid-column: 1 / -1;
 }
 
+.category-filter {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.category-filter-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(168px, auto);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.category-filter-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.category-picker-toggle {
+  justify-self: end;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-picker {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.category-picker[hidden] {
+  display: none;
+}
+
+.category-picker-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(54px, 1fr));
+  gap: 6px;
+}
+
+.category-picker-groups {
+  display: grid;
+  gap: 6px;
+  max-height: 330px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.category-group {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.category-group summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.category-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.category-group-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 7px;
+}
+
+.category-group-check input,
+.category-option input {
+  width: 14px;
+  min-height: 14px;
+  margin: 0;
+}
+
+.category-group-check span {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-group-check em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+}
+
+.category-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 4px 7px;
+  border-top: 1px solid var(--line);
+  padding: 7px;
+}
+
+.category-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.category-option span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .result-list {
   display: grid;
   gap: 8px;
@@ -1089,6 +1218,7 @@ mjx-container {
   }
 
   .automation-actions,
+  .category-filter-head,
   .ai-action-row,
   .modal-actions {
     grid-template-columns: 1fr;

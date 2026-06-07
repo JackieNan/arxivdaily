@@ -523,7 +523,7 @@ def create_app(
     def search_papers(
         q: str | None = None,
         date: str | None = None,
-        category: str | None = None,
+        category: list[str] | None = Query(default=None),
         event_type: str | None = None,
         metadata_status: str | None = None,
         summary_status: str | None = None,

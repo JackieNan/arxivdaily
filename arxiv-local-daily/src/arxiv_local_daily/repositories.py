@@ -1160,7 +1160,7 @@ class SearchRepository:
         *,
         query: str | None = None,
         date: str | None = None,
-        category: str | None = None,
+        category: str | list[str] | None = None,
         event_type: str | None = None,
         metadata_status: str | None = None,
         summary_status: str | None = None,
@@ -1233,7 +1233,7 @@ class SearchRepository:
         *,
         query: str | None = None,
         date: str | None = None,
-        category: str | None = None,
+        category: str | list[str] | None = None,
         event_type: str | None = None,
         metadata_status: str | None = None,
         summary_status: str | None = None,
@@ -1262,7 +1262,7 @@ class SearchRepository:
         *,
         query: str | None,
         date: str | None,
-        category: str | None,
+        category: str | list[str] | None,
         event_type: str | None,
         metadata_status: str | None,
         summary_status: str | None,
@@ -1291,34 +1291,45 @@ class SearchRepository:
             where.append("e.date = ?")
             params.append(date)
         if category:
-            category_value = category.lower()
-            if "." in category_value:
-                json_match = f'%"{category_value}"%'
-                where.append(
-                    """
-                    (
-                        LOWER(COALESCE(e.listing_category, '')) = ?
-                        OR LOWER(COALESCE(p.primary_category, '')) = ?
-                        OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+            category_values = [category] if isinstance(category, str) else category
+            category_clauses: list[str] = []
+            category_params: list[Any] = []
+            for raw_category in category_values:
+                category_value = raw_category.strip().lower()
+                if not category_value:
+                    continue
+                if "." in category_value:
+                    json_match = f'%"{category_value}"%'
+                    category_clauses.append(
+                        """
+                        (
+                            LOWER(COALESCE(e.listing_category, '')) = ?
+                            OR LOWER(COALESCE(p.primary_category, '')) = ?
+                            OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                        )
+                        """
                     )
-                    """
-                )
-                params.extend([category_value, category_value, json_match])
-            else:
-                category_prefix = f"{category_value}.%"
-                json_prefix = f'%"{category_value}.%'
-                where.append(
-                    """
-                    (
-                        LOWER(COALESCE(e.listing_category, '')) = ?
-                        OR LOWER(COALESCE(e.listing_category, '')) LIKE ?
-                        OR LOWER(COALESCE(p.primary_category, '')) = ?
-                        OR LOWER(COALESCE(p.primary_category, '')) LIKE ?
-                        OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                    category_params.extend([category_value, category_value, json_match])
+                else:
+                    category_prefix = f"{category_value}.%"
+                    json_prefix = f'%"{category_value}.%'
+                    category_clauses.append(
+                        """
+                        (
+                            LOWER(COALESCE(e.listing_category, '')) = ?
+                            OR LOWER(COALESCE(e.listing_category, '')) LIKE ?
+                            OR LOWER(COALESCE(p.primary_category, '')) = ?
+                            OR LOWER(COALESCE(p.primary_category, '')) LIKE ?
+                            OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                        )
+                        """
                     )
-                    """
-                )
-                params.extend([category_value, category_prefix, category_value, category_prefix, json_prefix])
+                    category_params.extend(
+                        [category_value, category_prefix, category_value, category_prefix, json_prefix]
+                    )
+            if category_clauses:
+                where.append(f"({' OR '.join(category_clauses)})")
+                params.extend(category_params)
         if event_type:
             where.append("e.event_type = ?")
             params.append(event_type)

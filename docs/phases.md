@@ -799,3 +799,25 @@ Date baseline: 2026-06-03
   - full test suite: 161 passed, 1 warning
   - browser verified `phase44` static assets, removed filter controls, no horizontal overflow, and `2026-06-05 + category=cs` no longer shows the Rydberg physics paper on the first page
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 38: Grouped Category Picker
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-category-picker.md`
+- Scope completed:
+  - replace the free-text search category input with a grouped checkbox picker
+  - default selected search categories to all 40 `cs.*` categories
+  - allow selecting a whole arXiv group or individual child categories
+  - add `CS`, `All`, and `Clear` picker actions
+  - send selected leaf categories as repeated `category` query parameters
+  - extend backend search repository/API to OR multiple category filters
+  - bump static assets to `phase45`
+- Important decisions:
+  - empty category selection means all categories
+  - parent category checkboxes are UI conveniences; backend receives leaf category codes
+  - single-category API compatibility remains intact
+- Verification:
+  - focused Web UI/search/API tests: 4 passed, 1 warning
+  - full test suite: 162 passed, 1 warning
+  - browser verified `phase45` assets, category picker expansion, CS default `50/1198`, Clear all-categories `50/2071`, and CS reset excluding the Rydberg physics paper
+- Status: implemented on branch, not yet merged to `main`.

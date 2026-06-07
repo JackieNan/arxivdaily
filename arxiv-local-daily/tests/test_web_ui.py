@@ -87,6 +87,13 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="daily-detail"' not in response.text
     assert 'id="settings-detail"' not in response.text
     assert 'id="search-sort"' in response.text
+    assert 'id="search-category"' not in response.text
+    assert 'id="category-picker-toggle"' in response.text
+    assert 'id="category-picker"' in response.text
+    assert 'id="category-picker-groups"' in response.text
+    assert 'id="category-select-cs"' in response.text
+    assert 'id="category-select-all"' in response.text
+    assert 'id="category-clear"' in response.text
     assert 'id="pagination-prev"' in response.text
     assert 'id="pagination-next"' in response.text
     assert 'id="pagination-label"' in response.text
@@ -150,6 +157,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert "renderPromptPreview" in js_response.text
     assert "renderSummaryContent" in js_response.text
     assert "CS_CATEGORIES" in js_response.text
+    assert "CATEGORY_GROUPS" in js_response.text
+    assert "renderCategoryPicker" in js_response.text
+    assert "selectedSearchCategories" in js_response.text
     assert "categories: CS_CATEGORIES" in js_response.text
     assert "state.archiveScope" in js_response.text
     assert "categoryScopeCategories" in js_response.text
@@ -225,6 +235,11 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'el("search-event")' not in js_response.text
     assert 'el("search-metadata")' not in js_response.text
     assert 'el("search-summary")' not in js_response.text
+    assert 'el("search-category")' not in js_response.text
+    assert 'params.append("category", category)' in js_response.text
+    assert 'el("category-picker-toggle")' in js_response.text
+    assert 'data-category-group' in js_response.text
+    assert 'data-category-code' in js_response.text
     assert '["event_type", el("search-event").value]' not in js_response.text
     assert '["metadata_status", el("search-metadata").value]' not in js_response.text
     assert '["summary_status", el("search-summary").value]' not in js_response.text
@@ -270,6 +285,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".progress-segment" not in css_response.text
     assert ".pagination-controls" in css_response.text
     assert ".source-link" in css_response.text
+    assert ".category-picker" in css_response.text
+    assert ".category-group" in css_response.text
+    assert ".category-option" in css_response.text
     assert ".summary-score-grid" not in css_response.text
     assert ".ai-config-card" not in css_response.text
     assert ".ai-action-row" in css_response.text

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase44">
+    <link rel="stylesheet" href="/static/styles.css?v=phase45">
     <script>
       window.MathJax = {
         tex: {
@@ -109,10 +109,20 @@
               <span>Query</span>
               <input id="search-query" type="search" placeholder="method, title, author, summary">
             </label>
-            <label>
-              <span>Category</span>
-              <input id="search-category" type="text" placeholder="cs.AI">
-            </label>
+            <div class="category-filter wide">
+              <div class="category-filter-head">
+                <span>Category</span>
+                <button id="category-picker-toggle" class="secondary-button category-picker-toggle" type="button" aria-expanded="false" aria-controls="category-picker">Computer Science</button>
+              </div>
+              <div id="category-picker" class="category-picker" hidden>
+                <div class="category-picker-actions">
+                  <button id="category-select-cs" class="secondary-button compact-button" type="button">CS</button>
+                  <button id="category-select-all" class="secondary-button compact-button" type="button">All</button>
+                  <button id="category-clear" class="secondary-button compact-button" type="button">Clear</button>
+                </div>
+                <div id="category-picker-groups" class="category-picker-groups"></div>
+              </div>
+            </div>
             <label>
               <span>Scope</span>
               <select id="search-scope">
@@ -221,6 +231,6 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase44"></script>
+    <script src="/static/app.js?v=phase45"></script>
   </body>
 </html>
