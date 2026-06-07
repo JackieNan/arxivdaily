@@ -177,6 +177,19 @@ uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --ho
 
 Then open `http://127.0.0.1:8765/`.
 
+## Deploy With Cloudflare Tunnel
+
+Use the Docker Compose deployment package when running on a server:
+
+```bash
+cp .env.example .env
+cp config/llm.example.json config/llm.local.json
+cp config/summary_template.example.json config/summary_template.local.json
+docker compose up -d --build
+```
+
+Fill `CLOUDFLARE_TUNNEL_TOKEN` in `.env`, point the Cloudflare Tunnel public hostname service to `http://app:8765`, and keep the app service without a public `ports:` mapping. See `docs/deployment.md` for the full Chinese deployment guide, Cloudflare Access checklist, and backup workflow.
+
 Daily Automation is the main ingestion path. In `auto` mode it first checks arXiv's current `/new` listing date with a short, single-attempt probe. If the probe fails, the app records a visible `waiting` crawl run instead of silently continuing or writing papers under an uncertain date. If the selected date equals arXiv's current date, it runs a daily listing preflight before the main crawl: every requested category page is fetched, the arXiv page date is verified, the declared entry count is compared with parsed entries, explicit `No updates today.` category pages are certified as zero papers, and distinct arXiv IDs are counted. It then crawls `/list/{category}/new` and verifies the page date before writing events. If the selected date is earlier than arXiv's current date, it crawls arXiv monthly listing/archive pages and stores exact daily `new`, `cross-list`, and `replacement` events. If the selected date is ahead of arXiv's current listing date, it records a `waiting` crawl run and writes no papers. After listing crawl, it keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
 
 The phase-one endpoints are:

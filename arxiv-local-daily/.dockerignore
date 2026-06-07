@@ -1,0 +1,13 @@
+.env
+.venv/
+.pytest_cache/
+.uv-cache/
+__pycache__/
+*.pyc
+*.egg-info/
+data/
+backups/
+config/llm.local.json
+config/summary_template.local.json
+*.sqlite3
+*.sqlite3-*

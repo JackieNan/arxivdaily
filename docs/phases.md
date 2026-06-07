@@ -842,3 +842,27 @@ Date baseline: 2026-06-03
   - full test suite: 162 passed, 1 warning
   - browser verified `phase46` assets: Chinese title, Daily Automation, search, detail, prompt preview, discussion, and category picker labels rendered; old English labels were absent; no horizontal overflow at the current in-app browser width
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 40: Cloudflare Tunnel Deployment Package
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-cloudflare-tunnel-deploy.md`
+- Scope completed:
+  - add a Dockerfile for running the FastAPI app with Uvicorn inside a Python 3.12 slim container
+  - add Docker Compose services for `app` and `cloudflared`
+  - keep the app service off the public host network by omitting `ports:` and routing Cloudflare Tunnel to `http://app:8765`
+  - mount SQLite data at `/data` and local config files at `/config`
+  - add `ARXIV_DAILY_DATABASE` support so deployed SQLite storage can live outside the project tree
+  - add `.env.example`, `.dockerignore`, optional named-tunnel cloudflared config template, and local runtime ignore rules
+  - add a SQLite-safe backup script that snapshots the DB and packages local config
+  - add Chinese deployment docs covering domain setup, Cloudflare Access, startup, logs, backup, update, and troubleshooting
+- Important decisions:
+  - Cloudflare Tunnel is the public ingress; the app container should not expose `8765` directly to the internet
+  - API keys and summary templates remain local config-file workflows, not environment-only deployment secrets
+  - backups include both SQLite data and local config because the DB alone is not enough to restore AI behavior
+- Verification:
+  - focused deployment/config tests: 7 passed
+  - full test suite: 169 passed, 1 warning
+  - backup script syntax check passed: `bash -n arxiv-local-daily/scripts/backup_sqlite.sh`
+  - Compose config expansion passed: `docker compose --env-file .env.example config`
+- Status: implemented on branch, not yet merged to `main`.

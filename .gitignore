@@ -1,10 +1,16 @@
 .superpowers/
 .worktrees/
+.env
 daily-arXiv-ai-enhanced/
 zotero-arxiv-daily/
 arxiv-local-daily/data/
+arxiv-local-daily/backups/
 arxiv-local-daily/config/llm.local.json
 arxiv-local-daily/config/summary_template.local.json
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
 
 .DS_Store
 __pycache__/

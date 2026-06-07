@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      ARXIV_DAILY_DATABASE: /data/arxiv-local-daily.sqlite3
+      ARXIV_DAILY_LLM_CONFIG: /config/llm.local.json
+      ARXIV_DAILY_SUMMARY_TEMPLATE_CONFIG: /config/summary_template.local.json
+    volumes:
+      - ./data:/data
+      - ./config:/config:ro
+    expose:
+      - "8765"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
