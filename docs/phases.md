@@ -777,3 +777,25 @@ Date baseline: 2026-06-03
   - browser verified 2026-06-05 CS status shows `Papers 1196/1196`, `Metadata 1196/1196`, and `AI 0/1196`
   - browser screenshot capture timed out twice, so verification used DOM/layout checks instead of a saved screenshot
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 37: Search Category Matching and Filter Cleanup
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-search-filter-cleanup.md`
+- Scope completed:
+  - diagnose why `Tuning long-range interactions in Sr Rydberg atoms` appeared under a `cs` category search
+  - fix category filtering so group input like `cs` matches `cs.*` rather than arbitrary substrings
+  - keep exact category input like `cs.AI` exact
+  - remove `categories_json` from broad text query matching to avoid accidental category substring hits
+  - remove `Event`, `Metadata`, and `Summary` dropdown filters from the web search panel
+  - bump static assets to `phase44`
+- Important decisions:
+  - old papers can legitimately appear in a daily list when arXiv reports replacement/cross-list activity for that date
+  - score sorting should still rank already scored papers first, but category matching must first be correct
+  - backend API support for event/metadata/summary filters remains for compatibility; only the web controls were removed
+- Verification:
+  - database confirmed `1505.07152` is a 2015 paper with a `2026-06-05 replacement` event in `physics.atom-ph` and a completed AI score
+  - focused category/Web UI tests: 3 passed, 1 warning
+  - full test suite: 161 passed, 1 warning
+  - browser verified `phase44` static assets, removed filter controls, no horizontal overflow, and `2026-06-05 + category=cs` no longer shows the Rydberg physics paper on the first page
+- Status: implemented on branch, not yet merged to `main`.

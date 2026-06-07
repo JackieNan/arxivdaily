@@ -73,7 +73,10 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="automation-summary"' not in response.text
     assert 'id="automation-note"' in response.text
     assert "then runs AI summary and score" in response.text
-    assert '<option value="historical">historical</option>' in response.text
+    assert 'id="search-event"' not in response.text
+    assert 'id="search-metadata"' not in response.text
+    assert 'id="search-summary"' not in response.text
+    assert '<option value="historical">historical</option>' not in response.text
     assert 'id="crawl-run"' not in response.text
     assert 'id="crawl-audit"' not in response.text
     assert 'id="crawl-retry"' not in response.text
@@ -219,6 +222,12 @@ def test_static_web_assets_are_served(tmp_path):
     assert "summary_keywords" in js_response.text
     assert "关键词" in js_response.text
     assert 'el("search-scope").value === "daily"' in js_response.text
+    assert 'el("search-event")' not in js_response.text
+    assert 'el("search-metadata")' not in js_response.text
+    assert 'el("search-summary")' not in js_response.text
+    assert '["event_type", el("search-event").value]' not in js_response.text
+    assert '["metadata_status", el("search-metadata").value]' not in js_response.text
+    assert '["summary_status", el("search-summary").value]' not in js_response.text
     assert 'params.set("date", dateValue())' in js_response.text
     assert "总览" in js_response.text
     assert "Loaded ${arxivId}" not in js_response.text

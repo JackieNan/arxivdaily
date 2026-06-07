@@ -1278,7 +1278,6 @@ class SearchRepository:
                     OR LOWER(COALESCE(p.title, '')) LIKE ?
                     OR LOWER(COALESCE(p.abstract, '')) LIKE ?
                     OR LOWER(COALESCE(p.authors_json, '')) LIKE ?
-                    OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
                     OR EXISTS (
                         SELECT 1 FROM summaries qs
                         WHERE qs.arxiv_id = p.arxiv_id
@@ -1287,22 +1286,39 @@ class SearchRepository:
                 )
                 """
             )
-            params.extend([like_query] * 6)
+            params.extend([like_query] * 5)
         if date:
             where.append("e.date = ?")
             params.append(date)
         if category:
-            category_like = f"%{category.lower()}%"
-            where.append(
-                """
-                (
-                    LOWER(COALESCE(e.listing_category, '')) = ?
-                    OR LOWER(COALESCE(p.primary_category, '')) = ?
-                    OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+            category_value = category.lower()
+            if "." in category_value:
+                json_match = f'%"{category_value}"%'
+                where.append(
+                    """
+                    (
+                        LOWER(COALESCE(e.listing_category, '')) = ?
+                        OR LOWER(COALESCE(p.primary_category, '')) = ?
+                        OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                    )
+                    """
                 )
-                """
-            )
-            params.extend([category.lower(), category.lower(), category_like])
+                params.extend([category_value, category_value, json_match])
+            else:
+                category_prefix = f"{category_value}.%"
+                json_prefix = f'%"{category_value}.%'
+                where.append(
+                    """
+                    (
+                        LOWER(COALESCE(e.listing_category, '')) = ?
+                        OR LOWER(COALESCE(e.listing_category, '')) LIKE ?
+                        OR LOWER(COALESCE(p.primary_category, '')) = ?
+                        OR LOWER(COALESCE(p.primary_category, '')) LIKE ?
+                        OR LOWER(COALESCE(p.categories_json, '')) LIKE ?
+                    )
+                    """
+                )
+                params.extend([category_value, category_prefix, category_value, category_prefix, json_prefix])
         if event_type:
             where.append("e.event_type = ?")
             params.append(event_type)

@@ -117,6 +117,41 @@ def test_search_papers_filters_by_daily_event_and_status_fields(db):
     assert wrong_category == []
 
 
+def test_search_papers_category_group_does_not_match_physics_substring(db):
+    _seed_search_data(db)
+    paper_repo = PaperRepository(db)
+    paper_repo.upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="1505.07152",
+            event_type="replacement",
+            listing_category="physics.atom-ph",
+            primary_category="physics.atom-ph",
+            source_url="https://arxiv.org/list/physics.atom-ph/recent",
+        ),
+    )
+    paper_repo.upsert_metadata(
+        PaperMetadata(
+            arxiv_id="1505.07152",
+            title="Tuning long-range interactions in Sr Rydberg atoms",
+            abstract="Rydberg atom interaction tuning.",
+            authors=["Jane Doe"],
+            primary_category="physics.atom-ph",
+            categories=["physics.atom-ph"],
+        )
+    )
+    db.commit()
+    repo = SearchRepository(db)
+
+    cs_results = repo.search_papers(date="2026-06-03", category="cs")
+    cs_ai_results = repo.search_papers(date="2026-06-03", category="cs.AI")
+    physics_results = repo.search_papers(date="2026-06-03", category="physics")
+
+    assert [row["arxiv_id"] for row in cs_results] == ["2606.00001"]
+    assert [row["arxiv_id"] for row in cs_ai_results] == ["2606.00001"]
+    assert [row["arxiv_id"] for row in physics_results] == ["1505.07152"]
+
+
 def test_search_papers_supports_offset_pagination_and_total_count(db):
     paper_repo = PaperRepository(db)
     for index in range(1, 5):

@@ -719,9 +719,6 @@ const ArxivDailyWorkbench = (() => {
     const pairs = [
       ["q", el("search-query").value.trim()],
       ["category", el("search-category").value.trim()],
-      ["event_type", el("search-event").value],
-      ["metadata_status", el("search-metadata").value],
-      ["summary_status", el("search-summary").value],
       ["sort", el("search-sort").value],
     ];
     if (el("search-scope").value === "daily") {
