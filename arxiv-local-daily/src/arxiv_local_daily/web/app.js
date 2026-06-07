@@ -7,7 +7,6 @@ const ArxivDailyWorkbench = (() => {
     searchPage: 1,
     pageSize: 50,
     pageMeta: null,
-    aiConfig: null,
     archiveScope: "cs",
   };
 
@@ -216,30 +215,6 @@ const ArxivDailyWorkbench = (() => {
     });
   }
 
-  async function loadAiConfig() {
-    try {
-      const config = await api("/api/ai/config");
-      state.aiConfig = config;
-      const stateText = config.configured ? "AI API configured" : "AI API not configured";
-      const configSource = config.config_file_present ? `file ${config.config_path}` : "environment/defaults";
-      const template = config.summary_template || {};
-      const templateSource = template.config_file_present ? `template ${template.config_path}` : `template default (${template.config_path})`;
-      const detail = config.configured
-        ? `${config.base_url}; key ${config.api_key_present ? "present" : "not required"}; ${configSource}; ${templateSource}; temperature ${config.temperature}`
-        : `Create ${config.config_path} or set ${config.env.api_key} / ${config.env.base_url}; template ${template.config_path}.`;
-      el("ai-config-state").textContent = stateText;
-      el("ai-config-state").className = config.configured ? "status-complete" : "status-pending";
-      setDetail("ai-config-status", detail);
-      return config;
-    } catch (error) {
-      state.aiConfig = null;
-      el("ai-config-state").textContent = "AI API status failed";
-      el("ai-config-state").className = "status-failed";
-      setDetail("ai-config-status", error.message);
-      return null;
-    }
-  }
-
   function splitList(value) {
     return value
       .split(",")
@@ -352,18 +327,11 @@ const ArxivDailyWorkbench = (() => {
     }
   }
 
-  function aiSettingsBody() {
-    return {};
-  }
-
   function summaryRequestBody() {
-    const scopedCategories = categoryScopeCategories();
-    const body = {
+    return {
       date: dateValue(),
-      ...aiSettingsBody(),
+      categories: CS_CATEGORIES,
     };
-    if (scopedCategories.length) body.categories = scopedCategories;
-    return body;
   }
 
   async function runAiTriageRequest() {
@@ -381,12 +349,12 @@ const ArxivDailyWorkbench = (() => {
       const message = triage.status === "not_configured"
         ? "LLM API not configured"
         : `AI triage ${triage.completed}/${triage.requested}; failed ${triage.failed}`;
-      setDetail("ai-config-status", message);
+      setDetail("automation-note", message);
       recordOperation(message);
       await loadDailyStatus({ silent: true });
       await runSearch({ silent: true });
     } catch (error) {
-      setDetail("ai-config-status", `Summary/score failed: ${error.message}.`);
+      setDetail("automation-note", `Summary/score failed: ${error.message}.`);
       recordOperation(`Summary/score failed: ${error.message}`);
     } finally {
       setBusy(button, false);
@@ -410,10 +378,7 @@ const ArxivDailyWorkbench = (() => {
     const button = el("paper-ai-run");
     setBusy(button, true);
     try {
-      const body = {
-        ...aiSettingsBody(),
-        force: true,
-      };
+      const body = { force: true };
       const result = await api(`/api/papers/${encodeURIComponent(state.selectedPaperId)}/ai-triage/run`, {
         method: "POST",
         body: JSON.stringify(body),
@@ -465,7 +430,6 @@ const ArxivDailyWorkbench = (() => {
         method: "POST",
         body: JSON.stringify({
           arxiv_id: state.selectedPaperId,
-          ...aiSettingsBody(),
         }),
       });
       renderPromptPreview(data);
@@ -530,18 +494,14 @@ const ArxivDailyWorkbench = (() => {
   }
 
   function renderDailyStatus(status) {
-    const cells = el("automation-summary").querySelectorAll("strong");
-    cells[0].textContent = status.status;
-    cells[0].className = `status-${status.status}`;
-    cells[1].textContent = String(status.metadata.total);
-    cells[2].textContent = `${status.crawl.complete_category_count}/${status.crawl.expected_category_count}`;
-    cells[3].textContent = metadataCoverageText(status, { compact: true });
-    cells[4].textContent = `${status.summary.complete}/${status.summary.eligible}`;
-    cells[5].textContent = `${status.score.complete}/${status.score.eligible}`;
+    const ai = status.ai || {};
+    const aiComplete = Number(ai.complete || 0);
+    const aiEligible = Number(ai.eligible || 0);
+    el("daily-status-summary").textContent = `papers ${status.metadata.total}; AI ${aiComplete}/${aiEligible}`;
     setDetail("automation-note", dailyStatusText(status));
     el("automation-state").textContent = status.status;
     el("automation-state").className = `badge status-${status.status}`;
-    renderPipelineStatus(status);
+    renderDailyStatusRows(status);
   }
 
   function isAutomationActive(automation) {
@@ -573,11 +533,11 @@ const ArxivDailyWorkbench = (() => {
     state.activeStatusTimer = null;
   }
 
-  function renderPipelineStatus(status) {
+  function renderDailyStatusRows(status) {
     renderAutomationStatus(status.automation || {});
 
     const papers = paperStageStatus(status);
-    renderStageStatus({
+    updateStatusRow({
       stateId: "paper-status-state",
       countId: "paper-status-count",
       detailId: "paper-status-detail",
@@ -585,7 +545,7 @@ const ArxivDailyWorkbench = (() => {
     });
 
     const metadata = metadataStageStatus(status);
-    renderStageStatus({
+    updateStatusRow({
       stateId: "metadata-status-state",
       countId: "metadata-status-count",
       detailId: "metadata-status-detail",
@@ -593,7 +553,7 @@ const ArxivDailyWorkbench = (() => {
     });
 
     const ai = aiStageStatus(status);
-    renderStageStatus({
+    updateStatusRow({
       stateId: "ai-status-state",
       countId: "ai-status-count",
       detailId: "ai-status-detail",
@@ -601,7 +561,7 @@ const ArxivDailyWorkbench = (() => {
     });
   }
 
-  function renderStageStatus({ stateId, countId, detailId, state, count, detail }) {
+  function updateStatusRow({ stateId, countId, detailId, state, count, detail }) {
     const stateNode = el(stateId);
     stateNode.textContent = state;
     stateNode.className = `stage-badge is-${state}`;
@@ -619,7 +579,7 @@ const ArxivDailyWorkbench = (() => {
       ? `Step: ${stepLabel}${automation.updated_at ? `; updated ${automation.updated_at}` : ""}.`
       : "No backend automation run yet.";
     if (automation.error) detail = `${detail} Error: ${automation.error}`;
-    renderStageStatus({
+    updateStatusRow({
       stateId: "automation-status-state",
       countId: "automation-status-count",
       detailId: "automation-status-detail",
@@ -633,9 +593,11 @@ const ArxivDailyWorkbench = (() => {
     const parsed = Number(status.crawl.parsed_paper_count || 0);
     const expected = Number(status.crawl.expected_paper_count || 0);
     const preflightTotal = preflightPaperTotal(status);
-    const total = preflightTotal || expected || parsed;
-    const state = paperStageState(status, parsed, expected);
-    const count = total > 0 ? `${parsed}/${total}` : "-";
+    const scopedTotal = Number(status.metadata.total || 0);
+    const visibleComplete = scopedTotal || parsed;
+    const total = scopedTotal || expected || preflightTotal || parsed;
+    const state = paperStageState(status, visibleComplete, total);
+    const count = total > 0 ? `${Math.min(visibleComplete, total)}/${total}` : "-";
     let detail = "No paper crawl has started.";
     if (status.automation?.status === "queued" || status.automation?.current_step === "crawl") {
       detail = `Backend is ${status.automation.current_step || status.automation.status}.`;
@@ -654,7 +616,9 @@ const ArxivDailyWorkbench = (() => {
     } else if (status.crawl.status === "waiting") {
       detail = "Waiting for arXiv to publish the requested listing date.";
     } else if (status.preflight?.status === "complete") {
-      detail = `Preflight complete; evidence ${preflightEvidenceUrl()}.`;
+      detail = scopedTotal
+        ? `Selected scope has ${scopedTotal} papers; preflight evidence ${preflightEvidenceUrl()}.`
+        : `Preflight complete; evidence ${preflightEvidenceUrl()}.`;
     } else if (status.preflight?.status && status.preflight.status !== "not_started") {
       detail = `Preflight ${status.preflight.status}; evidence ${preflightEvidenceUrl()}.`;
     } else if (parsed || expected) {
@@ -693,16 +657,20 @@ const ArxivDailyWorkbench = (() => {
   }
 
   function aiStageStatus(status) {
-    const total = Math.max(Number(status.summary.eligible || 0), Number(status.score.eligible || 0));
-    const complete = Math.min(Number(status.summary.complete || 0), Number(status.score.complete || 0));
+    const ai = status.ai || {};
+    const fallbackTotal = Math.max(Number(status.summary.eligible || 0), Number(status.score.eligible || 0));
+    const fallbackComplete = Math.min(Number(status.summary.complete || 0), Number(status.score.complete || 0));
+    const total = Number(ai.eligible ?? fallbackTotal);
+    const complete = Number(ai.complete ?? fallbackComplete);
+    const failed = Number(ai.failed ?? 0);
     let state = "running";
     if (!total) state = status.summary.template_missing ? "waiting" : "idle";
     else if (complete === total) state = "complete";
-    else if (Number(status.summary.failed || 0) || Number(status.score.failed || 0)) state = "failed";
+    else if (failed || Number(status.summary.failed || 0) || Number(status.score.failed || 0)) state = "failed";
     else if (status.summary.template_missing) state = "waiting";
-    const failures = Number(status.summary.failed || 0) + Number(status.score.failed || 0);
+    const failures = failed || Number(status.summary.failed || 0) + Number(status.score.failed || 0);
     let detail = total
-      ? `Summary ${status.summary.complete}/${status.summary.eligible}; score ${status.score.complete}/${status.score.eligible}.`
+      ? `${complete}/${total} papers already have summary + score.`
       : "No AI candidates yet.";
     if (status.summary.template_missing) detail = `${detail} Template missing.`;
     if (failures) detail = `${detail} ${failures} failed.`;
@@ -737,10 +705,13 @@ const ArxivDailyWorkbench = (() => {
   }
 
   function dailyStatusText(status) {
+    const ai = status.ai || {};
+    const aiComplete = Number(ai.complete || 0);
+    const aiEligible = Number(ai.eligible || 0);
     const blockers = status.blockers && status.blockers.length
       ? `Blockers: ${status.blockers.join(", ")}.`
       : "No blockers.";
-    return `Papers ${status.metadata.total}; categories ${status.crawl.complete_category_count}/${status.crawl.expected_category_count}; metadata ${metadataCoverageText(status)}; summary ${status.summary.complete}/${status.summary.eligible}; score ${status.score.complete}/${status.score.eligible}. ${preflightStatusText(status)} ${blockers}`;
+    return `Papers ${status.metadata.total}; metadata ${metadataCoverageText(status)}; AI ${aiComplete}/${aiEligible}. ${preflightStatusText(status)} ${blockers}`;
   }
 
   function searchParams() {
@@ -1087,7 +1058,6 @@ const ArxivDailyWorkbench = (() => {
     });
     window.addEventListener("mathjax-ready", () => typesetMath(document.body));
     renderArchiveScope();
-    loadAiConfig();
     refreshSelectedDateView();
     if (!state.automationTimer) {
       state.automationTimer = window.setInterval(() => {
@@ -1104,7 +1074,6 @@ const ArxivDailyWorkbench = (() => {
     runSelectedPaperAi,
     previewSelectedPaperPrompt,
     renderPromptPreview,
-    loadAiConfig,
     loadDailyStatus,
     openDateCrawlDialog,
     confirmDateCrawl,

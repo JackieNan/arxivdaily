@@ -124,6 +124,45 @@ def test_daily_pipeline_status_reports_summary_and_score_coverage(db):
     assert "score_missing" in status["blockers"]
 
 
+def test_daily_pipeline_status_ai_coverage_counts_existing_outputs_across_template_and_model(db):
+    template_id = TemplateRepository(db).create_template(_template())
+    _seed_daily_paper(db, "2606.00001")
+    _seed_daily_paper(db, "2606.00002")
+    SummaryRepository(db).upsert_summary(
+        arxiv_id="2606.00001",
+        template_id=template_id,
+        template_version=1,
+        model="old-model",
+        language="Chinese",
+        input_scope="abstract",
+        content={"keywords": ["已有总结"], "tldr": "已有旧模型总结。"},
+        status="complete",
+    )
+    ScoreRepository(db).upsert_score(
+        arxiv_id="2606.00001",
+        model="old-model",
+        rubric_version="reading_priority_v1",
+        content={
+            "score_total": 90,
+            "score_relevance": 30,
+            "score_novelty": 18,
+            "score_technical_depth": 18,
+            "score_evidence": 12,
+            "score_actionability": 12,
+            "recommended_action": "read",
+            "rationale": "Relevant.",
+        },
+        status="complete",
+    )
+    db.commit()
+
+    status = get_daily_pipeline_status(db, date="2026-06-03", model="new-model")
+
+    assert status["ai"]["eligible"] == 2
+    assert status["ai"]["complete"] == 1
+    assert status["ai"]["missing"] == 1
+
+
 def test_run_daily_pipeline_runs_summary_and_score_after_metadata(db):
     calls: list[str] = []
     template_id = TemplateRepository(db).create_template(_template())

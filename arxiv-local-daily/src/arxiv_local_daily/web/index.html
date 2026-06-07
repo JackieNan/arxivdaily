@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>arXiv Daily Workbench</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase41">
+    <link rel="stylesheet" href="/static/styles.css?v=phase43">
     <script>
       window.MathJax = {
         tex: {
@@ -57,66 +57,43 @@
             </label>
             <div class="automation-actions">
               <button id="crawl-date-open" type="button">抓取指定日期</button>
+              <button id="summary-score-run" type="button">Run Summary + Score</button>
               <button id="status-refresh" class="secondary-button compact-button" type="button">刷新状态</button>
             </div>
           </div>
-          <div id="automation-summary" class="metric-grid automation-summary">
-            <div><span>Status</span><strong>-</strong></div>
-            <div><span>Papers</span><strong>-</strong></div>
-            <div><span>Categories</span><strong>-</strong></div>
-            <div><span>Metadata</span><strong>-</strong></div>
-            <div><span>Summary</span><strong>-</strong></div>
-            <div><span>Score</span><strong>-</strong></div>
-          </div>
-          <div id="pipeline-status" class="pipeline-status" aria-label="Daily pipeline status">
-            <section class="stage-status" data-stage="backend">
-              <div class="stage-status-head">
-                <span>Backend</span>
-                <strong id="automation-status-state" class="stage-badge">idle</strong>
-              </div>
-              <p id="automation-status-count" class="stage-count">-</p>
-              <p id="automation-status-detail" class="stage-detail">No backend run yet.</p>
-            </section>
-            <section class="stage-status" data-stage="papers">
-              <div class="stage-status-head">
+          <div id="daily-status" class="daily-status" aria-label="Daily status">
+            <div class="daily-status-head">
+              <span>Daily Status</span>
+              <strong id="daily-status-summary">-</strong>
+            </div>
+            <div id="daily-status-rows" class="daily-status-rows">
+              <section class="daily-status-row" data-stage="papers">
                 <span>Papers</span>
-                <strong id="paper-status-state" class="stage-badge">idle</strong>
-              </div>
-              <p id="paper-status-count" class="stage-count">-</p>
-              <p id="paper-status-detail" class="stage-detail">No crawl status yet.</p>
-            </section>
-            <section class="stage-status" data-stage="metadata">
-              <div class="stage-status-head">
+                <strong id="paper-status-count">-</strong>
+                <em id="paper-status-state">idle</em>
+                <p id="paper-status-detail">No crawl status yet.</p>
+              </section>
+              <section class="daily-status-row" data-stage="metadata">
                 <span>Metadata</span>
-                <strong id="metadata-status-state" class="stage-badge">idle</strong>
-              </div>
-              <p id="metadata-status-count" class="stage-count">-</p>
-              <p id="metadata-status-detail" class="stage-detail">No metadata status yet.</p>
-            </section>
-            <section class="stage-status" data-stage="ai">
-              <div class="stage-status-head">
+                <strong id="metadata-status-count">-</strong>
+                <em id="metadata-status-state">idle</em>
+                <p id="metadata-status-detail">No metadata status yet.</p>
+              </section>
+              <section class="daily-status-row" data-stage="ai">
                 <span>AI</span>
-                <strong id="ai-status-state" class="stage-badge">idle</strong>
-              </div>
-              <p id="ai-status-count" class="stage-count">-</p>
-              <p id="ai-status-detail" class="stage-detail">No AI status yet.</p>
-            </section>
+                <strong id="ai-status-count">-</strong>
+                <em id="ai-status-state">idle</em>
+                <p id="ai-status-detail">No AI status yet.</p>
+              </section>
+              <section class="daily-status-row" data-stage="backend">
+                <span>Backend</span>
+                <strong id="automation-status-count">-</strong>
+                <em id="automation-status-state">idle</em>
+                <p id="automation-status-detail">No backend run yet.</p>
+              </section>
+            </div>
           </div>
           <p id="automation-note" class="inline-status">Automation starts crawl, completes metadata, then runs AI summary and score. Dates are resolved against arXiv's current listing date.</p>
-        </section>
-
-        <section id="settings-panel" class="panel control-panel">
-          <div class="panel-title">
-            <h2>Settings</h2>
-            <span class="badge">summary + score</span>
-          </div>
-          <div class="action-grid settings-grid summary-score-grid">
-            <button id="summary-score-run" type="button">Run Summary + Score</button>
-          </div>
-          <div id="ai-config-card" class="ai-config-card">
-            <strong id="ai-config-state">AI API unknown</strong>
-            <span id="ai-config-status">Loading AI configuration.</span>
-          </div>
         </section>
       </section>
 
@@ -271,6 +248,6 @@
         </div>
       </section>
     </div>
-    <script src="/static/app.js?v=phase41"></script>
+    <script src="/static/app.js?v=phase43"></script>
   </body>
 </html>

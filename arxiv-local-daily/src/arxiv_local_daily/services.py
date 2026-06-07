@@ -1766,6 +1766,58 @@ def _score_coverage(
     }
 
 
+def _ai_coverage(
+    connection: sqlite3.Connection,
+    *,
+    date: str,
+    categories: list[str] | None = None,
+    rubric_version: str = "reading_priority_v1",
+) -> dict[str, int | str]:
+    category_sql, category_params = _daily_event_category_filter(categories)
+    rows = connection.execute(
+        f"""
+        SELECT
+            p.arxiv_id,
+            MAX(CASE WHEN s.status = 'complete' THEN 1 ELSE 0 END) AS has_summary,
+            MAX(CASE WHEN s.status = 'failed' THEN 1 ELSE 0 END) AS has_summary_failed,
+            MAX(CASE WHEN ps.status = 'complete' THEN 1 ELSE 0 END) AS has_score,
+            MAX(CASE WHEN ps.status = 'failed' THEN 1 ELSE 0 END) AS has_score_failed
+        FROM papers p
+        JOIN daily_events e ON e.arxiv_id = p.arxiv_id
+        LEFT JOIN summaries s
+            ON s.arxiv_id = p.arxiv_id
+        LEFT JOIN paper_scores ps
+            ON ps.arxiv_id = p.arxiv_id
+           AND ps.rubric_version = ?
+        WHERE e.date = ?
+          {category_sql}
+          AND p.metadata_status = 'complete'
+          AND COALESCE(p.abstract, '') != ''
+        GROUP BY p.arxiv_id
+        """,
+        (rubric_version, date, *category_params),
+    ).fetchall()
+    complete = sum(
+        1
+        for row in rows
+        if int(row["has_summary"] or 0) == 1 and int(row["has_score"] or 0) == 1
+    )
+    failed = sum(
+        1
+        for row in rows
+        if not (int(row["has_summary"] or 0) == 1 and int(row["has_score"] or 0) == 1)
+        and (int(row["has_summary_failed"] or 0) == 1 or int(row["has_score_failed"] or 0) == 1)
+    )
+    eligible = len(rows)
+    return {
+        "eligible": eligible,
+        "complete": complete,
+        "failed": failed,
+        "missing": eligible - complete - failed,
+        "rubric_version": rubric_version,
+    }
+
+
 def _eligible_daily_paper_count(
     connection: sqlite3.Connection,
     *,
@@ -1856,6 +1908,12 @@ def get_daily_pipeline_status(
         rubric_version=rubric_version,
         categories=coverage_categories,
     )
+    ai = _ai_coverage(
+        connection,
+        date=date,
+        categories=coverage_categories,
+        rubric_version=rubric_version,
+    )
     preflight = PreflightRepository(connection).latest_for_date(date) or {
         "date": date,
         "status": "not_started",
@@ -1892,6 +1950,7 @@ def get_daily_pipeline_status(
         "metadata": metadata,
         "summary": summary,
         "score": score,
+        "ai": ai,
     }
 
 

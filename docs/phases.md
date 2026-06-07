@@ -752,3 +752,28 @@ Date baseline: 2026-06-03
   - browser verified `phase41` static assets, no template editor/toggle/save controls, no `Template name` text, no horizontal overflow, and Settings shows `config/summary_template.local.json`
   - local API verified `GET /api/summary-templates` returns 404 and `/api/ai/config` reports the summary template config path
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 36: Merged Daily Status and Single Batch AI Button
+
+- Branch: `codex/phase-7-web-ui`
+- Plan: `docs/superpowers/plans/2026-06-07-arxiv-local-daily-merged-daily-status.md`
+- Scope completed:
+  - remove the top-right Settings panel from the web workbench
+  - move `Run Summary + Score` into Daily Automation as the only page-level AI batch button
+  - make that button run the selected date's full CS scope with all 40 `cs.*` categories
+  - remove frontend AI config fetching and all model/template setting display from the main page
+  - merge paper, metadata, AI, and backend run state into one compact `Daily Status` component
+  - add backend `status.ai` coverage that counts paper-level summary + score completion independent of model/template identity
+  - make the Papers row prefer the selected category scope count, avoiding all-category preflight counts in the CS view
+  - bump static assets to `phase43`
+- Important decisions:
+  - API/template configuration remains a local config-file workflow rather than a routine UI setting
+  - AI daily progress is now `complete papers / eligible papers`, where complete means the paper has both a complete summary and a complete score
+  - top status text should stay compact and avoid mixing all-category preflight counts with CS-scope progress
+- Verification:
+  - focused Web UI + daily pipeline tests: 3 passed, 1 warning
+  - full test suite: 160 passed, 1 warning
+  - browser verified `phase43` static assets, no Settings panel, no old `automation-summary`/`pipeline-status` modules, and no horizontal overflow
+  - browser verified 2026-06-05 CS status shows `Papers 1196/1196`, `Metadata 1196/1196`, and `AI 0/1196`
+  - browser screenshot capture timed out twice, so verification used DOM/layout checks instead of a saved screenshot
+- Status: implemented on branch, not yet merged to `main`.

@@ -14,7 +14,9 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="automation-panel"' in response.text
     assert 'id="date-prev"' in response.text
     assert 'id="date-next"' in response.text
-    assert 'id="pipeline-status"' in response.text
+    assert 'id="daily-status"' in response.text
+    assert 'id="daily-status-rows"' in response.text
+    assert 'id="pipeline-status"' not in response.text
     assert 'id="automation-status-state"' in response.text
     assert 'id="automation-status-count"' in response.text
     assert 'id="automation-status-detail"' in response.text
@@ -30,7 +32,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert 'id="automation-progress"' not in response.text
     assert 'id="paper-progress-fill"' not in response.text
     assert 'id="top-actions"' in response.text
-    assert 'id="settings-panel"' in response.text
+    assert 'id="settings-panel"' not in response.text
     assert 'id="crawl-panel"' not in response.text
     assert 'id="daily-panel"' not in response.text
     assert 'id="search-panel"' in response.text
@@ -48,7 +50,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert "Edit Template" not in response.text
     assert "Save Template" not in response.text
     assert 'id="summary-score-run"' in response.text
-    assert 'id="ai-config-status"' in response.text
+    assert 'id="ai-config-status"' not in response.text
     assert 'id="paper-ai-run"' in response.text
     assert 'id="paper-prompt-preview"' in response.text
     assert 'id="paper-ai-status"' in response.text
@@ -68,7 +70,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert "开始抓取" in response.text
     assert 'id="automation-refresh"' not in response.text
     assert "Refresh Status" not in response.text
-    assert 'id="automation-summary"' in response.text
+    assert 'id="automation-summary"' not in response.text
     assert 'id="automation-note"' in response.text
     assert "then runs AI summary and score" in response.text
     assert '<option value="historical">historical</option>' in response.text
@@ -90,7 +92,7 @@ def test_root_serves_web_workbench(tmp_path):
     assert '<option value="overview">总览</option>' in response.text
     assert "MathJax" in response.text
     assert "tex-chtml.js" in response.text
-    assert "Settings" in response.text
+    assert "Settings" not in response.text
     assert "Enrich" not in response.text
     assert 'id="left-rail"' not in response.text
     assert "Summary limit" not in response.text
@@ -136,15 +138,16 @@ def test_static_web_assets_are_served(tmp_path):
     assert "/api/daily/status/" in js_response.text
     assert "/api/preflight/" in js_response.text
     assert "/api/ai-triage/run" in js_response.text
-    assert "/api/ai/config" in js_response.text
+    assert "/api/ai/config" not in js_response.text
     assert "/api/ai/prompt-preview" in js_response.text
     assert '/ai-triage/run"' in js_response.text
-    assert "loadAiConfig" in js_response.text
+    assert "loadAiConfig" not in js_response.text
     assert "runSelectedPaperAi" in js_response.text
     assert "previewSelectedPaperPrompt" in js_response.text
     assert "renderPromptPreview" in js_response.text
     assert "renderSummaryContent" in js_response.text
     assert "CS_CATEGORIES" in js_response.text
+    assert "categories: CS_CATEGORIES" in js_response.text
     assert "state.archiveScope" in js_response.text
     assert "categoryScopeCategories" in js_response.text
     assert "body.categories = scopedCategories" in js_response.text
@@ -171,8 +174,9 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'params.set("page", String(state.searchPage));' in js_response.text
     assert 'params.set("page_size", String(state.pageSize));' in js_response.text
     assert "renderPagination" in js_response.text
-    assert "renderPipelineStatus" in js_response.text
-    assert "renderStageStatus" in js_response.text
+    assert "renderDailyStatusRows" in js_response.text
+    assert "renderPipelineStatus" not in js_response.text
+    assert "renderStageStatus" not in js_response.text
     assert "renderAutomationStatus" in js_response.text
     assert "AUTOMATION_STEP_LABELS" in js_response.text
     assert "crawl_incomplete" in js_response.text
@@ -205,7 +209,7 @@ def test_static_web_assets_are_served(tmp_path):
     assert 'setDetail("daily-detail"' not in js_response.text
     assert 'setDetail("settings-detail"' not in js_response.text
     assert "status.metadata.failed" in js_response.text
-    assert "status.crawl.complete_category_count" in js_response.text
+    assert "Selected scope has" in js_response.text
     assert 'setDetail("operation-log", message);' in js_response.text
     assert 'detail ? `${message}\\n${detail}` : message' not in js_response.text
     assert "score-badge" in js_response.text
@@ -241,9 +245,11 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".automation-grid" in css_response.text
     assert ".automation-actions" in css_response.text
     assert ".compact-button" in css_response.text
-    assert ".automation-summary" in css_response.text
-    assert ".pipeline-status" in css_response.text
-    assert ".stage-status" in css_response.text
+    assert ".daily-status" in css_response.text
+    assert ".daily-status-row" in css_response.text
+    assert ".automation-summary" not in css_response.text
+    assert ".pipeline-status" not in css_response.text
+    assert ".stage-status" not in css_response.text
     assert ".stage-badge" in css_response.text
     assert ".stage-count" in css_response.text
     assert ".stage-detail" in css_response.text
@@ -255,8 +261,8 @@ def test_static_web_assets_are_served(tmp_path):
     assert ".progress-segment" not in css_response.text
     assert ".pagination-controls" in css_response.text
     assert ".source-link" in css_response.text
-    assert ".summary-score-grid" in css_response.text
-    assert ".ai-config-card" in css_response.text
+    assert ".summary-score-grid" not in css_response.text
+    assert ".ai-config-card" not in css_response.text
     assert ".ai-action-row" in css_response.text
     assert ".prompt-preview-content" in css_response.text
     assert ".summary-content" in css_response.text

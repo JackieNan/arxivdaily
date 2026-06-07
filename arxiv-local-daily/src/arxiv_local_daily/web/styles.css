@@ -168,8 +168,8 @@ label span {
 
 .top-actions {
   display: grid;
-  grid-template-columns: minmax(360px, 0.92fr) minmax(420px, 1.08fr);
-  grid-template-areas: "automation settings";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "automation";
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -200,10 +200,6 @@ label span {
 
 #automation-panel {
   grid-area: automation;
-}
-
-#settings-panel {
-  grid-area: settings;
 }
 
 .top-actions .panel {
@@ -309,7 +305,7 @@ label span {
 
 .automation-actions {
   display: grid;
-  grid-template-columns: minmax(136px, 1fr) minmax(76px, auto);
+  grid-template-columns: minmax(132px, 1fr) minmax(150px, 1fr) minmax(76px, auto);
   gap: 6px;
   align-items: end;
   min-width: 0;
@@ -319,39 +315,6 @@ label span {
   min-width: 0;
   padding-inline: 8px;
   font-size: 12px;
-}
-
-.settings-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.summary-score-grid {
-  align-items: end;
-}
-
-#summary-score-run {
-  grid-column: 1 / -1;
-}
-
-.ai-config-card {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #f8fafc;
-  padding: 7px 8px;
-}
-
-.ai-config-card strong {
-  font-size: 12px;
-}
-
-.ai-config-card span {
-  color: var(--muted);
-  font-size: 11px;
-  overflow-wrap: anywhere;
 }
 
 .inline-status {
@@ -370,39 +333,86 @@ label span {
   gap: 8px;
 }
 
-.automation-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.pipeline-status {
+.daily-status {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 6px;
-}
-
-.stage-status {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #f8fafc;
   padding: 8px;
 }
 
-.stage-status-head {
+.daily-status-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
-.stage-status-head span {
+.daily-status-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.daily-status-head strong {
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.daily-status-rows {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.daily-status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label state"
+    "count count"
+    "detail detail";
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 7px;
+}
+
+.daily-status-row span {
+  grid-area: label;
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.daily-status-row strong {
+  grid-area: count;
+  min-width: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.daily-status-row em {
+  grid-area: state;
+  justify-self: end;
+  font-style: normal;
+}
+
+.daily-status-row p {
+  grid-area: detail;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .stage-badge {
@@ -819,11 +829,6 @@ label span {
   padding-left: 8px;
 }
 
-.settings-divider {
-  height: 1px;
-  background: var(--line);
-}
-
 .section-block h4 {
   margin: 0;
   color: var(--muted);
@@ -978,9 +983,8 @@ mjx-container {
 
 @media (max-width: 1120px) {
   .top-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "automation settings";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "automation";
   }
 
   .workspace-grid {
@@ -1029,7 +1033,6 @@ mjx-container {
     grid-template-columns: 1fr;
   }
 
-  .settings-grid,
   .search-controls,
   .automation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1040,16 +1043,8 @@ mjx-container {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .automation-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .pipeline-status {
-    grid-template-columns: 1fr;
-  }
-
-  .template-field-row {
-    grid-template-columns: 1fr;
+  .daily-status-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .modal-actions {
@@ -1085,12 +1080,9 @@ mjx-container {
 @media (max-width: 420px) {
   .top-actions {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      "automation"
-      "settings";
+    grid-template-areas: "automation";
   }
 
-  .settings-grid,
   .search-controls,
   .automation-grid {
     grid-template-columns: 1fr;
@@ -1106,7 +1098,7 @@ mjx-container {
     grid-column: auto;
   }
 
-  .automation-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .daily-status-rows {
+    grid-template-columns: 1fr;
   }
 }
