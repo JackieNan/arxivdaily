@@ -27,6 +27,17 @@ def test_dockerfile_runs_uvicorn_with_internal_bind_and_mounted_config_defaults(
     assert '"--port", "8765"' in dockerfile
 
 
+def test_dockerfile_supports_domestic_debian_apt_mirrors() -> None:
+    dockerfile = read_project_file("Dockerfile")
+
+    assert "ARG DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian" in dockerfile
+    assert "ARG DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security" in dockerfile
+    assert "deb.debian.org/debian" in dockerfile
+    assert "${DEBIAN_MIRROR}" in dockerfile
+    assert "${DEBIAN_SECURITY_MIRROR}" in dockerfile
+    assert "/etc/apt/sources.list.d/debian.sources" in dockerfile
+
+
 def test_compose_uses_cloudflare_tunnel_without_publishing_app_port() -> None:
     compose = read_project_file("docker-compose.yml")
     app_section = compose.split("\n  cloudflared:", 1)[0]
@@ -34,6 +45,11 @@ def test_compose_uses_cloudflare_tunnel_without_publishing_app_port() -> None:
     assert "services:" in compose
     assert "\n  app:" in compose
     assert "\n  cloudflared:" in compose
+    assert "DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian}" in app_section
+    assert (
+        "DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian-security}"
+        in app_section
+    )
     assert "\n    ports:" not in app_section
     assert "ARXIV_DAILY_DATABASE: /data/arxiv-local-daily.sqlite3" in app_section
     assert "ARXIV_DAILY_LLM_CONFIG: /config/llm.local.json" in app_section
@@ -62,12 +78,14 @@ def test_env_example_and_deployment_docs_cover_required_cloudflare_steps() -> No
     docs = read_project_file("docs/deployment.md")
 
     assert "CLOUDFLARE_TUNNEL_TOKEN=" in env_example
-    assert "ARXIV_DAILY" not in env_example
+    assert "DEBIAN_MIRROR=" in env_example
+    assert "DEBIAN_SECURITY_MIRROR=" in env_example
     assert "Cloudflare Tunnel" in docs
     assert "Cloudflare Access" in docs
     assert "CLOUDFLARE_TUNNEL_TOKEN" in docs
     assert "http://app:8765" in docs
     assert "docker compose up -d --build" in docs
+    assert "DEBIAN_MIRROR" in docs
     assert "不要暴露 8765" in docs
     assert "./scripts/backup_sqlite.sh" in docs
 

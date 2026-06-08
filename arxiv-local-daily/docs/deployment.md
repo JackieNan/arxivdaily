@@ -83,6 +83,31 @@ docker compose logs -f cloudflared
 
 浏览器打开你的域名，例如 `https://papers.example.com`。
 
+## 构建镜像下载慢
+
+Docker daemon 的 `registry-mirrors` 只影响 `docker pull python:3.12-slim`、`docker pull cloudflare/cloudflared:latest` 这一类镜像下载。构建 app 镜像时，如果卡在 `RUN apt-get update`，慢的是容器内部 Debian apt 源，不是 Docker Hub 源。
+
+`Dockerfile` 默认会把 Debian 源切到 TUNA：
+
+```env
+DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian
+DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security
+```
+
+如果你的服务器在阿里云 ECS，可以在 `.env` 里改成阿里云内网源：
+
+```env
+DEBIAN_MIRROR=http://mirrors.cloud.aliyuncs.com/debian
+DEBIAN_SECURITY_MIRROR=http://mirrors.cloud.aliyuncs.com/debian-security
+```
+
+然后重新构建：
+
+```bash
+docker compose build --no-cache app
+docker compose up -d
+```
+
 ## 开启 Cloudflare Access
 
 建议一定开启 Cloudflare Access，让这个 app 只允许你自己的邮箱或团队账号访问：

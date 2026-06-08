@@ -883,3 +883,21 @@ Date baseline: 2026-06-03
   - full test suite with existing venv: 170 passed, 1 warning
   - `uv lock` could not be refreshed in the sandbox because network access to PyPI is blocked and the local uv cache lacks `beautifulsoup4`
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 40 Hotfix: Docker Build Apt Mirror
+
+- Branch: `codex/phase-7-web-ui`
+- Scope completed:
+  - add Docker build args for Debian apt mirrors: `DEBIAN_MIRROR` and `DEBIAN_SECURITY_MIRROR`
+  - default apt mirrors to TUNA for Debian trixie builds
+  - pass apt mirror args through Docker Compose and `.env.example`
+  - document that Docker Hub registry mirrors do not affect `apt-get update` inside the image build
+  - document Aliyun ECS internal apt mirror overrides
+- Important decisions:
+  - keep mirror values configurable because the fastest source depends on server provider and region
+  - leave Docker Hub mirror configuration as a host-level Docker daemon setting; apt mirror configuration belongs in the Dockerfile/build args
+- Verification:
+  - focused deployment tests: 7 passed
+  - Compose config expansion shows apt mirror build args
+  - full test suite with existing venv: 171 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.
