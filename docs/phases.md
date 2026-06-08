@@ -866,3 +866,20 @@ Date baseline: 2026-06-03
   - backup script syntax check passed: `bash -n arxiv-local-daily/scripts/backup_sqlite.sh`
   - Compose config expansion passed: `docker compose --env-file .env.example config`
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 40 Hotfix: Docker Package Web Assets
+
+- Branch: `codex/phase-7-web-ui`
+- Scope completed:
+  - fix Docker startup crash where installed package lacked `arxiv_local_daily/web`
+  - add setuptools package-data config for `web/*.html`, `web/*.js`, and `web/*.css`
+  - add a regression test that requires package-data coverage for the static web assets
+- Root cause:
+  - local tests used `pythonpath = ["src"]`, so the app read static files from the source tree
+  - Docker used `pip install .`, so the app read from `site-packages`
+  - `pyproject.toml` did not declare the web directory as package data, so `site-packages/arxiv_local_daily/web` was missing
+- Verification:
+  - focused import/web UI tests with existing venv: 4 passed, 1 warning
+  - full test suite with existing venv: 170 passed, 1 warning
+  - `uv lock` could not be refreshed in the sandbox because network access to PyPI is blocked and the local uv cache lacks `beautifulsoup4`
+- Status: implemented on branch, not yet merged to `main`.

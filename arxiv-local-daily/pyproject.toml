@@ -14,6 +14,16 @@ dependencies = [
 [project.scripts]
 arxiv-local-daily = "arxiv_local_daily.cli:main"
 
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+arxiv_local_daily = ["web/*.html", "web/*.js", "web/*.css"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",
