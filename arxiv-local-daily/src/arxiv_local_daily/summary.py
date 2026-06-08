@@ -1,4 +1,6 @@
 from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 import json
 import os
@@ -11,12 +13,67 @@ class SummaryParseError(ValueError):
     pass
 
 
+class ScoreParseError(ValueError):
+    pass
+
+
+class AiTriageParseError(ValueError):
+    pass
+
+
 class LLMClient(Protocol):
     def complete(self, *, model: str, messages: list[dict[str, str]]) -> str:
         pass
 
 
 FENCED_JSON_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.IGNORECASE | re.DOTALL)
+DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_LLM_MODEL = "local"
+DEFAULT_LLM_CONFIG_PATH = Path("config/llm.local.json")
+
+
+@dataclass(frozen=True)
+class LLMApiConfig:
+    base_url: str
+    api_key: str | None
+    model: str
+    temperature: float
+    config_path: Path
+    config_file_present: bool
+
+
+def _llm_config_path() -> Path:
+    return Path(os.getenv("ARXIV_DAILY_LLM_CONFIG", str(DEFAULT_LLM_CONFIG_PATH)))
+
+
+def _load_llm_config_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    loaded = json.loads(path.read_text())
+    if not isinstance(loaded, dict):
+        raise ValueError("LLM config file must contain a JSON object")
+    return loaded
+
+
+def load_llm_api_config() -> LLMApiConfig:
+    config_path = _llm_config_path()
+    file_values = _load_llm_config_file(config_path)
+    base_url = str(os.getenv("ARXIV_DAILY_LLM_BASE_URL", file_values.get("base_url", DEFAULT_LLM_BASE_URL))).rstrip("/")
+    api_key = os.getenv("ARXIV_DAILY_LLM_API_KEY", file_values.get("api_key"))
+    model = str(os.getenv("ARXIV_DAILY_LLM_MODEL", file_values.get("model", DEFAULT_LLM_MODEL)))
+    temperature = float(os.getenv("ARXIV_DAILY_LLM_TEMPERATURE", file_values.get("temperature", 0)))
+    return LLMApiConfig(
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        config_path=config_path,
+        config_file_present=config_path.exists(),
+    )
+
+
+def resolve_llm_model(model: str | None = None) -> str:
+    return model or load_llm_api_config().model
 
 
 def _value(row: Mapping[str, Any] | Any, key: str, default: Any = None) -> Any:
@@ -53,12 +110,14 @@ def build_summary_messages(
     authors = ", ".join(_json_list(_value(paper, "authors_json")))
     categories = ", ".join(_json_list(_value(paper, "categories_json")))
     system_prompt = _value(template, "system_prompt", "")
+    language = _value(template, "language", "Chinese")
     input_scope = _value(template, "input_scope", "abstract")
 
     system_message = (
         f"{system_prompt}\n\n"
         "Return only a valid JSON object. "
-        f"The JSON object must use these keys exactly: {expected_keys}."
+        f"The JSON object must use these keys exactly: {expected_keys}. "
+        f"All user-facing values must be in {language}; keep technical terms, arXiv IDs, and LaTeX formulas when needed."
     )
     user_message = "\n".join(
         [
@@ -95,6 +154,151 @@ def parse_summary_response(text: str, *, expected_keys: list[str]) -> dict[str, 
     return {key: loaded.get(key, "") for key in expected_keys}
 
 
+SCORE_KEYS = [
+    "score_total",
+    "score_relevance",
+    "score_novelty",
+    "score_technical_depth",
+    "score_evidence",
+    "score_actionability",
+    "recommended_action",
+    "rationale",
+]
+
+
+def build_score_messages(
+    *,
+    paper: Mapping[str, Any] | Any,
+    summary: Mapping[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    summary = summary or {}
+    system_message = (
+        "You assign a reading-priority score for arXiv paper triage. "
+        "Return only valid JSON with the requested score fields. "
+        "This is not an objective paper-quality score; it is a practical reading priority score."
+    )
+    user_message = "\n".join(
+        [
+            f"arXiv ID: {_value(paper, 'arxiv_id', '')}",
+            f"Title: {_value(paper, 'title', '')}",
+            f"Primary category: {_value(paper, 'primary_category', '')}",
+            f"Abstract: {_value(paper, 'abstract', '')}",
+            f"Summary JSON: {json.dumps(summary, ensure_ascii=False, sort_keys=True)}",
+            "",
+            "Rubric:",
+            "- score_relevance: 0-30, fit to research interests and today's triage.",
+            "- score_novelty: 0-20, novelty of problem, method, or insight.",
+            "- score_technical_depth: 0-20, technical substance and method depth.",
+            "- score_evidence: 0-15, experimental, theoretical, or empirical support.",
+            "- score_actionability: 0-15, value of reading or discussing today.",
+            "- score_total: integer 0-100, sum of the five component scores.",
+            "- recommended_action: one of read, skim, skip, discuss.",
+            "- rationale: one concise sentence explaining the score.",
+        ]
+    )
+    return [{"role": "system", "content": system_message}, {"role": "user", "content": user_message}]
+
+
+def build_ai_triage_messages(
+    *,
+    paper: Mapping[str, Any] | Any,
+    template: Mapping[str, Any] | Any,
+) -> list[dict[str, str]]:
+    fields = enabled_template_fields(template)
+    field_lines = [
+        f"- {field['key']} ({field.get('label', field['key'])}, {field.get('field_type', 'text')}): {field.get('prompt', '')}"
+        for field in fields
+    ]
+    expected_summary_keys = ", ".join(field["key"] for field in fields)
+    authors = ", ".join(_json_list(_value(paper, "authors_json")))
+    categories = ", ".join(_json_list(_value(paper, "categories_json")))
+    system_prompt = _value(template, "system_prompt", "")
+    language = _value(template, "language", "Chinese")
+    input_scope = _value(template, "input_scope", "abstract")
+
+    system_message = (
+        f"{system_prompt}\n\n"
+        "Return only a valid JSON object with exactly two top-level keys: "
+        '"summary" and "score". '
+        f'"summary" must use these keys exactly: {expected_summary_keys}. '
+        f'"score" must use these keys exactly: {", ".join(SCORE_KEYS)}. '
+        f"All user-facing summary values, keywords, and score rationale must be in {language}; "
+        "keep technical terms, arXiv IDs, and LaTeX formulas when needed."
+    )
+    user_message = "\n".join(
+        [
+            f"arXiv ID: {_value(paper, 'arxiv_id', '')}",
+            f"Title: {_value(paper, 'title', '')}",
+            f"Authors: {authors}",
+            f"Primary category: {_value(paper, 'primary_category', '')}",
+            f"Categories: {categories}",
+            f"Abstract: {_value(paper, 'abstract', '') if input_scope == 'abstract' else ''}",
+            "",
+            "Required summary fields:",
+            *field_lines,
+            "",
+            "Score rubric:",
+            "- score_relevance: 0-30, fit to research interests and today's triage.",
+            "- score_novelty: 0-20, novelty of problem, method, or insight.",
+            "- score_technical_depth: 0-20, technical substance and method depth.",
+            "- score_evidence: 0-15, experimental, theoretical, or empirical support.",
+            "- score_actionability: 0-15, value of reading or discussing today.",
+            "- score_total: integer 0-100, sum of the five component scores.",
+            "- recommended_action: one of read, skim, skip, discuss.",
+            "- rationale: one concise Chinese sentence explaining the score.",
+        ]
+    )
+    return [{"role": "system", "content": system_message}, {"role": "user", "content": user_message}]
+
+
+def parse_ai_triage_response(text: str, *, expected_summary_keys: list[str]) -> dict[str, dict[str, Any]]:
+    stripped = text.strip()
+    match = FENCED_JSON_RE.match(stripped)
+    if match:
+        stripped = match.group(1).strip()
+    try:
+        loaded = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise AiTriageParseError("AI triage response is not valid JSON") from exc
+    if not isinstance(loaded, dict):
+        raise AiTriageParseError("AI triage response must be a JSON object")
+    if not isinstance(loaded.get("summary"), dict):
+        raise AiTriageParseError('AI triage response must include a "summary" object')
+    if not isinstance(loaded.get("score"), dict):
+        raise AiTriageParseError('AI triage response must include a "score" object')
+    try:
+        summary = parse_summary_response(
+            json.dumps(loaded["summary"], ensure_ascii=False),
+            expected_keys=expected_summary_keys,
+        )
+        score = parse_score_response(json.dumps(loaded["score"], ensure_ascii=False))
+    except (SummaryParseError, ScoreParseError) as exc:
+        raise AiTriageParseError(str(exc)) from exc
+    return {"summary": summary, "score": score}
+
+
+def parse_score_response(text: str) -> dict[str, Any]:
+    stripped = text.strip()
+    match = FENCED_JSON_RE.match(stripped)
+    if match:
+        stripped = match.group(1).strip()
+    try:
+        loaded = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise ScoreParseError("score response is not valid JSON") from exc
+    if not isinstance(loaded, dict):
+        raise ScoreParseError("score response must be a JSON object")
+    missing = [key for key in SCORE_KEYS if key not in loaded]
+    if missing:
+        raise ScoreParseError(f"score response missing keys: {', '.join(missing)}")
+    parsed = dict(loaded)
+    for key in SCORE_KEYS[:6]:
+        parsed[key] = int(parsed[key])
+    if parsed["score_total"] < 0 or parsed["score_total"] > 100:
+        raise ScoreParseError("score_total must be between 0 and 100")
+    return parsed
+
+
 class OpenAICompatibleChatClient:
     def __init__(
         self,
@@ -111,10 +315,11 @@ class OpenAICompatibleChatClient:
 
     @classmethod
     def from_env(cls) -> "OpenAICompatibleChatClient":
+        config = load_llm_api_config()
         return cls(
-            base_url=os.getenv("ARXIV_DAILY_LLM_BASE_URL", "https://api.openai.com/v1"),
-            api_key=os.getenv("ARXIV_DAILY_LLM_API_KEY"),
-            temperature=float(os.getenv("ARXIV_DAILY_LLM_TEMPERATURE", "0")),
+            base_url=config.base_url,
+            api_key=config.api_key,
+            temperature=config.temperature,
         )
 
     def complete(self, *, model: str, messages: list[dict[str, str]]) -> str:
@@ -146,3 +351,8 @@ class OpenAICompatibleChatClient:
         except urllib.error.URLError as exc:
             raise RuntimeError(f"LLM request failed: {exc}") from exc
         return response_payload["choices"][0]["message"]["content"]
+
+
+def llm_api_configured() -> bool:
+    config = load_llm_api_config()
+    return bool(config.api_key) or config.base_url != DEFAULT_LLM_BASE_URL

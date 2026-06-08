@@ -1,4 +1,7 @@
 import re
+import threading
+import time
+from collections.abc import Callable
 from urllib.parse import urlencode
 import xml.etree.ElementTree as ET
 
@@ -88,13 +91,47 @@ def parse_arxiv_atom_feed(xml: str) -> list[PaperMetadata]:
 
 
 class ArxivMetadataClient:
-    def __init__(self, *, http_client: ArxivHttpClient | None = None):
+    _rate_limit_lock = threading.Lock()
+    _last_request_at_by_key: dict[str, float] = {}
+
+    def __init__(
+        self,
+        *,
+        http_client: ArxivHttpClient | None = None,
+        min_request_interval_seconds: float = 3.0,
+        rate_limit_key: str = "arxiv-api",
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         self.http_client = http_client or ArxivHttpClient()
+        self.min_request_interval_seconds = min_request_interval_seconds
+        self.rate_limit_key = rate_limit_key
+        self.clock = clock
+        self.sleep = sleep
+
+    @classmethod
+    def reset_rate_limit(cls, key: str) -> None:
+        with cls._rate_limit_lock:
+            cls._last_request_at_by_key.pop(key, None)
 
     def fetch_by_ids(self, ids: list[str]) -> list[PaperMetadata]:
         if not ids:
             return []
+        self._wait_for_rate_limit()
         response = self.http_client.fetch_text(build_arxiv_api_query_url(ids))
         if response.status_code != 200:
             raise ValueError(f"arXiv API metadata fetch failed: HTTP {response.status_code}")
         return parse_arxiv_atom_feed(response.text)
+
+    def _wait_for_rate_limit(self) -> None:
+        if self.min_request_interval_seconds <= 0:
+            return
+        with self._rate_limit_lock:
+            now = self.clock()
+            last_request_at = self._last_request_at_by_key.get(self.rate_limit_key)
+            if last_request_at is not None:
+                wait_seconds = self.min_request_interval_seconds - (now - last_request_at)
+                if wait_seconds > 0:
+                    self.sleep(wait_seconds)
+                    now = self.clock()
+            self._last_request_at_by_key[self.rate_limit_key] = now

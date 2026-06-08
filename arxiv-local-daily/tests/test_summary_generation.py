@@ -119,6 +119,47 @@ def test_generate_summaries_for_date_persists_structured_content(db):
     assert content["method"] == ["Versioned templates", "Structured JSON output"]
 
 
+def test_generate_summaries_for_date_defaults_to_all_candidates(db):
+    template_id = _seed_daily_paper(db)
+    paper_repo = PaperRepository(db)
+    for index in range(2, 5):
+        arxiv_id = f"2606.0000{index}"
+        paper_repo.upsert_daily_event(
+            date="2026-06-03",
+            event=ParsedDailyEvent(
+                arxiv_id=arxiv_id,
+                event_type="new",
+                listing_category="cs.AI",
+                primary_category="cs.AI",
+                source_url="https://arxiv.org/list/cs.AI/new",
+            ),
+        )
+        paper_repo.upsert_metadata(
+            PaperMetadata(
+                arxiv_id=arxiv_id,
+                title=f"Structured Summary Candidate {index}",
+                abstract=f"Candidate {index} abstract.",
+                authors=["Ada Lovelace"],
+                primary_category="cs.AI",
+                categories=["cs.AI"],
+            )
+        )
+    db.commit()
+    llm = FakeLLMClient(json.dumps({"tldr": "All candidates", "method": ["No UI limit"]}))
+
+    result = generate_summaries_for_date(
+        db,
+        date="2026-06-03",
+        template_id=template_id,
+        model="fake-model",
+        llm_client=llm,
+    )
+
+    assert result["requested"] == 4
+    assert result["completed"] == 4
+    assert len(llm.calls) == 4
+
+
 def test_generate_summaries_for_date_skips_existing_complete_summary_without_force(db):
     template_id = _seed_daily_paper(db)
     llm = FakeLLMClient(json.dumps({"tldr": "First", "method": ["First method"]}))

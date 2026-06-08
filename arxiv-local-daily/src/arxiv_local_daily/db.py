@@ -39,6 +39,9 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             published_at TEXT,
             updated_at TEXT,
             metadata_status TEXT NOT NULL DEFAULT 'pending',
+            metadata_error TEXT,
+            metadata_attempts INTEGER NOT NULL DEFAULT 0,
+            metadata_next_run_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_row_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -73,9 +76,110 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             status TEXT NOT NULL,
             http_status INTEGER,
             parsed_count INTEGER NOT NULL DEFAULT 0,
+            expected_count INTEGER,
+            missing_count INTEGER NOT NULL DEFAULT 0,
             error TEXT,
             retry_count INTEGER NOT NULL DEFAULT 0,
             UNIQUE (run_id, category, event_section, url)
+        );
+
+        CREATE TABLE IF NOT EXISTS crawl_preflight_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            status TEXT NOT NULL,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            category_count INTEGER NOT NULL DEFAULT 0,
+            source_count INTEGER NOT NULL DEFAULT 0,
+            listing_entry_count INTEGER NOT NULL DEFAULT 0,
+            distinct_paper_count INTEGER NOT NULL DEFAULT 0,
+            missing_count INTEGER NOT NULL DEFAULT 0,
+            error_counts_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS crawl_preflight_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL REFERENCES crawl_preflight_runs(id) ON DELETE CASCADE,
+            category TEXT NOT NULL,
+            url TEXT NOT NULL,
+            status TEXT NOT NULL,
+            http_status INTEGER,
+            listing_date TEXT,
+            parsed_count INTEGER NOT NULL DEFAULT 0,
+            expected_count INTEGER,
+            distinct_count INTEGER NOT NULL DEFAULT 0,
+            missing_count INTEGER NOT NULL DEFAULT 0,
+            error TEXT,
+            arxiv_ids_json TEXT NOT NULL DEFAULT '[]',
+            UNIQUE (run_id, category, url)
+        );
+
+        CREATE TABLE IF NOT EXISTS daily_automation_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            crawl_mode TEXT NOT NULL,
+            status TEXT NOT NULL,
+            current_step TEXT NOT NULL,
+            template_name TEXT,
+            model TEXT NOT NULL DEFAULT 'local',
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS metadata_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            status TEXT NOT NULL,
+            from_date TEXT,
+            until_date TEXT,
+            set_spec TEXT,
+            max_pages INTEGER NOT NULL DEFAULT 1,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            records_seen INTEGER NOT NULL DEFAULT 0,
+            records_upserted INTEGER NOT NULL DEFAULT 0,
+            pages_fetched INTEGER NOT NULL DEFAULT 0,
+            resumption_token TEXT,
+            error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS metadata_enrichment_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            status TEXT NOT NULL,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            crawl_count INTEGER NOT NULL DEFAULT 0,
+            id_api_count INTEGER NOT NULL DEFAULT 0,
+            oai_count INTEGER NOT NULL DEFAULT 0,
+            merged_count INTEGER NOT NULL DEFAULT 0,
+            missing_after_merge_count INTEGER NOT NULL DEFAULT 0,
+            oai_missing_count INTEGER NOT NULL DEFAULT 0,
+            oai_extra_count INTEGER NOT NULL DEFAULT 0,
+            mismatch_count INTEGER NOT NULL DEFAULT 0,
+            error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS metadata_source_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL REFERENCES metadata_enrichment_runs(id) ON DELETE CASCADE,
+            source TEXT NOT NULL,
+            arxiv_id TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (run_id, source, arxiv_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS metadata_merge_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL REFERENCES metadata_enrichment_runs(id) ON DELETE CASCADE,
+            report_type TEXT NOT NULL,
+            arxiv_id TEXT NOT NULL,
+            details_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS daily_events (
@@ -119,6 +223,25 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             UNIQUE (arxiv_id, template_id, template_version, model, input_scope)
         );
 
+        CREATE TABLE IF NOT EXISTS paper_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            arxiv_id TEXT NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+            rubric_version TEXT NOT NULL,
+            model TEXT NOT NULL,
+            score_total INTEGER NOT NULL,
+            score_relevance INTEGER NOT NULL,
+            score_novelty INTEGER NOT NULL,
+            score_technical_depth INTEGER NOT NULL,
+            score_evidence INTEGER NOT NULL,
+            score_actionability INTEGER NOT NULL,
+            recommended_action TEXT NOT NULL,
+            rationale TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (arxiv_id, rubric_version, model)
+        );
+
         CREATE TABLE IF NOT EXISTS ai_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_type TEXT NOT NULL,
@@ -143,4 +266,18 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         );
         """
     )
+    _ensure_column(connection, "papers", "metadata_error", "TEXT")
+    _ensure_column(connection, "papers", "metadata_attempts", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(connection, "papers", "metadata_next_run_at", "TEXT")
+    _ensure_column(connection, "crawl_run_sources", "expected_count", "INTEGER")
+    _ensure_column(connection, "crawl_run_sources", "missing_count", "INTEGER NOT NULL DEFAULT 0")
     connection.commit()
+
+
+def _ensure_column(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

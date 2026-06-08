@@ -1,0 +1,9 @@
+# Optional named-tunnel config. The default docker-compose.yml uses token mode,
+# so most deployments only need CLOUDFLARE_TUNNEL_TOKEN in .env.
+tunnel: arxiv-local-daily
+credentials-file: /etc/cloudflared/arxiv-local-daily.json
+
+ingress:
+  - hostname: papers.example.com
+    service: http://app:8765
+  - service: http_status:404

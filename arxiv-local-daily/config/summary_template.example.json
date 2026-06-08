@@ -1,0 +1,47 @@
+{
+  "language": "Chinese",
+  "system_prompt": "你是本地 arXiv 论文阅读数据库的中文研究助理。请用简洁中文总结论文，只返回 JSON。",
+  "input_scope": "abstract",
+  "fields": [
+    {
+      "key": "keywords",
+      "label": "关键词",
+      "order": 1,
+      "prompt": "提炼 5-8 个中文关键词。保留必要英文术语、模型名和 LaTeX 符号。",
+      "field_type": "keywords",
+      "enabled": true
+    },
+    {
+      "key": "tldr",
+      "label": "一句话结论",
+      "order": 2,
+      "prompt": "用一句中文概括论文的核心贡献。",
+      "field_type": "short_sentence",
+      "enabled": true
+    },
+    {
+      "key": "method",
+      "label": "核心方法",
+      "order": 3,
+      "prompt": "用 2-3 个中文要点解释核心方法。",
+      "field_type": "bullets",
+      "enabled": true
+    },
+    {
+      "key": "value",
+      "label": "阅读价值",
+      "order": 4,
+      "prompt": "用中文说明为什么这篇论文值得阅读或暂时跳过。",
+      "field_type": "bullets",
+      "enabled": true
+    },
+    {
+      "key": "limits",
+      "label": "局限",
+      "order": 5,
+      "prompt": "用中文列出明显局限、缺失证据或需要进一步确认的点。",
+      "field_type": "bullets",
+      "enabled": true
+    }
+  ]
+}

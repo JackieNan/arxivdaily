@@ -56,6 +56,20 @@ class FailingMetadataClient:
         raise RuntimeError("api unavailable")
 
 
+class RateLimitedMetadataClient:
+    def __init__(self):
+        self.seen_ids = []
+
+    def fetch_by_ids(self, ids):
+        self.seen_ids.append(ids)
+        raise RuntimeError("arXiv API metadata fetch failed: HTTP 429")
+
+
+class TimeoutMetadataClient:
+    def fetch_by_ids(self, ids):
+        raise RuntimeError("The read operation timed out")
+
+
 def test_enrich_metadata_for_date_updates_pending_daily_papers(db):
     html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
     xml = Path("tests/fixtures/arxiv_api_feed.xml").read_text()
@@ -80,7 +94,7 @@ def test_enrich_metadata_for_date_updates_pending_daily_papers(db):
     missing = db.execute("SELECT * FROM papers WHERE arxiv_id = ?", ("2606.00002",)).fetchone()
 
     assert client.seen_ids == [["2606.00001", "2606.00002"]]
-    assert result == {"requested": 2, "updated": 1, "missing": 1, "failed": 0}
+    assert result == {"requested": 2, "updated": 1, "missing": 1, "failed": 0, "retryable": 0}
     assert paper["metadata_status"] == "complete"
     assert paper["title"] == "First paper title"
     assert missing["metadata_status"] == "failed"
@@ -107,8 +121,104 @@ def test_enrich_metadata_for_date_marks_batch_failed_when_client_errors(db):
         "SELECT arxiv_id, metadata_status FROM papers ORDER BY arxiv_id LIMIT 2"
     ).fetchall()
 
-    assert result == {"requested": 2, "updated": 0, "missing": 0, "failed": 2}
+    assert result == {
+        "requested": 2,
+        "updated": 0,
+        "missing": 0,
+        "failed": 2,
+        "retryable": 0,
+        "error": "api unavailable",
+    }
     assert [(row["arxiv_id"], row["metadata_status"]) for row in statuses] == [
         ("2606.00001", "failed"),
         ("2606.00002", "failed"),
     ]
+
+
+def test_enrich_metadata_for_date_marks_rate_limits_retryable(db):
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+    ingest_daily_listing_html(
+        db,
+        date="2026-06-03",
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/new",
+        html=html,
+    )
+    client = RateLimitedMetadataClient()
+
+    result = enrich_metadata_for_date(
+        db,
+        date="2026-06-03",
+        metadata_client=client,
+        limit=2,
+    )
+
+    rows = db.execute(
+        """
+        SELECT arxiv_id, metadata_status, metadata_error, metadata_attempts, metadata_next_run_at
+        FROM papers
+        ORDER BY arxiv_id
+        LIMIT 2
+        """
+    ).fetchall()
+
+    assert result["requested"] == 2
+    assert result["retryable"] == 2
+    assert result["failed"] == 0
+    assert result["next_run_at"] is not None
+    assert client.seen_ids == [["2606.00001", "2606.00002"]]
+    assert [
+        (row["arxiv_id"], row["metadata_status"], row["metadata_attempts"])
+        for row in rows
+    ] == [
+        ("2606.00001", "retryable", 1),
+        ("2606.00002", "retryable", 1),
+    ]
+    assert rows[0]["metadata_error"] == "arXiv API metadata fetch failed: HTTP 429"
+    assert rows[0]["metadata_next_run_at"] == result["next_run_at"]
+
+    second_result = enrich_metadata_for_date(
+        db,
+        date="2026-06-03",
+        metadata_client=client,
+        limit=2,
+    )
+
+    assert second_result["requested"] == 1
+    assert second_result["retryable"] == 1
+    assert client.seen_ids == [["2606.00001", "2606.00002"], ["2606.00003"]]
+
+
+def test_enrich_metadata_for_date_marks_timeouts_retryable(db):
+    html = Path("tests/fixtures/list_cs_ai_new.html").read_text()
+    ingest_daily_listing_html(
+        db,
+        date="2026-06-03",
+        listing_category="cs.AI",
+        source_url="https://arxiv.org/list/cs.AI/new",
+        html=html,
+    )
+
+    result = enrich_metadata_for_date(
+        db,
+        date="2026-06-03",
+        metadata_client=TimeoutMetadataClient(),
+        limit=1,
+    )
+
+    row = db.execute(
+        """
+        SELECT metadata_status, metadata_error, metadata_attempts, metadata_next_run_at
+        FROM papers
+        WHERE arxiv_id = ?
+        """,
+        ("2606.00001",),
+    ).fetchone()
+
+    assert result["retryable"] == 1
+    assert result["failed"] == 0
+    assert result["next_run_at"] is not None
+    assert row["metadata_status"] == "retryable"
+    assert row["metadata_error"] == "The read operation timed out"
+    assert row["metadata_attempts"] == 1
+    assert row["metadata_next_run_at"] == result["next_run_at"]

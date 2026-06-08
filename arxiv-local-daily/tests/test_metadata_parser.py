@@ -69,3 +69,47 @@ def test_metadata_client_fetches_and_parses_ids():
         "https://export.arxiv.org/api/query?id_list=2606.00001%2Chep-th%2F9901001&start=0&max_results=2"
     ]
     assert [paper.arxiv_id for paper in papers] == ["2606.00001", "hep-th/9901001"]
+
+
+def test_metadata_client_rate_limits_across_instances():
+    xml = Path("tests/fixtures/arxiv_api_feed.xml").read_text()
+    now = [100.0]
+    sleeps: list[float] = []
+    key = "test-metadata-rate-limit"
+    ArxivMetadataClient.reset_rate_limit(key)
+
+    def clock() -> float:
+        return now[0]
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=xml)
+
+    first = ArxivMetadataClient(
+        http_client=ArxivHttpClient(
+            transport=httpx.MockTransport(handler),
+            retry_sleep_seconds=0,
+        ),
+        min_request_interval_seconds=3,
+        rate_limit_key=key,
+        clock=clock,
+        sleep=sleep,
+    )
+    second = ArxivMetadataClient(
+        http_client=ArxivHttpClient(
+            transport=httpx.MockTransport(handler),
+            retry_sleep_seconds=0,
+        ),
+        min_request_interval_seconds=3,
+        rate_limit_key=key,
+        clock=clock,
+        sleep=sleep,
+    )
+
+    first.fetch_by_ids(["2606.00001"])
+    second.fetch_by_ids(["2606.00002"])
+
+    assert sleeps == [3]

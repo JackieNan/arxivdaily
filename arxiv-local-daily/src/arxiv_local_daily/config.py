@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,4 +9,4 @@ class Settings:
 
 
 def default_settings() -> Settings:
-    return Settings()
+    return Settings(database_path=Path(os.getenv("ARXIV_DAILY_DATABASE", str(Settings.database_path))))

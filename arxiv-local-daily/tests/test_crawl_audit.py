@@ -2,6 +2,7 @@ from pathlib import Path
 
 from arxiv_local_daily.crawler.audit import build_crawl_completeness_report
 from arxiv_local_daily.models import CrawlSourceInput
+from arxiv_local_daily.repositories import CrawlRepository
 from arxiv_local_daily.services import ingest_daily_crawl_sources, retry_incomplete_crawl_categories_for_date
 
 
@@ -13,6 +14,18 @@ def _complete_source(category: str) -> CrawlSourceInput:
         status="complete",
         http_status=200,
         html=Path("tests/fixtures/list_cs_ai_new.html").read_text(),
+    )
+
+
+def _incomplete_source(category: str) -> CrawlSourceInput:
+    return CrawlSourceInput(
+        category=category,
+        event_section="all",
+        url=f"https://arxiv.org/list/{category}/new",
+        status="complete",
+        http_status=200,
+        html=Path("tests/fixtures/list_cs_ai_new.html").read_text(),
+        expected_count=4,
     )
 
 
@@ -37,6 +50,55 @@ def test_crawl_completeness_report_returns_no_run_for_empty_date(db):
     assert report["retry_categories"] == []
 
 
+def test_crawl_completeness_report_ignores_historical_oai_metadata_runs(db):
+    crawl_repo = CrawlRepository(db)
+    run_id = crawl_repo.create_run(date="2026-06-03", mode="historical-oai", status="running")
+    crawl_repo.record_source(
+        run_id=run_id,
+        category="historical",
+        event_section="historical",
+        url="oai-pmh:2026-06-03",
+        status="complete",
+        http_status=200,
+        parsed_count=100,
+    )
+    crawl_repo.finish_run(run_id, status="complete", summary_counts={"historical": 100})
+    db.commit()
+
+    report = build_crawl_completeness_report(db, date="2026-06-03")
+
+    assert report["status"] == "no_run"
+    assert report["source_count"] == 0
+    assert report["complete_category_count"] == 0
+
+
+def test_crawl_completeness_report_rejects_poisoned_historical_archive_complete_rows(db):
+    crawl_repo = CrawlRepository(db)
+    run_id = crawl_repo.create_run(date="2026-06-04", mode="historical-listing", status="running")
+    crawl_repo.record_source(
+        run_id=run_id,
+        category="cs.AI",
+        event_section="archive",
+        url="https://arxiv.org/list/cs.AI/2606?skip=0&show=2000",
+        status="complete",
+        http_status=404,
+        parsed_count=0,
+        expected_count=0,
+        missing_count=0,
+        error="archive page not found; treated as no submissions",
+    )
+    crawl_repo.finish_run(run_id, status="complete", summary_counts={})
+    db.commit()
+
+    report = build_crawl_completeness_report(db, date="2026-06-04", expected_categories=["cs.AI"])
+
+    assert report["status"] == "partial"
+    assert report["failed_category_count"] == 1
+    assert report["retry_categories"] == ["cs.AI"]
+    assert report["categories"][0]["status"] == "failed"
+    assert report["categories"][0]["error"] == "archive page not found; treated as no submissions"
+
+
 def test_crawl_completeness_report_marks_all_complete_sources_complete(db):
     ingest_daily_crawl_sources(
         db,
@@ -54,6 +116,9 @@ def test_crawl_completeness_report_marks_all_complete_sources_complete(db):
     assert report["status"] == "complete"
     assert report["expected_category_count"] == 2
     assert report["complete_category_count"] == 2
+    assert report["parsed_paper_count"] == 3
+    assert report["expected_paper_count"] == 3
+    assert report["missing_paper_count"] == 0
     assert report["failed_category_count"] == 0
     assert report["missing_category_count"] == 0
     assert report["retry_categories"] == []
@@ -79,6 +144,32 @@ def test_crawl_completeness_report_lists_failed_retry_categories(db):
     assert report["retry_categories"] == ["cs.LG"]
     assert report["categories"][1]["category"] == "cs.LG"
     assert report["categories"][1]["status"] == "failed"
+
+
+def test_crawl_completeness_report_marks_count_mismatch_incomplete(db):
+    ingest_daily_crawl_sources(
+        db,
+        date="2026-06-03",
+        mode="all-categories",
+        sources=[_incomplete_source("cs.AI")],
+    )
+
+    report = build_crawl_completeness_report(
+        db,
+        date="2026-06-03",
+        expected_categories=["cs.AI"],
+    )
+
+    assert report["status"] == "partial"
+    assert report["incomplete_category_count"] == 1
+    assert report["retry_categories"] == ["cs.AI"]
+    assert report["categories"][0]["status"] == "incomplete"
+    assert report["categories"][0]["parsed_count"] == 3
+    assert report["categories"][0]["expected_count"] == 4
+    assert report["categories"][0]["missing_count"] == 1
+    assert report["parsed_paper_count"] == 3
+    assert report["expected_paper_count"] == 4
+    assert report["missing_paper_count"] == 1
 
 
 def test_crawl_completeness_report_detects_missing_expected_categories(db):

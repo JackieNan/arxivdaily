@@ -8,12 +8,30 @@ def test_schema_creates_core_tables(db):
         "ai_jobs",
         "crawl_run_sources",
         "crawl_runs",
+        "crawl_preflight_runs",
+        "crawl_preflight_sources",
         "daily_events",
+        "daily_automation_runs",
+        "metadata_sync_runs",
+        "metadata_enrichment_runs",
+        "metadata_merge_reports",
+        "metadata_source_records",
         "papers",
         "paper_discussions",
+        "paper_scores",
         "summary_templates",
         "summaries",
     }.issubset(table_names)
+
+    paper_columns = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(papers)").fetchall()
+    }
+    assert {
+        "metadata_error",
+        "metadata_attempts",
+        "metadata_next_run_at",
+    }.issubset(paper_columns)
 
 
 def test_daily_events_are_unique_per_date_id_type_and_listing_category(db):

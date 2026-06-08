@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>arXiv 每日论文工作台</title>
+    <link rel="stylesheet" href="/static/styles.css?v=phase46">
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"], ["\\(", "\\)"]],
+          displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+          processEscapes: true
+        },
+        options: {
+          skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+        },
+        startup: {
+          typeset: false,
+          ready: () => {
+            MathJax.startup.defaultReady();
+            window.dispatchEvent(new Event("mathjax-ready"));
+          }
+        }
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>arXiv 每日论文工作台</h1>
+          <p id="run-status" class="status-line">就绪</p>
+          <pre id="operation-log" class="operation-log" aria-live="polite">暂无操作记录。</pre>
+        </div>
+        <div class="date-control" aria-label="日期导航">
+          <button id="date-prev" class="secondary-button date-step" type="button" title="前一天">&lt;</button>
+          <label>
+            <span>日期</span>
+            <input id="date-input" type="date">
+          </label>
+          <button id="date-next" class="secondary-button date-step" type="button" title="后一天">&gt;</button>
+        </div>
+      </header>
+
+      <section id="top-actions" class="top-actions">
+        <section id="automation-panel" class="panel control-panel">
+          <div class="panel-title">
+            <h2>每日自动化</h2>
+            <span id="automation-state" class="badge">空闲</span>
+          </div>
+          <div class="action-grid automation-grid">
+            <label>
+              <span>抓取分类</span>
+              <input id="crawl-categories" type="text" placeholder="cs.AI, cs.LG">
+            </label>
+            <div class="automation-actions">
+              <button id="crawl-date-open" type="button">抓取指定日期</button>
+              <button id="summary-score-run" type="button">运行总结 + 评分</button>
+              <button id="status-refresh" class="secondary-button compact-button" type="button">刷新状态</button>
+            </div>
+          </div>
+          <div id="daily-status" class="daily-status" aria-label="每日状态">
+            <div class="daily-status-head">
+              <span>每日状态</span>
+              <strong id="daily-status-summary">-</strong>
+            </div>
+            <div id="daily-status-rows" class="daily-status-rows">
+              <section class="daily-status-row" data-stage="papers">
+                <span>论文</span>
+                <strong id="paper-status-count">-</strong>
+                <em id="paper-status-state">空闲</em>
+                <p id="paper-status-detail">暂无抓取状态。</p>
+              </section>
+              <section class="daily-status-row" data-stage="metadata">
+                <span>元数据</span>
+                <strong id="metadata-status-count">-</strong>
+                <em id="metadata-status-state">空闲</em>
+                <p id="metadata-status-detail">暂无元数据状态。</p>
+              </section>
+              <section class="daily-status-row" data-stage="ai">
+                <span>AI</span>
+                <strong id="ai-status-count">-</strong>
+                <em id="ai-status-state">空闲</em>
+                <p id="ai-status-detail">暂无 AI 状态。</p>
+              </section>
+              <section class="daily-status-row" data-stage="backend">
+                <span>后台</span>
+                <strong id="automation-status-count">-</strong>
+                <em id="automation-status-state">空闲</em>
+                <p id="automation-status-detail">暂无后台任务。</p>
+              </section>
+            </div>
+          </div>
+          <p id="automation-note" class="inline-status">自动化会先抓取论文，再补齐元数据，最后运行 AI 总结和评分；日期按 arXiv 当前 listing 日期判断。</p>
+        </section>
+      </section>
+
+      <main class="workspace-grid">
+
+        <section id="search-panel" class="panel search-panel">
+          <div class="panel-title">
+            <h2>论文列表</h2>
+            <span id="result-count" class="badge">0</span>
+          </div>
+          <div class="search-controls">
+            <label class="wide">
+              <span>关键词</span>
+              <input id="search-query" type="search" placeholder="方法、标题、作者、总结">
+            </label>
+            <div class="category-filter wide">
+              <div class="category-filter-head">
+                <span>分类</span>
+                <button id="category-picker-toggle" class="secondary-button category-picker-toggle" type="button" aria-expanded="false" aria-controls="category-picker">计算机科学</button>
+              </div>
+              <div id="category-picker" class="category-picker" hidden>
+                <div class="category-picker-actions">
+                  <button id="category-select-cs" class="secondary-button compact-button" type="button">只选 CS</button>
+                  <button id="category-select-all" class="secondary-button compact-button" type="button">全选</button>
+                  <button id="category-clear" class="secondary-button compact-button" type="button">清空</button>
+                </div>
+                <div id="category-picker-groups" class="category-picker-groups"></div>
+              </div>
+            </div>
+            <label>
+              <span>范围</span>
+              <select id="search-scope">
+                <option value="daily" selected>当日</option>
+                <option value="overview">总览</option>
+              </select>
+            </label>
+            <label>
+              <span>排序</span>
+              <select id="search-sort">
+                <option value="score">评分优先</option>
+                <option value="recent">最新优先</option>
+              </select>
+            </label>
+            <button id="search-run" type="button">搜索</button>
+          </div>
+          <pre id="search-detail" class="operation-detail" aria-live="polite">尚未搜索。</pre>
+          <div class="pagination-controls" aria-label="论文结果分页">
+            <button id="pagination-prev" class="secondary-button" type="button">上一页</button>
+            <span id="pagination-label" class="inline-status">第 1 / 1 页</span>
+            <button id="pagination-next" class="secondary-button" type="button">下一页</button>
+          </div>
+          <div id="paper-results" class="result-list" aria-live="polite"></div>
+        </section>
+
+        <aside id="right-rail" class="right-rail">
+          <section id="paper-detail" class="panel detail-panel">
+            <div class="panel-title">
+              <h2>论文详情</h2>
+              <span id="paper-id" class="badge">未选择</span>
+            </div>
+            <div class="ai-action-row">
+              <button id="paper-ai-run" type="button" disabled>运行 AI</button>
+              <button id="paper-prompt-preview" class="secondary-button" type="button" disabled>预览提示词</button>
+              <span id="paper-ai-status" class="inline-status">选择论文后可运行 AI。</span>
+            </div>
+            <article id="paper-content" class="paper-content">
+              <p class="empty-state">尚未选择论文。</p>
+            </article>
+          </section>
+
+          <section id="discussion-panel" class="panel discussion-panel">
+            <div class="panel-title">
+              <h2>讨论</h2>
+              <span id="discussion-count" class="badge">0</span>
+            </div>
+            <div id="discussion-list" class="discussion-list"></div>
+            <div class="discussion-form">
+              <label>
+                <span>角色</span>
+                <select id="discussion-role">
+                  <option value="user">用户</option>
+                  <option value="assistant">助手</option>
+                  <option value="system">系统</option>
+                </select>
+              </label>
+              <label class="wide">
+                <span>消息</span>
+                <textarea id="discussion-content" rows="4"></textarea>
+              </label>
+              <label>
+                <span>标签</span>
+                <input id="discussion-tags" type="text" placeholder="问题, 跟进">
+              </label>
+              <button id="discussion-add" type="button">添加消息</button>
+            </div>
+          </section>
+        </aside>
+      </main>
+      <section id="archive-scope-panel" class="archive-scope-panel">
+        <div>
+          <strong>默认范围：计算机科学</strong>
+          <p id="archive-scope-status">未填写手动分类：抓取、状态和 AI 使用 40 个 cs.* 分类。</p>
+        </div>
+        <div class="archive-scope-actions">
+          <button id="archive-scope-toggle" class="secondary-button" type="button">抓取全部大组</button>
+        </div>
+      </section>
+    </div>
+    <div id="crawl-date-dialog" class="modal-backdrop" hidden>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="crawl-date-title">
+        <div class="modal-header">
+          <h2 id="crawl-date-title">抓取指定日期</h2>
+          <button id="crawl-date-cancel" class="icon-button" type="button" aria-label="关闭">x</button>
+        </div>
+        <label>
+          <span>目标日期</span>
+          <input id="crawl-date-target" type="date">
+        </label>
+        <p class="inline-status">系统会自动判断当前 daily 或历史 listing，持续补齐论文、元数据和 AI 结果；若 arXiv 尚未更新到该日期，会记录等待状态。</p>
+        <div class="modal-actions">
+          <button id="crawl-date-confirm" type="button">开始抓取</button>
+          <button id="crawl-date-dismiss" class="secondary-button" type="button">取消</button>
+        </div>
+      </section>
+    </div>
+    <div id="prompt-preview-dialog" class="modal-backdrop" hidden>
+      <section class="modal-panel prompt-preview-panel" role="dialog" aria-modal="true" aria-labelledby="prompt-preview-title">
+        <div class="modal-header">
+          <h2 id="prompt-preview-title">提示词预览</h2>
+          <button id="prompt-preview-close" class="icon-button" type="button" aria-label="关闭">x</button>
+        </div>
+        <pre id="prompt-preview-content" class="prompt-preview-content"></pre>
+        <div class="modal-actions">
+          <button id="prompt-preview-dismiss" class="secondary-button" type="button">关闭</button>
+        </div>
+      </section>
+    </div>
+    <script src="/static/app.js?v=phase46"></script>
+  </body>
+</html>

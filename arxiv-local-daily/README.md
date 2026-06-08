@@ -61,7 +61,93 @@ Phase 6 adds search and discussion:
 - paper detail records with events, summaries, and discussions
 - local per-paper discussion messages
 
+## Phase 7
+
+Phase 7 adds a local web workbench:
+
+- FastAPI serves the UI at `/`
+- static CSS and JavaScript are served under `/static`
+- crawl, audit, retry, summary, score, search, paper detail, and discussion controls are available in one screen
+- the UI uses the existing local API and SQLite database
+
+## Phase 8
+
+Phase 8 reduces dependency on the rate-limited legacy arXiv API:
+
+- daily listing titles are stored immediately during crawl
+- OAI-PMH ListRecords metadata pages can be synced into SQLite
+- metadata sync runs are tracked with status, counts, resumption token, and error
+- the web UI starts and polls OAI metadata sync jobs
+- legacy `Run Metadata` remains available as a fallback
+
+## Phase 9
+
+Phase 9 unifies metadata enrichment and improves reading triage:
+
+- crawl sources store page-declared counts and become `incomplete` when parsed count is lower
+- unified `Enrich Metadata` compares crawled IDs against ID API and OAI metadata sources
+- enrichment reports record missing-after-merge, OAI-missing, OAI-extra, and mismatch diagnostics
+- paper scores store a 0-100 reading-priority score plus component scores, rationale, and recommended action
+- search can sort by score
+- the web UI uses left controls, center search results, and a fixed right paper detail panel
+- summary templates and scoring controls live in Settings
+
+## Phase 10
+
+Phase 10 makes crawl the only user-facing ingestion action:
+
+- `POST /api/crawl/run` queues unified metadata enrichment in the background after the crawl finishes
+- unified enrichment processes all crawled paper IDs for the day by default and merges ID API plus OAI metadata sources
+- the web UI removes the Enrich panel, left rail, metadata limits, OAI page controls, summary limit, and score limit
+- search shows all matching papers by default instead of forcing a 50-paper UI cap
+- the workbench uses a top action strip with a paper list and fixed right detail panel
+- long titles, tags, abstracts, LaTeX-like text, and JSON summaries wrap without horizontal page scrolling
+
+## Phase 11
+
+Phase 11 improves reading quality in the paper list and detail panel:
+
+- paper titles and abstracts are rendered with MathJax when available, with a local fallback for common LaTeX formulas such as `$p$`, `\mathscr{F}`, and superscripts/subscripts
+- the paper list no longer displays abstract snippets
+- paper cards show Chinese keyword chips from the latest complete summary JSON `keywords` field
+- the default summary template now asks the LLM for Chinese `keywords`, `tldr`, `method`, `value`, and `limits`
+- summary prompt construction explicitly requires user-facing JSON values in the template language, defaulting to Chinese
+
 The default SQLite database path is `data/arxiv-local-daily.sqlite3`.
+
+## Phase 21
+
+Phase 21 repairs local wrong-date daily listing rows created before the date-aware crawler existed:
+
+- contaminated `new`, `cross-list`, and `replacement` events can be removed for selected dates
+- `historical` OAI records, paper metadata, summaries, scores, discussions, and paper rows are preserved
+- old daily crawl runs for repaired dates are removed so crawl audit does not treat polluted runs as valid
+- the open web workbench silently restarts daily automation every 10 minutes
+
+OAI-PMH is used for metadata and historical records, not as proof of an exact historical arXiv daily listing. Exact earlier-day listing reconstruction should parse arXiv historical listing/archive pages per category and date, then enrich those IDs with OAI/API metadata.
+
+## Phase 22
+
+Phase 22 adds exact historical listing crawl:
+
+- earlier selected dates use arXiv monthly listing pages such as `/list/cs.AI/2606?skip=0&show=2000`
+- the parser extracts only the requested date's `new`, `cross-list`, and `replacement` sections
+- historical listing crawl runs are stored with mode `historical-listing`
+- old `historical-oai` metadata runs no longer satisfy crawl completeness
+- when exact listing rows are successfully crawled for a category/date, metadata-only `historical` event rows for that category/date are removed while paper metadata remains
+
+OAI-PMH and the arXiv ID API are still used by metadata completion after the exact paper IDs are known.
+
+## Phase 23
+
+Phase 23 improves automation timing and list ergonomics:
+
+- Daily Automation now defaults to `crawl_mode=auto`.
+- In auto mode, the backend probes arXiv's current `/new` listing date and chooses daily crawl, historical listing crawl, or `waiting` if the selected date is ahead of arXiv.
+- Search results are paginated with `page` and `page_size`; the web UI defaults to 50 papers per page.
+- The date picker has previous/next day buttons.
+- Paper cards and detail panels include arXiv original links.
+- Daily Automation shows a compact three-segment progress line for crawl, metadata, and AI triage.
 
 ## Deferred
 
@@ -83,17 +169,50 @@ uv run pytest
 PYTHONPATH=src uv run uvicorn arxiv_local_daily.api:create_app --factory --reload
 ```
 
+## Run Web UI
+
+```bash
+uv run --with-editable . uvicorn arxiv_local_daily.api:create_app --factory --host 127.0.0.1 --port 8765
+```
+
+Then open `http://127.0.0.1:8765/`.
+
+## Deploy With Cloudflare Tunnel
+
+Use the Docker Compose deployment package when running on a server:
+
+```bash
+cp .env.example .env
+cp config/llm.example.json config/llm.local.json
+cp config/summary_template.example.json config/summary_template.local.json
+docker compose up -d --build
+```
+
+Fill `CLOUDFLARE_TUNNEL_TOKEN` in `.env`, point the Cloudflare Tunnel public hostname service to `http://app:8765`, and keep the app service without a public `ports:` mapping. See `docs/deployment.md` for the full Chinese deployment guide, Cloudflare Access checklist, and backup workflow.
+
+Daily Automation is the main ingestion path. In `auto` mode it first checks arXiv's current `/new` listing date with a short, single-attempt probe. If the probe fails, the app records a visible `waiting` crawl run instead of silently continuing or writing papers under an uncertain date. If the selected date equals arXiv's current date, it runs a daily listing preflight before the main crawl: every requested category page is fetched, the arXiv page date is verified, the declared entry count is compared with parsed entries, explicit `No updates today.` category pages are certified as zero papers, and distinct arXiv IDs are counted. It then crawls `/list/{category}/new` and verifies the page date before writing events. If the selected date is earlier than arXiv's current date, it crawls arXiv monthly listing/archive pages and stores exact daily `new`, `cross-list`, and `replacement` events. If the selected date is ahead of arXiv's current listing date, it records a `waiting` crawl run and writes no papers. After listing crawl, it keeps fetching metadata until daily papers are complete or waiting for retry, then runs AI triage for eligible papers. AI triage makes one OpenAI-compatible chat-completions call per paper and persists both the configurable Chinese summary/keywords and the reading-priority score.
+
 The phase-one endpoints are:
 
 - `GET /api/days/{date}/papers`
 - `GET /api/crawl/runs/{date}`
 - `GET /api/crawl/completeness/{date}`
+- `GET /api/preflight/{date}`
 - `POST /api/crawl/retry-failed`
+- `POST /api/metadata/enrich`
+- `POST /api/metadata/oai-sync/start`
+- `GET /api/metadata/oai-sync/runs`
+- `GET /api/metadata/oai-sync/runs/{run_id}`
 - `GET /api/search/papers`
 - `GET /api/papers/{arxiv_id}`
 - `GET /api/summary-templates`
 - `POST /api/summary-templates`
+- `POST /api/daily/automation/start`
+- `GET /api/daily/status/{date}`
+- `POST /api/repair/daily-listings`
+- `POST /api/ai-triage/run`
 - `POST /api/summaries/run`
+- `POST /api/scores/run`
 - `GET /api/papers/{arxiv_id}/summaries`
 - `GET /api/papers/{arxiv_id}/discussions`
 - `POST /api/papers/{arxiv_id}/discussions`
@@ -111,6 +230,63 @@ uv run --with-editable . arxiv-local-daily crawl --date 2026-06-03
 ```
 
 The all-category command discovers categories from arXiv's taxonomy page, then fetches `/list/{category}/new` for every discovered category. A crawl run is `complete` when all requested category pages fetch successfully; it is `partial` when one or more requested sources fail.
+
+The live `/new` crawler validates the announcement date shown in the arXiv page headings. If arXiv has not yet advanced to the selected date, the source is recorded as `date_mismatch` and no papers are stored under the wrong date.
+
+## Verify Daily Completeness
+
+Use the daily status endpoint first:
+
+```bash
+curl http://127.0.0.1:8765/api/daily/status/2026-06-05
+```
+
+For a fully verified current daily crawl, check these fields:
+
+- `preflight.status == "complete"`
+- `preflight.source_count == preflight.category_count`
+- every `preflight.sources[].status == "complete"`
+- every preflight source has `parsed_count == expected_count`
+- `crawl.status == "complete"`
+- `crawl.parsed_paper_count == preflight.distinct_paper_count`
+- `metadata.total == crawl.parsed_paper_count`
+
+For current daily `/new` pages, arXiv declares counts per category when there are entries. Empty category pages may instead say `No updates today.`; those are treated as verified complete with `expected_count = 0`.
+
+Inspect the raw preflight evidence with:
+
+```bash
+curl http://127.0.0.1:8765/api/preflight/2026-06-05
+```
+
+SQLite verification:
+
+```bash
+sqlite3 data/arxiv-local-daily.sqlite3 \
+  "SELECT COUNT(DISTINCT arxiv_id) FROM daily_events WHERE date='2026-06-05';"
+sqlite3 data/arxiv-local-daily.sqlite3 \
+  "SELECT status, category_count, source_count, distinct_paper_count FROM crawl_preflight_runs WHERE date='2026-06-05' ORDER BY id DESC LIMIT 1;"
+sqlite3 data/arxiv-local-daily.sqlite3 \
+  "SELECT category, status, parsed_count, expected_count, missing_count FROM crawl_preflight_sources WHERE run_id=(SELECT id FROM crawl_preflight_runs WHERE date='2026-06-05' ORDER BY id DESC LIMIT 1) ORDER BY category;"
+```
+
+Historical dates are collected through Daily Automation in `historical` mode. The crawler fetches monthly arXiv listing pages and extracts only the selected date:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-03","crawl_mode":"historical","categories":["cs.AI"],"historical_max_pages":100}'
+```
+
+Exact historical listing rows use the normal daily event types: `new`, `cross-list`, and `replacement`. OAI-PMH remains a metadata source, not the list source.
+
+Repair contaminated local daily listing rows for selected dates:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/repair/daily-listings \
+  -H "Content-Type: application/json" \
+  -d '{"dates":["2026-06-03","2026-06-04","2026-06-05"]}'
+```
 
 The crawl trigger API accepts the same date/category shape:
 
@@ -143,11 +319,29 @@ The retry command uses the combined audit across all runs for the date. If a lat
 
 ## Run Metadata Enrichment
 
+Metadata enrichment is normally automatic after `POST /api/crawl/run`. The OAI and legacy metadata endpoints remain available for diagnostics and controlled experiments.
+
+OAI metadata sync:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/metadata/oai-sync/start \
+  -H "Content-Type: application/json" \
+  -d '{"from_date":"2026-06-03","until_date":"2026-06-03","set_spec":"cs:cs:AI","max_pages":1}'
+```
+
+Check sync status:
+
+```bash
+curl http://127.0.0.1:8765/api/metadata/oai-sync/runs/1
+```
+
+Legacy API fallback:
+
 ```bash
 uv run --with-editable . arxiv-local-daily metadata --date 2026-06-03 --limit 100
 ```
 
-Metadata enrichment uses the official arXiv API `id_list` query for crawled paper IDs. Daily crawl events remain in the database even when metadata is missing or failed.
+The fallback metadata command uses the official arXiv API `id_list` query for crawled paper IDs. Daily crawl events remain in the database even when metadata is missing or failed.
 
 The metadata trigger API accepts the same date/limit shape:
 
@@ -191,26 +385,45 @@ Importing a template with the same `name` creates a new version:
 uv run --with-editable . arxiv-local-daily template import --file template.json
 ```
 
-## Run AI Summary Generation
+The built-in default template created from the web Settings panel includes a `keywords` field. The paper list reads that field from the latest complete summary and displays it as Chinese keyword chips.
 
-The summary worker calls an OpenAI-compatible chat-completions endpoint. Configure it with environment variables:
+## Run AI Summary and Scoring
+
+AI triage calls an OpenAI-compatible chat-completions endpoint. Configure it with environment variables:
 
 ```bash
 export ARXIV_DAILY_LLM_BASE_URL="http://localhost:11434/v1"
 export ARXIV_DAILY_LLM_API_KEY=""
 ```
 
-Then generate summaries for metadata-enriched papers from one daily crawl:
+For the default OpenAI API URL, set `ARXIV_DAILY_LLM_API_KEY`. For a custom local or proxy base URL, the app allows unauthenticated requests. If neither an API key nor a custom base URL is configured, automatic AI triage returns `not_configured` and does not write failed summary/score rows.
+
+Trigger the normal background flow from the web UI or API:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/daily/automation/start \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-03","template_name":"daily_research","model":"local-model"}'
+```
+
+You can also run a direct AI triage pass for metadata-enriched papers:
+
+```bash
+curl -X POST http://127.0.0.1:8765/api/ai-triage/run \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-06-03","template_name":"daily_research","model":"local-model"}'
+```
+
+The older summary-only CLI remains available for diagnostics:
 
 ```bash
 uv run --with-editable . arxiv-local-daily summarize \
   --date 2026-06-03 \
   --template-name daily_research \
-  --model local-model \
-  --limit 20
+  --model local-model
 ```
 
-Use `--force` to regenerate existing complete summaries for the same template version, model, and input scope.
+Use `--force` to regenerate existing complete summaries for the same template version, model, and input scope. The command processes all eligible papers by default; pass `--limit` only for a controlled diagnostic run.
 
 ## Search Papers
 
@@ -224,7 +437,7 @@ uv run --with-editable . arxiv-local-daily search \
   --summary-status complete
 ```
 
-The search command returns JSON with paper metadata, latest daily event date, event types, listing categories, and summary statuses.
+The search command returns all matching papers by default as JSON with paper metadata, latest daily event date, event types, listing categories, and summary statuses. Pass `--limit` only when you intentionally want a smaller diagnostic result set.
 
 ## Discuss a Paper Locally
 

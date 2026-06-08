@@ -62,7 +62,7 @@ def _seed_search_data(db):
         model="fake-model",
         language="Chinese",
         input_scope="abstract",
-        content={"tldr": "Configurable summary pipeline helps daily triage."},
+        content={"tldr": "可配置总结流水线帮助每日论文筛选。", "keywords": ["论文筛选", "可配置摘要", "本地数据库"]},
         status="complete",
     )
     db.commit()
@@ -90,12 +90,13 @@ def test_search_papers_matches_metadata_and_summary_content(db):
     repo = SearchRepository(db)
 
     title_results = repo.search_papers(query="structured summaries")
-    summary_results = repo.search_papers(query="daily triage")
+    summary_results = repo.search_papers(query="论文筛选")
 
     assert [row["arxiv_id"] for row in title_results] == ["2606.00001"]
     assert [row["arxiv_id"] for row in summary_results] == ["2606.00001"]
     assert title_results[0]["latest_date"] == "2026-06-03"
     assert title_results[0]["summary_statuses"] == ["complete"]
+    assert title_results[0]["summary_keywords"] == ["论文筛选", "可配置摘要", "本地数据库"]
 
 
 def test_search_papers_filters_by_daily_event_and_status_fields(db):
@@ -103,17 +104,88 @@ def test_search_papers_filters_by_daily_event_and_status_fields(db):
     repo = SearchRepository(db)
 
     matching = repo.search_papers(
-        query="summary",
+        query="论文筛选",
         date="2026-06-03",
         category="cs.AI",
         event_type="new",
         metadata_status="complete",
         summary_status="complete",
     )
-    wrong_category = repo.search_papers(query="summary", category="math.AG")
+    wrong_category = repo.search_papers(query="论文筛选", category="math.AG")
 
     assert [row["arxiv_id"] for row in matching] == ["2606.00001"]
     assert wrong_category == []
+
+
+def test_search_papers_category_group_does_not_match_physics_substring(db):
+    _seed_search_data(db)
+    paper_repo = PaperRepository(db)
+    paper_repo.upsert_daily_event(
+        date="2026-06-03",
+        event=ParsedDailyEvent(
+            arxiv_id="1505.07152",
+            event_type="replacement",
+            listing_category="physics.atom-ph",
+            primary_category="physics.atom-ph",
+            source_url="https://arxiv.org/list/physics.atom-ph/recent",
+        ),
+    )
+    paper_repo.upsert_metadata(
+        PaperMetadata(
+            arxiv_id="1505.07152",
+            title="Tuning long-range interactions in Sr Rydberg atoms",
+            abstract="Rydberg atom interaction tuning.",
+            authors=["Jane Doe"],
+            primary_category="physics.atom-ph",
+            categories=["physics.atom-ph"],
+        )
+    )
+    db.commit()
+    repo = SearchRepository(db)
+
+    cs_results = repo.search_papers(date="2026-06-03", category="cs")
+    cs_ai_results = repo.search_papers(date="2026-06-03", category="cs.AI")
+    physics_results = repo.search_papers(date="2026-06-03", category="physics")
+    mixed_results = repo.search_papers(date="2026-06-03", category=["cs.AI", "physics.atom-ph"], sort="recent")
+
+    assert [row["arxiv_id"] for row in cs_results] == ["2606.00001"]
+    assert [row["arxiv_id"] for row in cs_ai_results] == ["2606.00001"]
+    assert [row["arxiv_id"] for row in physics_results] == ["1505.07152"]
+    assert [row["arxiv_id"] for row in mixed_results] == ["1505.07152", "2606.00001"]
+
+
+def test_search_papers_supports_offset_pagination_and_total_count(db):
+    paper_repo = PaperRepository(db)
+    for index in range(1, 5):
+        arxiv_id = f"2606.0000{index}"
+        paper_repo.upsert_daily_event(
+            date="2026-06-03",
+            event=ParsedDailyEvent(
+                arxiv_id=arxiv_id,
+                event_type="new",
+                listing_category="cs.AI",
+                primary_category="cs.AI",
+                source_url="https://arxiv.org/list/cs.AI/new",
+            ),
+        )
+        paper_repo.upsert_metadata(
+            PaperMetadata(
+                arxiv_id=arxiv_id,
+                title=f"Pagination Paper {index}",
+                abstract="pagination test",
+                authors=["Ada Lovelace"],
+                primary_category="cs.AI",
+                categories=["cs.AI"],
+            )
+        )
+    db.commit()
+    repo = SearchRepository(db)
+
+    page = repo.search_papers(date="2026-06-03", sort="recent", limit=2, offset=2)
+    total = repo.count_search_papers(date="2026-06-03")
+
+    assert [row["arxiv_id"] for row in page] == ["2606.00003", "2606.00004"]
+    assert total == 4
 
 
 def test_get_paper_detail_returns_events_summaries_and_discussions(db):
@@ -128,5 +200,5 @@ def test_get_paper_detail_returns_events_summaries_and_discussions(db):
 
     assert detail["paper"]["title"] == "Structured Summaries for Daily Research"
     assert detail["events"][0]["date"] == "2026-06-03"
-    assert detail["summaries"][0]["content"]["tldr"].startswith("Configurable")
+    assert detail["summaries"][0]["content"]["tldr"].startswith("可配置")
     assert detail["discussions"][0]["content"] == "This is useful for triage."
