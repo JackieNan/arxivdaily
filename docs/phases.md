@@ -901,3 +901,20 @@ Date baseline: 2026-06-03
   - Compose config expansion shows apt mirror build args
   - full test suite with existing venv: 171 passed, 1 warning
 - Status: implemented on branch, not yet merged to `main`.
+
+## Phase 40 Hotfix: Docker Build Pip Mirror
+
+- Branch: `codex/phase-7-web-ui`
+- Scope completed:
+  - add Docker build arg `PIP_INDEX_URL` for Python dependency installation
+  - default pip mirror to TUNA PyPI during image builds
+  - pass `PIP_INDEX_URL` through Docker Compose and `.env.example`
+  - document TUNA, Aliyun, and Tencent Cloud PyPI mirror options
+- Important decisions:
+  - keep pip mirror configurable because provider-local mirrors are usually faster than one global default
+  - use a build-time `--index-url` instead of writing a permanent pip config into the runtime container
+- Verification:
+  - focused deployment tests: 8 passed
+  - Compose config expansion shows `PIP_INDEX_URL` build arg
+  - full test suite with existing venv: 172 passed, 1 warning
+- Status: implemented on branch, not yet merged to `main`.

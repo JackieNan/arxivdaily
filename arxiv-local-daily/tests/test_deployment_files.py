@@ -38,6 +38,13 @@ def test_dockerfile_supports_domestic_debian_apt_mirrors() -> None:
     assert "/etc/apt/sources.list.d/debian.sources" in dockerfile
 
 
+def test_dockerfile_supports_domestic_pip_index() -> None:
+    dockerfile = read_project_file("Dockerfile")
+
+    assert "ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple" in dockerfile
+    assert 'python -m pip install --no-cache-dir --index-url "${PIP_INDEX_URL}" .' in dockerfile
+
+
 def test_compose_uses_cloudflare_tunnel_without_publishing_app_port() -> None:
     compose = read_project_file("docker-compose.yml")
     app_section = compose.split("\n  cloudflared:", 1)[0]
@@ -50,6 +57,7 @@ def test_compose_uses_cloudflare_tunnel_without_publishing_app_port() -> None:
         "DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian-security}"
         in app_section
     )
+    assert "PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}" in app_section
     assert "\n    ports:" not in app_section
     assert "ARXIV_DAILY_DATABASE: /data/arxiv-local-daily.sqlite3" in app_section
     assert "ARXIV_DAILY_LLM_CONFIG: /config/llm.local.json" in app_section
@@ -80,12 +88,14 @@ def test_env_example_and_deployment_docs_cover_required_cloudflare_steps() -> No
     assert "CLOUDFLARE_TUNNEL_TOKEN=" in env_example
     assert "DEBIAN_MIRROR=" in env_example
     assert "DEBIAN_SECURITY_MIRROR=" in env_example
+    assert "PIP_INDEX_URL=" in env_example
     assert "Cloudflare Tunnel" in docs
     assert "Cloudflare Access" in docs
     assert "CLOUDFLARE_TUNNEL_TOKEN" in docs
     assert "http://app:8765" in docs
     assert "docker compose up -d --build" in docs
     assert "DEBIAN_MIRROR" in docs
+    assert "PIP_INDEX_URL" in docs
     assert "不要暴露 8765" in docs
     assert "./scripts/backup_sqlite.sh" in docs
 

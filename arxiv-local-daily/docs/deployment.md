@@ -108,6 +108,31 @@ docker compose build --no-cache app
 docker compose up -d
 ```
 
+如果卡在 `RUN python -m pip install ...`，慢的是 pip 从 PyPI 下载依赖。`.env` 里可以设置：
+
+```env
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+阿里云可试：
+
+```env
+PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+```
+
+腾讯云可试：
+
+```env
+PIP_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple
+```
+
+修改后重新构建：
+
+```bash
+docker compose build --no-cache app
+docker compose up -d
+```
+
 ## 开启 Cloudflare Access
 
 建议一定开启 Cloudflare Access，让这个 app 只允许你自己的邮箱或团队账号访问：
